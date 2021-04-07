@@ -7,7 +7,7 @@
 #define XP_WIN
 #endif
 
-#define D2BS_VERSION L"1.6.3U"
+#define D2BS_VERSION L"1.6.4U"
 
 #include <windows.h>
 #include <vector>
@@ -79,11 +79,13 @@ struct Variables {
     HWND hHandle;
 
     wchar_t szPath[_MAX_PATH];
+    wchar_t szLogPath[_MAX_PATH];
     wchar_t szScriptPath[_MAX_PATH];
     wchar_t szProfile[256];
     wchar_t szStarter[_MAX_FNAME];
     wchar_t szConsole[_MAX_FNAME];
     wchar_t szDefault[_MAX_FNAME];
+    char szHosts[256];
     char szClassic[30];
     char szLod[30];
     wchar_t szTitle[256];

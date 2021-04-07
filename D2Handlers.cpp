@@ -22,11 +22,7 @@
 using namespace std;
 
 bool __fastcall UpdatePlayerGid(Script* script, void*, uint) {
-    if (wcscmp(script->GetShortFilename(), Vars.szDefault) == 0) {
-        script->Stop(true, true);
-    } else {
-        script->UpdatePlayerGid();
-    }
+    script->UpdatePlayerGid();
     return true;
 }
 
@@ -35,13 +31,9 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
     bool beginStarter = true;
     bool bInGame = false;
 
-    InitSettings();
-
-    if (InitHooks()) {
-        Log(L"D2BS Engine startup complete. %s", D2BS_VERSION);
-        Print(L"\u00FFc2D2BS\u00FFc0 :: Engine startup complete!");
-    } else {
-        Log(L"D2BS Engine startup failed.");
+    if (!InitHooks()) {
+        wcscpy_s(Vars.szPath, MAX_PATH, L"common");
+        Log(L"D2BS Engine startup failed. %s", Vars.szCommandLine);
         Print(L"\u00FFc2D2BS\u00FFc0 :: Engine startup failed!");
         return FALSE;
     }
@@ -71,6 +63,9 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
         else
             Print(L"\u00FFc2D2BS\u00FFc0 :: Profile %s not found", profile);
     }
+
+    Log(L"D2BS Engine startup complete. %s", D2BS_VERSION);
+    Print(L"\u00FFc2D2BS\u00FFc0 :: Engine startup complete!");
 
     while (Vars.bActive) {
         switch (ClientState()) {

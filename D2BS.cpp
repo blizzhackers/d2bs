@@ -40,8 +40,11 @@ BOOL WINAPI DllMain(HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved) {
             Vars.bLoadedWithCGuard = FALSE;
         }
 
+        swprintf_s(Vars.szLogPath, _countof(Vars.szLogPath), L"%slogs\\", Vars.szPath);
+        CreateDirectoryW(Vars.szLogPath, NULL);
         InitCommandLine();
         ParseCommandLine(Vars.szCommandLine);
+        InitSettings();
         sLine* command = NULL;
         Vars.bUseRawCDKey = FALSE;
 

@@ -1278,13 +1278,23 @@ JSAPI_FUNC(my_getPlayerFlag) {
 
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
-
+    
     uint32 nFirstUnitId = (uint32)-1;
     uint32 nSecondUnitId = (uint32)-1;
     JS_BeginRequest(cx);
     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &nFirstUnitId);
     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nSecondUnitId);
     JS_EndRequest(cx);
+
+    // If this gets called while a game already closed (happens with race conditions) the tables are garbage
+    // and thus the units wont be found either, as this is also cleared up.
+    // Easy race condition fix is to test if either is not found, already return early
+    UnitAny* pFirst = D2CLIENT_FindUnit(nFirstUnitId, 0);   // 0 = UNIT_PLAYER
+    UnitAny* pSecond = D2CLIENT_FindUnit(nSecondUnitId, 0);
+    if (pFirst == NULL || pSecond == NULL) {
+        JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(FALSE));
+        return JS_TRUE;
+    }
 
     DWORD nFlag = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
 

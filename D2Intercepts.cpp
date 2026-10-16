@@ -418,3 +418,13 @@ char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
     Log(L"Crash File: %hs\n", crash_file);
     exit(0);
 }
+
+// Fog's crash handler: Fog's top-level exception filter, which replaces D2BS's at startup, calls it with its crash
+// info in ECX (+0x18 = the EXCEPTION_POINTERS). Returning 0 makes that filter answer EXCEPTION_CONTINUE_SEARCH, so
+// Windows Error Reporting gets the real exception.
+DWORD __fastcall FogCrash_Intercept(BYTE* crashInfo, DWORD) {
+    EXCEPTION_POINTERS* ptrs = *(EXCEPTION_POINTERS**)(crashInfo + 0x18);
+    if (ptrs && ptrs->ExceptionRecord && ptrs->ContextRecord)
+        ExceptionHandler(ptrs);
+    return 0;
+}

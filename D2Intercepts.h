@@ -23,5 +23,6 @@ void ChatPacketRecv_Interception();
 void AddUnit_Intercept(UnitAny* lpUnit);
 void RemoveUnit_Intercept(UnitAny* lpUnit);
 int WINAPI LogMessageBoxA_Intercept(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType);
+DWORD __fastcall FogCrash_Intercept(BYTE* crashInfo, DWORD);
 
 #endif

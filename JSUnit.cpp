@@ -752,9 +752,12 @@ JSAPI_FUNC(unit_cancel) {
     case 0:
         D2CLIENT_CloseInteract();
         break;
-    case 1:
+    case 1: {
+        // as ClickMap: the click runs game code that only the game thread may run unlocked
+        AutoCriticalRoom cRoom;
         D2CLIENT_ClickMap(0, 10, 10, 0x08);
         break;
+    }
     case 2:
         D2CLIENT_CloseNPCInteract();
         break;

@@ -18,6 +18,7 @@
 #include "Offset.h"
 #include "CommandLine.h"
 #include "Control.h"
+#include "CriticalSections.h"
 
 using namespace std;
 
@@ -80,7 +81,13 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
 
                 Sleep(500);
 
-                D2CLIENT_InitInventory();
+                {
+                    // Loads inventory graphics through the game's sprite caches, which only the game thread may use
+                    // unlocked; the game may also have ended during the sleep.
+                    AutoCriticalRoom cRoom;
+                    if (ClientState() == ClientStateInGame)
+                        D2CLIENT_InitInventory();
+                }
                 ScriptEngine::ForEachScript(UpdatePlayerGid, NULL, 0);
                 ScriptEngine::UpdateConsole();
                 Vars.bQuitting = false;

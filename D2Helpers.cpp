@@ -497,11 +497,27 @@ UnitAny* GetMercUnit(UnitAny* pUnit) {
 #endif
 }
 
+// The game's lookup (0x463940) halts (Halt 90) when the first node with the id has another type: a unit freed and
+// reused while a script thread reads the tables without the game lock. This walks the same chains, but answers
+// "not found" for that node, an unknown type or a chain that does not end.
+static UnitAny* FindUnitInTables(UnitHashTable* pTables, DWORD dwId, DWORD dwType) {
+    static_assert(offsetof(UnitAny, pListNext) == 0xE4, "the game chains its unit tables through +0xE4");
+    if (dwType > UNIT_TILE)
+        return NULL;
+    UnitAny* pUnit = pTables[dwType].table[dwId & 0x7F];
+    for (int n = 0; pUnit && n < 0x10000; n++, pUnit = pUnit->pListNext)
+        if (pUnit->dwUnitId == dwId)
+            return pUnit->dwType == dwType ? pUnit : NULL;
+    return NULL;
+}
+
 UnitAny* D2CLIENT_FindUnit(DWORD dwId, DWORD dwType) {
     if (dwId == -1)
         return NULL;
-    UnitAny* pUnit = D2CLIENT_FindServerSideUnit(dwId, dwType);
-    return pUnit ? pUnit : D2CLIENT_FindClientSideUnit(dwId, dwType);
+    // Same order as before: FindServerSideUnit (0x4639B0) walks the tables at 0x7A5270, which D2Ptrs.h names
+    // ClientSideUnitHashTables, then FindClientSideUnit (0x463990) walks ServerSideUnitHashTables (0x7A5E70).
+    UnitAny* pUnit = FindUnitInTables(p_D2CLIENT_ClientSideUnitHashTables, dwId, dwType);
+    return pUnit ? pUnit : FindUnitInTables(p_D2CLIENT_ServerSideUnitHashTables, dwId, dwType);
 }
 
 // TODO: Rewrite this and split it into two functions

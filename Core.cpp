@@ -132,6 +132,9 @@ void __fastcall Say(const wchar_t* szFormat, ...) {
 }
 
 bool ClickMap(DWORD dwClickType, int wX, int wY, BOOL bShift, UnitAny* pUnit) {
+    // A click can start the player's next animation at once, which loads its graphics through the game's sprite
+    // caches: only the game thread may use them unlocked.
+    AutoCriticalRoom cRoom;
     if (ClientState() != ClientStateInGame)
         return false;
 

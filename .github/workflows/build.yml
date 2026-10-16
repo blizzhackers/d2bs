@@ -3,13 +3,14 @@ name: Build D2BS.dll
 on:
   push:
     branches: [master]
-    tags: ['v*']
+    # Release tags only (v1.6.5); the build fails a tag that doesn't match VERSION.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   pull_request:
   workflow_dispatch:
   schedule:
-    # Twice a week, so the toolset cache (removed after 7 days without use) stays on master even when a scheduled
-    # run starts late or is dropped.
-    - cron: '23 4 * * 1,4'
+    # Three times a week, so the toolset cache (removed after 7 days without use) stays on master even if a
+    # scheduled run starts late or is dropped.
+    - cron: '23 4 * * 1,3,5'
 
 permissions:
   contents: read
@@ -23,7 +24,11 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 45
     steps:
+      # A pull request builds its head commit, not GitHub's temporary merge commit, so the commit stamped into the
+      # DLL and the artifact's name is one that exists on the branch.
       - uses: actions/checkout@v7 # floating major; v7.0.1 was current on 2026-10-15
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       # The Visual C++ 2010 SP1 toolset, unpacked from Microsoft's downloads on a cache miss. The key changes
       # whenever the package list or the unpacking does.
@@ -61,7 +66,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7 # floating major; v7.0.2 was current on 2026-10-15
         with:
-          name: D2BS-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+          name: D2BS-${{ github.ref_type == 'tag' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
           path: |
             ${{ runner.temp }}/out/D2BS.dll
             ${{ runner.temp }}/out/D2BS.pdb
@@ -70,7 +75,8 @@ jobs:
           retention-days: ${{ github.ref_type == 'tag' && 90 || 30 }}
 
   release:
-    if: github.ref_type == 'tag'
+    # Only a pushed release tag: a manual run on a tag builds it but makes no second release.
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     permissions:

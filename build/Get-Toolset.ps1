@@ -16,7 +16,14 @@ param(
 )
 Set-StrictMode -Version 3
 $ErrorActionPreference = 'Stop'
-$Out = [IO.Path]::GetFullPath($Out)
+# Relative paths resolve against PowerShell's current location; .NET would use the process's own directory.
+$Out = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)
+if ($PackageDir) { $PackageDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PackageDir) }
+# -Out is replaced whole, so it must be new, empty, or a toolset this script made (it holds toolset.txt).
+if ((Test-Path -LiteralPath $Out) -and @(Get-ChildItem -LiteralPath $Out -Force).Count -and
+    -not (Test-Path -LiteralPath (Join-Path $Out 'toolset.txt'))) {
+  throw "$Out already holds files and is not a toolset made by this script (no toolset.txt): pass a new or empty folder"
+}
 $work = Join-Path ([IO.Path]::GetTempPath()) "d2bs-toolset-$PID"
 $spec = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'toolset.json') -Raw | ConvertFrom-Json
 if (-not $SevenZip) {
@@ -119,9 +126,13 @@ try {
     "recipe $($spec.recipe)"
     ($spec.packages | ForEach-Object { "$($_.file) sha256 $($_.sha256)" })
   )
-  $env:PATH = (Join-Path $Out 'vc\bin') + ';' + (Join-Path $Out 'ide') + ';' + $env:PATH
-  # cl prints its banner on stderr and its usage on stdout, in no fixed order once merged.
-  $clOut = @(& (Join-Path $Out 'vc\bin\cl.exe') 2>&1 | ForEach-Object { "$_" })
+  # cl prints its banner on stderr and its usage on stdout, in no fixed order once merged. PATH is the caller's
+  # again afterwards, as the script may run in-process.
+  $savedPath = $env:PATH
+  try {
+    $env:PATH = (Join-Path $Out 'vc\bin') + ';' + (Join-Path $Out 'ide') + ';' + $env:PATH
+    $clOut = @(& (Join-Path $Out 'vc\bin\cl.exe') 2>&1 | ForEach-Object { "$_" })
+  } finally { $env:PATH = $savedPath }
   $banner = @($clOut -match 'Version 16\.00\.40219') | Select-Object -First 1
   if (-not $banner) { throw "unexpected compiler output: $($clOut -join ' | ')" }
   $mb = [math]::Round(((Get-ChildItem -LiteralPath $Out -Recurse -File | Measure-Object -Property Length -Sum).Sum) / 1MB)

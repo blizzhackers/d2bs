@@ -1,16 +1,16 @@
 #Requires -Version 7
 <#
-  Interactive release for D2BS. Checks that master is ready, proposes the version (VERSION as it stands when that
-  version has no tag yet, or the next patch, minor or major), writes VERSION, and after a review commits
-  "chore(release): v<version>", tags it (annotated) and pushes master and the tag in one atomic push. The tag push
-  makes the build workflow publish a DRAFT GitHub release with D2BS.dll and D2BS.pdb; publish it after a smoke test.
+  Interactive release for D2BS. Checks that master is ready, proposes the next patch, minor or major version (or the
+  same version again, when its release commit exists but its tag was deleted), writes VERSION, and after a review
+  commits "chore(release): v<version>", tags it (annotated) and pushes master and the tag in one atomic push. The tag
+  push makes the build workflow create a DRAFT GitHub release with D2BS.dll and D2BS.pdb; publish it after a test.
 
     pwsh -File build\Release-D2BS.ps1             interactive
     pwsh -File build\Release-D2BS.ps1 -DryRun     rehearse: prints every step that would change something, changes nothing
     pwsh -File build\Release-D2BS.ps1 -NoFetch    skip git fetch and the remote tag lookup
 #>
-# CmdletBinding makes an unknown argument an error: a mistyped -DryRun (or release.mjs's --dry-run) must never run a
-# real release.
+# CmdletBinding makes an unknown argument an error: a mistyped switch (-DryRn, --dry-run) must never run a real
+# release.
 [CmdletBinding()]
 param([switch]$DryRun, [switch]$NoFetch)
 Set-StrictMode -Version 3
@@ -26,16 +26,22 @@ function Stop-Release([string]$Message = 'aborted') { Bad $Message; exit 1 }
 # A failed precondition stops a real release; a dry run only warns, so it can be rehearsed from any state.
 function Fail([string]$Message) { if ($DryRun) { Warn $Message } else { Stop-Release $Message } }
 
-# Reads one answer from the console or from piped input; running out of input stops cleanly.
-function Ask([string]$Prompt) {
+# Reads one answer from the console or from piped input. Running out of input stops cleanly, or answers -OnEof when
+# one is given (after the push, where stopping would report a finished release as failed).
+function Ask([string]$Prompt, [string]$OnEof) {
   Write-Host $Prompt -NoNewline
   $line = [Console]::In.ReadLine()
-  if ($null -eq $line) { Write-Host ''; Stop-Release 'no more input' }
+  if ($null -eq $line) {
+    Write-Host ''
+    if ($PSBoundParameters.ContainsKey('OnEof')) { return $OnEof }
+    Stop-Release 'no more input'
+  }
   if ([Console]::IsInputRedirected) { Write-Host $line }
   $line.Trim()
 }
-function Confirm-Step([string]$Prompt, [bool]$DefaultYes) {
-  $answer = (Ask ($Prompt + $(if ($DefaultYes) { ' [Y/n] ' } else { ' [y/N] ' }))).ToLower()
+function Confirm-Step([string]$Prompt, [bool]$DefaultYes, [switch]$EofMeansNo) {
+  $question = $Prompt + $(if ($DefaultYes) { ' [Y/n] ' } else { ' [y/N] ' })
+  $answer = if ($EofMeansNo) { (Ask $question -OnEof 'n').ToLower() } else { (Ask $question).ToLower() }
   if (-not $answer) { return $DefaultYes }
   $answer -in 'y', 'yes'
 }
@@ -145,9 +151,11 @@ if ($latestTag) {
 Say ''
 Say 'Version'
 $options = @()
+# The same version again only when its release commit exists but its tag is gone (deleted after a failed build).
 $currentTag = "v$current"
-if (-not (Test-LocalTag $currentTag) -and -not (Test-RemoteTag $currentTag)) {
-  $options += [pscustomobject]@{ Label = "$current (VERSION as it stands: not released yet)"; Version = $current }
+$releaseCommit = Read-Git @('log', '-1', '--format=%h', '--extended-regexp', "--grep=^chore\(release\): v$($current -replace '\.', '\.')$")
+if ($releaseCommit -and -not (Test-LocalTag $currentTag) -and -not (Test-RemoteTag $currentTag)) {
+  $options += [pscustomobject]@{ Label = "$current again (release commit $releaseCommit, tag deleted)"; Version = $current }
 }
 $options += [pscustomobject]@{ Label = 'patch'; Version = '{0}.{1}.{2}' -f $currentVersion.Major, $currentVersion.Minor, ($currentVersion.Build + 1) }
 $options += [pscustomobject]@{ Label = 'minor'; Version = '{0}.{1}.0' -f $currentVersion.Major, ($currentVersion.Minor + 1) }
@@ -235,7 +243,8 @@ if ($bump) {
   # The pathspec commits VERSION only, whatever else may have been staged during the prompts.
   Invoke-GitStep @('commit', '-m', "chore(release): $tag", '--', 'VERSION') @('git restore --staged --worktree -- VERSION')
 }
-$undoCommit = @(if ($bump) { 'git reset --hard HEAD~1' })
+# --keep (not --hard) drops the release commit but keeps any edits made to other files during the prompts.
+$undoCommit = @(if ($bump) { 'git reset --keep HEAD~1' })
 Invoke-GitStep @('tag', '-a', $tag, '-m', "D2BS $tag") $undoCommit
 Say "  > git push --atomic origin master $tag"
 if (-not $DryRun) {
@@ -258,20 +267,29 @@ Say ('-' * 60)
 Ok "$(if ($DryRun) { 'Dry run complete' } else { 'Release pushed' }): $tag"
 Say ''
 Say 'Next steps:'
+$repoArg = if ($slug) { $slug } else { '<owner>/<repo>' }
 Say '  1. Wait for the build to go green:'
 Say "     $url/actions/workflows/build.yml"
-Say '     If it fails on a download, re-run it there. If the code fails, delete the tag (git push origin'
-Say "     :refs/tags/$tag, then git tag -d $tag), fix master, and run this script again: it offers $chosen again."
 Say "  2. Review the DRAFT release `"D2BS $tag`" (D2BS.dll, D2BS.pdb): $url/releases"
-Say '  3. Try the DLL, e.g. on the rig or with one D2Bot profile.'
+Say '  3. Try the DLL on a test install, e.g. with one D2Bot profile.'
 Say '  4. Publish it and mark it Latest:'
-Say "     gh release edit $tag --repo $(if ($slug) { $slug } else { '<owner>/<repo>' }) --draft=false --latest"
-if ($slug -and $hasGh -and -not $DryRun -and (Confirm-Step 'Watch the release build now?' $true)) {
+Say "     gh release edit $tag --repo $repoArg --draft=false --latest"
+Say '  If the build fails on a download, re-run it from its Actions page. If the code or the DLL is at fault:'
+Say "     gh release delete $tag --repo $repoArg --yes   (if the draft exists)"
+Say "     git push origin :refs/tags/$tag"
+Say "     git tag -d $tag"
+Say "  then fix master and run this script again: it offers $chosen again."
+if ($slug -and $hasGh -and -not $DryRun -and (Confirm-Step 'Watch the release build now?' $true -EofMeansNo)) {
+  # The run for this tag's commit: a tag pushed again after a failed build also has the old tag's run.
+  $tagCommit = Read-Git @('rev-parse', "$tag^{commit}")
   $runId = $null
   for ($try = 0; $try -lt 20 -and -not $runId; $try++) {
     Start-Sleep -Seconds 3
-    $runs = & gh run list --repo $slug --workflow build.yml --limit 20 --json databaseId,headBranch 2>$null
-    if (-not $LASTEXITCODE -and $runs) { $runId = @($runs | ConvertFrom-Json | Where-Object { $_.headBranch -eq $tag }) | Select-Object -First 1 -ExpandProperty databaseId }
+    $runs = & gh run list --repo $slug --workflow build.yml --limit 20 --json databaseId,headBranch,headSha 2>$null
+    if (-not $LASTEXITCODE -and $runs) {
+      $runId = @($runs | ConvertFrom-Json | Where-Object { $_.headBranch -eq $tag -and $_.headSha -eq $tagCommit }) |
+        Select-Object -First 1 -ExpandProperty databaseId
+    }
   }
   if ($runId) { & gh run watch $runId --repo $slug } else { Warn "the release build has not appeared yet: $url/actions" }
 }

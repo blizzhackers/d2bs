@@ -149,8 +149,8 @@ try {
     Get-CimInstance Win32_Process -Filter "Name='mspdbsrv.exe'" | Where-Object {
       $_.ExecutablePath -and $_.ExecutablePath.StartsWith($Out + '\', [StringComparison]::OrdinalIgnoreCase)
     } | ForEach-Object {
-      # Errors are ignored: it may exit on its own after the lookup, and one this can't stop makes the rename below
-      # fail with a clear message.
+      # Errors are ignored: it may exit on its own after the lookup, and one this can't stop only keeps the old
+      # toolset from being deleted, which the warning below reports.
       Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
       Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
     }

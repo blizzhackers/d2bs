@@ -1,0 +1,89 @@
+name: Build D2BS.dll
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Twice a week, so the toolset cache (removed after 7 days without use) stays on master even when a scheduled
+    # run starts late or is dropped.
+    - cron: '23 4 * * 1,4'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7 # floating major; v7.0.1 was current on 2026-10-15
+
+      # The Visual C++ 2010 SP1 toolset, unpacked from Microsoft's downloads on a cache miss. The key changes
+      # whenever the package list or the unpacking does.
+      - name: Restore the VC++ 2010 toolset
+        id: toolset
+        uses: actions/cache/restore@v6 # floating major; v6.1.0 was current on 2026-10-15
+        with:
+          path: ${{ runner.temp }}/toolset
+          key: vc100-sp1-${{ hashFiles('build/toolset.json', 'build/Get-Toolset.ps1') }}
+
+      - name: Fetch the toolset from Microsoft
+        if: steps.toolset.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./build/Get-Toolset.ps1 -Out "$env:RUNNER_TEMP/toolset"
+
+      # Saved before the build, so a build that fails still leaves the toolset cached.
+      - name: Save the toolset
+        if: steps.toolset.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6 # floating major; v6.1.0 was current on 2026-10-15
+        with:
+          path: ${{ runner.temp }}/toolset
+          key: ${{ steps.toolset.outputs.cache-primary-key }}
+
+      - name: Build
+        shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          # The last file-version number: 1-65535 for dev builds (0 is reserved for releases).
+          $build = @{ Toolset = "$env:RUNNER_TEMP/toolset"; Out = "$env:RUNNER_TEMP/out"; BuildNumber = 1 + ([int]$env:RUN_NUMBER - 1) % 65535 }
+          if ($env:REF_TYPE -eq 'tag') { $build.Release = $true; $build.Tag = $env:REF_NAME }
+          ./build/Build-D2BS.ps1 @build
+
+      - uses: actions/upload-artifact@v7 # floating major; v7.0.2 was current on 2026-10-15
+        with:
+          name: D2BS-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+          path: |
+            ${{ runner.temp }}/out/D2BS.dll
+            ${{ runner.temp }}/out/D2BS.pdb
+            ${{ runner.temp }}/out/build.log
+          if-no-files-found: error
+          retention-days: ${{ github.ref_type == 'tag' && 90 || 30 }}
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8 # floating major; v8.0.2 was current on 2026-10-15
+        with:
+          name: D2BS-${{ github.ref_name }}
+          path: dist
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        # A draft, published by hand after a smoke test (build/Release-D2BS.ps1 prints the command).
+        run: gh release create "$TAG" dist/D2BS.dll dist/D2BS.pdb --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "D2BS $TAG" --generate-notes

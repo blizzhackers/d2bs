@@ -3,7 +3,7 @@
   Builds D2BS.dll (Release|Win32) with the Visual C++ 2010 SP1 toolset from Get-Toolset.ps1, without MSBuild or an
   installed Visual Studio. The flags mirror D2BS.vcxproj's Release|Win32 settings, including sqlite3.c's own (warning
   level 3, _CRT_SECURE_NO_WARNINGS). Everything the build writes goes to -Out (default build\out): objects, generated
-  headers, the unpacked js_static.lib, D2BS.dll and D2BS.pdb.
+  headers, the unpacked js_static.lib, D2BS.dll, D2BS.pdb and build.log.
 
   The version comes from the VERSION file (the latest release, which build\Release-D2BS.ps1 bumps) and the commit:
   "1.6.5U+dev (7c036ba)", a build after 1.6.5, and file version 1.6.5.<BuildNumber>; or with -Release -Tag v1.6.5,

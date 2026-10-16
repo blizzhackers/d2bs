@@ -112,7 +112,9 @@ elseif ([int]$ahead -gt 0) {
 
 $current = if (Test-Path -LiteralPath $versionFile) { (Get-Content -LiteralPath $versionFile -Raw).Trim() } else { '' }
 $currentVersion = ConvertTo-Version $current
-if (-not $currentVersion) { Stop-Release "VERSION must hold major.minor.patch, not '$current'" }
+if (-not $currentVersion -or $currentVersion.ToString() -ne $current) {
+  Stop-Release "VERSION must hold major.minor.patch without leading zeros, not '$current'"
+}
 
 # GitHub extras (the CI check and watching the release build) need gh and a GitHub origin; without them they are skipped.
 $slug = $null
@@ -179,6 +181,8 @@ while (-not $chosen) {
   $candidate = $candidate.TrimStart('v')
   $candidateVersion = ConvertTo-Version $candidate
   if (-not $candidateVersion) { Warn 'a version is major.minor.patch, e.g. 1.6.5'; continue }
+  # Tags and VERSION use the normalized form, so a leading-zero spelling can't duplicate an existing release.
+  $candidate = $candidateVersion.ToString()
   if (Test-LocalTag "v$candidate") { Warn "tag v$candidate already exists here"; continue }
   $remote = Test-RemoteTag "v$candidate"
   if ($remote) { Warn "tag v$candidate already exists on origin"; continue }

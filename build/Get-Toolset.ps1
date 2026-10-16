@@ -101,8 +101,10 @@ function Copy-Tree([string]$from, [string]$to, [switch]$Recurse) {
   else { Get-ChildItem -LiteralPath $from -File | Copy-Item -Destination $to -Force }
 }
 
-# The toolset is assembled and checked beside -Out, then swapped in: a failed run leaves -Out as it was.
-$stage = "$Out.partial-$PID"
+# The toolset is assembled and checked beside -Out, then swapped in: a failed run leaves -Out as it was. The names
+# are per run, so a folder that a killed run left behind is never built into or renamed over.
+$runId = "$PID-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+$stage = "$Out.partial-$runId"
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 try {
   $images = @{}
@@ -139,14 +141,33 @@ try {
     "recipe $($spec.recipe)"
     ($spec.packages | ForEach-Object { "$($_.file) sha256 $($_.sha256)" })
   )
+  # Swapped by renames: a rename fails whole while a file in the folder is open, where a delete stops halfway and
+  # Move-Item falls back to moving file by file. A running program inside doesn't block a rename.
+  $old = $null
   if (Test-Path -LiteralPath $Out) {
     # cl /Zi leaves a PDB server running from the toolset for a while after a build, holding its DLLs open.
     Get-CimInstance Win32_Process -Filter "Name='mspdbsrv.exe'" | Where-Object {
       $_.ExecutablePath -and $_.ExecutablePath.StartsWith($Out + '\', [StringComparison]::OrdinalIgnoreCase)
     } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue }
-    Remove-Item -LiteralPath $Out -Recurse -Force
+    $old = "$Out.old-$runId"
+    try { Rename-Item -LiteralPath $Out -NewName (Split-Path -Leaf $old) }
+    catch { throw "$Out could not be renamed (is a build running from it?), so it was left as it was: $($_.Exception.Message)" }
   }
-  Move-Item -LiteralPath $stage -Destination $Out
+  try { Rename-Item -LiteralPath $stage -NewName (Split-Path -Leaf $Out) }
+  catch {
+    $failure = $_
+    if ($old) {
+      try { Rename-Item -LiteralPath $old -NewName (Split-Path -Leaf $Out) }
+      catch { throw "the new toolset could not be renamed to $Out ($($failure.Exception.Message)), nor the old one back: rename $old to $Out by hand" }
+    }
+    throw $failure
+  }
+  # Old toolsets go once no program runs from them: this run's, and any an earlier run had to leave behind. Only
+  # names this script makes match, so a backup someone named <Out>.old-something is never touched.
+  $ours = '^' + [regex]::Escape((Split-Path -Leaf $Out)) + '\.old-\d+-[0-9a-f]{8}$'
+  Get-ChildItem -LiteralPath (Split-Path -Parent $Out) -Directory | Where-Object { $_.Name -match $ours } |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+  if ($old -and (Test-Path -LiteralPath $old)) { Write-Warning "a program still uses the old toolset, so $old is left behind; a later run deletes it" }
   $mb = [math]::Round(((Get-ChildItem -LiteralPath $Out -Recurse -File | Measure-Object -Property Length -Sum).Sum) / 1MB)
   Write-Host "toolset ready in $Out ($mb MB): $banner"
 } finally {

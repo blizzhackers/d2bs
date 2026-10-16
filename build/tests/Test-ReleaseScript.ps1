@@ -106,9 +106,10 @@ function Invoke-Scenarios {
   Check 'the d answer showed the diff' ($r.Text -match '\+1\.6\.6') ''
 
   # 4. A taken or malformed version is asked again; abort at review puts VERSION back.
-  $r = Invoke-Release @('1', '1.6.6', 'banana', '1.6.70000', '1.6.3', 'n', '1.7.0', 'y', 'n')
+  $r = Invoke-Release @('1', '1.6.6', '1.6.06', 'banana', '1.6.70000', '1.6.3', 'n', '1.7.0', 'y', 'n')
   Check 'abort at review exits 1' ($r.Code -eq 1) $r.Text
   Check 'existing tag refused' ($r.Text -match 'tag v1\.6\.6 already exists') ''
+  Check 'a leading zero is the same version' (([regex]::Matches($r.Text, 'tag v1\.6\.6 already exists')).Count -eq 2) $r.Text
   Check 'malformed version refused' ($r.Text -match 'a version is major\.minor\.patch') ''
   Check 'a number over 65535 refused' (([regex]::Matches($r.Text, 'a version is major\.minor\.patch')).Count -eq 2) ''
   Check 'a version below the latest tag needs a confirmation' ($r.Text -match 'v1\.6\.3 is not newer than v1\.6\.6') ''

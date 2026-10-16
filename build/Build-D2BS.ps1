@@ -42,13 +42,16 @@ $spec = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'toolset.json') -Raw |
 $wanted = @("recipe $($spec.recipe)") + @($spec.packages | ForEach-Object { "$($_.file) sha256 $($_.sha256)" })
 $made = @(Get-Content -LiteralPath (Join-Path $Toolset 'toolset.txt') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if (($made -join "`n") -ne ($wanted -join "`n")) {
-  $first = if ($made) { $made[0] } else { 'empty toolset.txt' }
+  $odd = @($made | Where-Object { $_ -notin $wanted }) + @($wanted | Where-Object { $_ -notin $made } | ForEach-Object { "no $_" })
+  $first = if ($odd) { $odd[0] } else { 'lines out of order or repeated' }
   throw "$Toolset was made by another toolset recipe or from other packages ($first): run build\Get-Toolset.ps1 again"
 }
 
 # Version: VERSION holds major.minor.patch; the U suffix is D2BS's (Unicode build) since 1.6.4U.
 $version = (Get-Content -LiteralPath (Join-Path $repo 'VERSION') -Raw).Trim()
-if ($version -notmatch '^(\d{1,5})\.(\d{1,5})\.(\d{1,5})$') { throw "VERSION must be major.minor.patch, not '$version'" }
+if ($version -notmatch '^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})$') {
+  throw "VERSION must be major.minor.patch without leading zeros, not '$version'"
+}
 $numbers = @([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
 if (@($numbers | Where-Object { $_ -gt 65535 }).Count) { throw "VERSION $version does not fit a file version: each number is at most 65535" }
 if ($Release -and $Tag -ne "v$version") { throw "release tag '$Tag' does not match VERSION $version (expected v$version)" }

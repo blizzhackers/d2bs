@@ -117,13 +117,18 @@ function Invoke-Scenarios {
   Check 'no tag v1.7.0' (-not (G $work @('tag', '--list', 'v1.7.0'))) ''
   Check 'tree clean after abort' (-not (G $work @('status', '--porcelain'))) ''
 
-  # 5. Preconditions: a tracked change stops a real run; a dry run only warns.
+  # 5. Preconditions: a tracked change stops a real run; a dry run only warns. So only a dry run gets past the edited
+  #    VERSION's own tracked change to the VERSION check, which stops even a dry run.
   Add-Content -LiteralPath (Join-Path $work 'D2BS.h') -Value '// sandbox edit'
   $r = Invoke-Release @('1', '', 'y')
   Check 'tracked change stops the release' ($r.Code -eq 1 -and $r.Text -match 'tracked change') $r.Text
   $r = Invoke-Release @('1', '', 'y') @('-DryRun')
   Check 'dry run only warns about it' ($r.Code -eq 0 -and $r.Text -match 'tracked change') $r.Text
   G $work @('checkout', '--quiet', '--', 'D2BS.h') | Out-Null
+  [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "1.6.06`n")
+  $r = Invoke-Release @() @('-DryRun')
+  Check 'a VERSION with a leading zero is refused' ($r.Code -eq 1 -and $r.Text -match 'without leading zeros') $r.Text
+  G $work @('checkout', '--quiet', '--', 'VERSION') | Out-Null
 
   # 6. Behind origin stops the release.
   & git clone --quiet --branch master $origin $other; if ($LASTEXITCODE) { throw 'clone failed' }

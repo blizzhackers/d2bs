@@ -148,7 +148,12 @@ try {
     # cl /Zi leaves a PDB server running from the toolset for a while after a build, holding its DLLs open.
     Get-CimInstance Win32_Process -Filter "Name='mspdbsrv.exe'" | Where-Object {
       $_.ExecutablePath -and $_.ExecutablePath.StartsWith($Out + '\', [StringComparison]::OrdinalIgnoreCase)
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue }
+    } | ForEach-Object {
+      # Errors are ignored: it may exit on its own after the lookup, and one this can't stop makes the rename below
+      # fail with a clear message.
+      Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+      Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
+    }
     $old = "$Out.old-$runId"
     try { Rename-Item -LiteralPath $Out -NewName (Split-Path -Leaf $old) }
     catch { throw "$Out could not be renamed (is a build running from it?), so it was left as it was: $($_.Exception.Message)" }

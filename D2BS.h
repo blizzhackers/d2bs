@@ -7,7 +7,10 @@
 #define XP_WIN
 #endif
 
-#define D2BS_VERSION L"1.6.4U"
+// build\Build-D2BS.ps1 defines the version from VERSION and the commit (d2bs_build.h); builds without it say so.
+#ifndef D2BS_VERSION
+#define D2BS_VERSION L"local build"
+#endif
 
 #include <windows.h>
 #include <vector>

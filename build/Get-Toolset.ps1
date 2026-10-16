@@ -1,4 +1,4 @@
-#Requires -Version 7
+#Requires -Version 7.2
 <#
   Fetches the Visual C++ 2010 SP1 x86 compiler and the Windows SDK 7.1 headers and libraries listed in toolset.json
   from Microsoft, checks their size and SHA-256, and unpacks them into -Out without installing anything: 7-Zip takes
@@ -17,7 +17,8 @@ param(
 Set-StrictMode -Version 3
 $ErrorActionPreference = 'Stop'
 # Relative paths resolve against PowerShell's current location; .NET would use the process's own directory.
-$Out = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)
+$Out = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out).TrimEnd('\', '/')
+if ($Out -match '^[A-Za-z]:$') { throw "-Out must be a folder, not the drive root $Out" }
 if ($PackageDir) { $PackageDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PackageDir) }
 # -Out is replaced whole, so it must be new, empty, or a toolset this script made (it holds toolset.txt).
 if ((Test-Path -LiteralPath $Out) -and @(Get-ChildItem -LiteralPath $Out -Force).Count -and
@@ -62,7 +63,13 @@ function Expand-Msi($pkg, [string]$archive) {
   $log = Join-Path $work "$($pkg.name)-msiexec.log"
   $p = Start-Process -FilePath msiexec.exe -Wait -PassThru -ArgumentList @('/a', "`"$msi`"", '/qn', "TARGETDIR=`"$image`"", '/L*', "`"$log`"")
   if ($p.ExitCode -notin 0, 3010) {
-    if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 30 | Write-Host }
+    # The log goes with the work folder, so show its errors (the failing action ends with "Return value 3") and end.
+    if (Test-Path -LiteralPath $log) {
+      $lines = @(Get-Content -LiteralPath $log)
+      $errors = @($lines | Where-Object { $_ -match 'Return value 3|Error \d{4}' } | Select-Object -First 10)
+      if ($errors) { Write-Host 'msiexec errors:'; $errors | Write-Host }
+      Write-Host 'msiexec log, last lines:'; $lines | Select-Object -Last 30 | Write-Host
+    }
     throw "msiexec /a $($pkg.msi) failed ($($p.ExitCode))"
   }
   $image
@@ -90,10 +97,12 @@ function Find-X86Dll([string]$root, [string]$name) {
 # Copies the files of $from (with -Recurse, its subfolders too) into $to.
 function Copy-Tree([string]$from, [string]$to, [switch]$Recurse) {
   New-Item -ItemType Directory -Force -Path $to | Out-Null
-  if ($Recurse) { Copy-Item -Path (Join-Path $from '*') -Destination $to -Recurse -Force }
+  if ($Recurse) { Get-ChildItem -LiteralPath $from -Force | Copy-Item -Destination $to -Recurse -Force }
   else { Get-ChildItem -LiteralPath $from -File | Copy-Item -Destination $to -Force }
 }
 
+# The toolset is assembled and checked beside -Out, then swapped in: a failed run leaves -Out as it was.
+$stage = "$Out.partial-$PID"
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 try {
   $images = @{}
@@ -101,6 +110,35 @@ try {
   $vc = Find-Root $images.vc 'VC' @('bin\cl.exe', 'include\stdio.h', 'lib\msvcrt.lib')
   $ide = Find-Root $images.vc 'IDE' @('mspdb100.dll')
   $sdk = Find-Root $images.sdk 'v7.1' @('Include\Windows.h', 'Lib\kernel32.lib')
+  # x86 only: the top level of VC\bin, VC\lib and the SDK's Lib; amd64/ia64 subfolders are left out.
+  Copy-Tree (Join-Path $vc 'bin') (Join-Path $stage 'vc\bin')
+  Copy-Tree (Join-Path $vc 'bin\1033') (Join-Path $stage 'vc\bin\1033')
+  Copy-Tree (Join-Path $vc 'include') (Join-Path $stage 'vc\include') -Recurse
+  Copy-Tree (Join-Path $vc 'lib') (Join-Path $stage 'vc\lib')
+  Copy-Tree $ide (Join-Path $stage 'ide')
+  Copy-Tree (Join-Path $sdk 'Include') (Join-Path $stage 'sdk\include') -Recurse
+  Copy-Tree (Join-Path $sdk 'Lib') (Join-Path $stage 'sdk\lib')
+  # cl, link and mspdb100 load the VC++ 2010 runtime, which build machines no longer have; the MSI ships it for
+  # the system folder, and Windows looks for it beside the program first.
+  foreach ($name in 'msvcr100.dll', 'msvcp100.dll') {
+    $dll = Find-X86Dll $images.vc $name
+    foreach ($to in 'vc\bin', 'ide') { Copy-Item -LiteralPath $dll -Destination (Join-Path $stage $to) -Force }
+  }
+  # cl prints its banner on stderr and its usage on stdout, in no fixed order once merged. PATH is the caller's
+  # again afterwards, as the script may run in-process.
+  $savedPath = $env:PATH
+  try {
+    $env:PATH = (Join-Path $stage 'vc\bin') + ';' + (Join-Path $stage 'ide') + ';' + $env:PATH
+    $clOut = @(& (Join-Path $stage 'vc\bin\cl.exe') 2>&1 | ForEach-Object { "$_" })
+  } finally { $env:PATH = $savedPath }
+  $banner = @($clOut -match 'Version 16\.00\.40219') | Select-Object -First 1
+  if (-not $banner) { throw "unexpected compiler output: $($clOut -join ' | ')" }
+  # Written last, once the toolset is known good. Build-D2BS.ps1 checks these lines against toolset.json, so bump
+  # "recipe" there whenever this script changes what it puts in the toolset.
+  Set-Content -LiteralPath (Join-Path $stage 'toolset.txt') -Encoding utf8 -Value @(
+    "recipe $($spec.recipe)"
+    ($spec.packages | ForEach-Object { "$($_.file) sha256 $($_.sha256)" })
+  )
   if (Test-Path -LiteralPath $Out) {
     # cl /Zi leaves a PDB server running from the toolset for a while after a build, holding its DLLs open.
     Get-CimInstance Win32_Process -Filter "Name='mspdbsrv.exe'" | Where-Object {
@@ -108,35 +146,10 @@ try {
     } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $Out -Recurse -Force
   }
-  # x86 only: the top level of VC\bin, VC\lib and the SDK's Lib; amd64/ia64 subfolders are left out.
-  Copy-Tree (Join-Path $vc 'bin') (Join-Path $Out 'vc\bin')
-  Copy-Tree (Join-Path $vc 'bin\1033') (Join-Path $Out 'vc\bin\1033')
-  Copy-Tree (Join-Path $vc 'include') (Join-Path $Out 'vc\include') -Recurse
-  Copy-Tree (Join-Path $vc 'lib') (Join-Path $Out 'vc\lib')
-  Copy-Tree $ide (Join-Path $Out 'ide')
-  Copy-Tree (Join-Path $sdk 'Include') (Join-Path $Out 'sdk\include') -Recurse
-  Copy-Tree (Join-Path $sdk 'Lib') (Join-Path $Out 'sdk\lib')
-  # cl, link and mspdb100 load the VC++ 2010 runtime, which build machines no longer have; the MSI ships it for
-  # the system folder, and Windows looks for it beside the program first.
-  foreach ($name in 'msvcr100.dll', 'msvcp100.dll') {
-    $dll = Find-X86Dll $images.vc $name
-    foreach ($to in 'vc\bin', 'ide') { Copy-Item -LiteralPath $dll -Destination (Join-Path $Out $to) -Force }
-  }
-  Set-Content -LiteralPath (Join-Path $Out 'toolset.txt') -Encoding utf8 -Value @(
-    "recipe $($spec.recipe)"
-    ($spec.packages | ForEach-Object { "$($_.file) sha256 $($_.sha256)" })
-  )
-  # cl prints its banner on stderr and its usage on stdout, in no fixed order once merged. PATH is the caller's
-  # again afterwards, as the script may run in-process.
-  $savedPath = $env:PATH
-  try {
-    $env:PATH = (Join-Path $Out 'vc\bin') + ';' + (Join-Path $Out 'ide') + ';' + $env:PATH
-    $clOut = @(& (Join-Path $Out 'vc\bin\cl.exe') 2>&1 | ForEach-Object { "$_" })
-  } finally { $env:PATH = $savedPath }
-  $banner = @($clOut -match 'Version 16\.00\.40219') | Select-Object -First 1
-  if (-not $banner) { throw "unexpected compiler output: $($clOut -join ' | ')" }
+  Move-Item -LiteralPath $stage -Destination $Out
   $mb = [math]::Round(((Get-ChildItem -LiteralPath $Out -Recurse -File | Measure-Object -Property Length -Sum).Sum) / 1MB)
   Write-Host "toolset ready in $Out ($mb MB): $banner"
 } finally {
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+  if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
 }

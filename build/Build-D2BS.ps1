@@ -1,4 +1,4 @@
-#Requires -Version 7
+#Requires -Version 7.2
 <#
   Builds D2BS.dll (Release|Win32) with the Visual C++ 2010 SP1 toolset from Get-Toolset.ps1, without MSBuild or an
   installed Visual Studio. The flags mirror D2BS.vcxproj's Release|Win32 settings, including sqlite3.c's own (warning
@@ -12,7 +12,12 @@
   gets 65535. The DLL's product version string carries the full version text.
 
     pwsh -File build\Build-D2BS.ps1 -Toolset C:\d2bs-toolset
+
+  PowerShell 7.2 or later: earlier versions turn a native tool's output on stderr into an error under ErrorAction
+  Stop.
 #>
+# CmdletBinding makes an unknown argument an error: a mistyped -Release must not quietly build a dev DLL.
+[CmdletBinding()]
 param(
   [string]$Toolset = $env:D2BS_TOOLSET,
   [string]$Out,
@@ -28,8 +33,17 @@ if (-not $Toolset) { throw 'pass -Toolset (a folder made by build\Get-Toolset.ps
 # Relative paths resolve against PowerShell's current location; .NET would use the process's own directory.
 $Out = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)
 $Toolset = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Toolset)
-foreach ($need in 'vc\bin\cl.exe', 'ide\mspdb100.dll', 'sdk\include\Windows.h', 'sdk\lib\kernel32.lib') {
+foreach ($need in 'vc\bin\cl.exe', 'ide\mspdb100.dll', 'sdk\include\Windows.h', 'sdk\lib\kernel32.lib', 'toolset.txt') {
   if (-not (Test-Path -LiteralPath (Join-Path $Toolset $need))) { throw "$Toolset has no ${need}; make it with build\Get-Toolset.ps1" }
+}
+# A toolset made from other packages or by an older Get-Toolset.ps1 (another recipe) may lack what this build needs:
+# its toolset.txt must name the recipe and the packages toolset.json names now.
+$spec = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'toolset.json') -Raw | ConvertFrom-Json
+$wanted = @("recipe $($spec.recipe)") + @($spec.packages | ForEach-Object { "$($_.file) sha256 $($_.sha256)" })
+$made = @(Get-Content -LiteralPath (Join-Path $Toolset 'toolset.txt') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if (($made -join "`n") -ne ($wanted -join "`n")) {
+  $first = if ($made) { $made[0] } else { 'empty toolset.txt' }
+  throw "$Toolset was made by another toolset recipe or from other packages ($first): run build\Get-Toolset.ps1 again"
 }
 
 # Version: VERSION holds major.minor.patch; the U suffix is D2BS's (Unicode build) since 1.6.4U.
@@ -79,11 +93,18 @@ if (-not (Test-Path -LiteralPath $jsLib) -or $unpacked -ne $zipHash) {
 # The linker looks for js_static.lib's debug info (generated.pdb) beside the library.
 Copy-Item -LiteralPath (Join-Path $jsDir 'generated.pdb') -Destination $lib -Force
 
+# On a failure, the console gets the tool's first error lines (the cause; later ones are often its echoes) and its
+# last lines; build.log keeps everything.
 function Invoke-Tool([string]$Exe, [string[]]$ToolArgs) {
   Add-Content -LiteralPath $log -Value ("> $Exe " + ($ToolArgs -join ' '))
-  $o = & $Exe @ToolArgs 2>&1
+  $o = @(& $Exe @ToolArgs 2>&1 | ForEach-Object { "$_" })
   $o | Add-Content -LiteralPath $log
-  if ($LASTEXITCODE) { $o | Select-Object -Last 20 | Write-Host; throw "$Exe failed ($LASTEXITCODE)" }
+  if ($LASTEXITCODE) {
+    $errors = @($o | Where-Object { $_ -match '\b(fatal )?error [A-Z]+\d+' } | Select-Object -First 10)
+    if ($errors) { Write-Host 'First errors:'; $errors | Write-Host }
+    Write-Host 'Last lines:'; $o | Select-Object -Last 20 | Write-Host
+    throw "$Exe failed ($LASTEXITCODE); the whole output is in $log"
+  }
 }
 
 # Run in-process (./build/Build-D2BS.ps1), the script must hand the caller back its own PATH, INCLUDE and LIB, which
@@ -144,7 +165,8 @@ try {
 
 # A resource editor that rewrote the version block would ship 0.0.0.0 without an error; fail instead. FileVersion and
 # ProductVersion are the string values; the *Part properties are the numeric FILEVERSION and PRODUCTVERSION.
-$info = (Get-Item -LiteralPath $dll).VersionInfo
+$dllItem = Get-Item -LiteralPath $dll
+$info = $dllItem.VersionInfo
 $want = $fileVersion -join '.'
 $found = [ordered]@{
   'file version number' = '{0}.{1}.{2}.{3}' -f $info.FileMajorPart, $info.FileMinorPart, $info.FileBuildPart, $info.FilePrivatePart
@@ -158,4 +180,4 @@ if ($bad) { throw "D2BS.dll carries the wrong version: $($bad -join '; '). Check
 $warnings = @(Get-Content -LiteralPath $log | Where-Object { $_ -match ': warning [A-Z]+\d+' }).Count
 $h = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash
 Add-Content -LiteralPath $log -Value "built $dll sha256 $h, $warnings warnings"
-Write-Host "built D2BS.dll $display, file version $($fileVersion -join '.'), $((Get-Item $dll).Length) bytes, sha256 $($h.Substring(0, 16)), $warnings warnings"
+Write-Host "built D2BS.dll $display, file version $($fileVersion -join '.'), $($dllItem.Length) bytes, sha256 $($h.Substring(0, 16)), $warnings warnings"

@@ -1,4 +1,4 @@
-#Requires -Version 7
+#Requires -Version 7.2
 <#
   Interactive release for D2BS. Checks that master is ready, proposes the next patch, minor or major version (or the
   same version again, when its release commit exists but its tag was deleted), writes VERSION, and after a review
@@ -123,12 +123,15 @@ elseif (-not $hasGh) { Warn 'gh is not installed: no CI check and no release wat
 else {
   $head = Read-Git @('rev-parse', 'HEAD')
   $runs = & gh run list --repo $slug --workflow build.yml --branch master --limit 5 --json headSha,status,conclusion,url 2>$null
-  $runForHead = if (-not $LASTEXITCODE -and $runs) { @($runs | ConvertFrom-Json | Where-Object { $_.headSha -eq $head }) | Select-Object -First 1 } else { $null }
-  if (-not $runForHead) { Warn "no CI build of master's latest commit found; the release build will be its first" }
-  elseif ($runForHead.conclusion -eq 'success') { Ok "CI built master's latest commit: $($runForHead.url)" }
+  if ($LASTEXITCODE) { Warn "gh could not list $slug's runs (check gh auth status): no CI check" }
   else {
-    Warn "CI on master's latest commit is $($runForHead.status) $($runForHead.conclusion): $($runForHead.url)"
-    if (-not $DryRun -and -not (Confirm-Step 'Release anyway?' $false)) { Stop-Release }
+    $runForHead = if ($runs) { @($runs | ConvertFrom-Json | Where-Object { $_.headSha -eq $head }) | Select-Object -First 1 } else { $null }
+    if (-not $runForHead) { Warn "no CI build of master's latest commit found; the release build will be its first" }
+    elseif ($runForHead.conclusion -eq 'success') { Ok "CI built master's latest commit: $($runForHead.url)" }
+    else {
+      Warn "CI on master's latest commit is $($runForHead.status) $($runForHead.conclusion): $($runForHead.url)"
+      if (-not $DryRun -and -not (Confirm-Step 'Release anyway?' $false)) { Stop-Release }
+    }
   }
 }
 
@@ -154,7 +157,8 @@ $options = @()
 # The same version again only when its release commit exists but its tag is gone (deleted after a failed build).
 $currentTag = "v$current"
 $releaseCommit = Read-Git @('log', '-1', '--format=%h', '--extended-regexp', "--grep=^chore\(release\): v$($current -replace '\.', '\.')$")
-if ($releaseCommit -and -not (Test-LocalTag $currentTag) -and -not (Test-RemoteTag $currentTag)) {
+$sameAgain = [bool]($releaseCommit -and -not (Test-LocalTag $currentTag) -and -not (Test-RemoteTag $currentTag))
+if ($sameAgain) {
   $options += [pscustomobject]@{ Label = "$current again (release commit $releaseCommit, tag deleted)"; Version = $current }
 }
 $options += [pscustomobject]@{ Label = 'patch'; Version = '{0}.{1}.{2}' -f $currentVersion.Major, $currentVersion.Minor, ($currentVersion.Build + 1) }
@@ -179,9 +183,11 @@ while (-not $chosen) {
   $remote = Test-RemoteTag "v$candidate"
   if ($remote) { Warn "tag v$candidate already exists on origin"; continue }
   if ($null -eq $remote -and -not $NoFetch) { Warn "could not ask origin about v$candidate; the atomic push still refuses a duplicate" }
-  if ($latestTag -and $candidateVersion -le (ConvertTo-Version $latestTag.Substring(1))) {
-    if (-not (Confirm-Step "v$candidate is not newer than $latestTag. Use it anyway?" $false)) { continue }
-  }
+  # Newer than the latest release tag and than VERSION (the latest release, even one shipped untagged, like 1.6.4U);
+  # only the "again" case may reuse VERSION's number.
+  $notNewer = if ($latestTag -and $candidateVersion -le (ConvertTo-Version $latestTag.Substring(1))) { $latestTag }
+  elseif ($candidateVersion -lt $currentVersion -or ($candidateVersion -eq $currentVersion -and -not $sameAgain)) { "VERSION $current" }
+  if ($notNewer -and -not (Confirm-Step "v$candidate is not newer than $notNewer. Use it anyway?" $false)) { continue }
   $chosen = $candidate
 }
 $tag = "v$chosen"
@@ -283,13 +289,19 @@ if ($slug -and $hasGh -and -not $DryRun -and (Confirm-Step 'Watch the release bu
   # The run for this tag's commit: a tag pushed again after a failed build also has the old tag's run.
   $tagCommit = Read-Git @('rev-parse', "$tag^{commit}")
   $runId = $null
-  for ($try = 0; $try -lt 20 -and -not $runId; $try++) {
+  $ghFailures = 0
+  # Up to a minute for the run to appear; three gh failures in a row (not one passing blip) end the wait.
+  for ($try = 0; $try -lt 20 -and -not $runId -and $ghFailures -lt 3; $try++) {
     Start-Sleep -Seconds 3
     $runs = & gh run list --repo $slug --workflow build.yml --limit 20 --json databaseId,headBranch,headSha 2>$null
-    if (-not $LASTEXITCODE -and $runs) {
+    if ($LASTEXITCODE) { $ghFailures++; continue }
+    $ghFailures = 0
+    if ($runs) {
       $runId = @($runs | ConvertFrom-Json | Where-Object { $_.headBranch -eq $tag -and $_.headSha -eq $tagCommit }) |
         Select-Object -First 1 -ExpandProperty databaseId
     }
   }
-  if ($runId) { & gh run watch $runId --repo $slug } else { Warn "the release build has not appeared yet: $url/actions" }
+  if ($runId) { & gh run watch $runId --repo $slug }
+  elseif ($ghFailures -ge 3) { Warn "gh could not list $slug's runs (check gh auth status); see $url/actions" }
+  else { Warn "the release build has not appeared yet; see $url/actions" }
 }

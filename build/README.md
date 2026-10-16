@@ -11,6 +11,10 @@ and on demand (Run workflow).
 
 - **Every build:** the run's artifact holds `D2BS.dll`, `D2BS.pdb` and `build.log`. It is named `D2BS-<commit>` and
   kept for 30 days. A pull request builds its own head commit, so that commit is the one in the name and in the DLL.
+  A build that fails while compiling, linking or checking the DLL's version uploads its whole `build.log` alone, as
+  `D2BS-build-log-<commit>` (or `-<tag>`); the job log shows the failing tool's first errors and last lines. A failure
+  before that (fetching the toolset, a missing toolset, a tag that doesn't match `VERSION`) shows its cause in the
+  job log.
 - **Release tags (`v<major>.<minor>.<patch>`, e.g. `v1.6.5`):** the build is a release, and the workflow creates a
   draft GitHub Release with the DLL and PDB. The artifact is named `D2BS-<tag>` and kept for 90 days. You publish
   the draft by hand (see Releasing). Other tags don't start a build.
@@ -28,10 +32,13 @@ pwsh -File build\Get-Toolset.ps1 -Out C:\d2bs-toolset                    # once;
 pwsh -File build\Build-D2BS.ps1 -Toolset C:\d2bs-toolset                 # writes build\out\D2BS.dll
 ```
 
-You need PowerShell 7, 7-Zip and a Windows 10 or later SDK (for `rc.exe`). Set `D2BS_TOOLSET` to skip `-Toolset`.
-Everything the build writes goes to `build\out` (ignored by git), or to the folder you pass with `-Out`. The toolset
-brings its own copy of the Visual C++ 2010 runtime, so the machine doesn't need it installed. `Get-Toolset.ps1`
-replaces its `-Out` folder, so it refuses a folder that holds anything other than an earlier toolset.
+You need PowerShell 7.2 or later, 7-Zip and a Windows 10 or later SDK (for `rc.exe`). Set `D2BS_TOOLSET` to skip
+`-Toolset`. Everything the build writes goes to `build\out` (ignored by git), or to the folder you pass with `-Out`.
+The toolset brings its own copy of the Visual C++ 2010 runtime, so the machine doesn't need it installed.
+`Get-Toolset.ps1` replaces its `-Out` folder only once the new toolset passes its checks, and it refuses a folder
+that holds anything other than an earlier toolset. The build refuses a toolset made from other packages or by an
+older `Get-Toolset.ps1`: run `Get-Toolset.ps1` again. Whoever changes what `Get-Toolset.ps1` puts in the toolset
+bumps `recipe` in `toolset.json`; a package change is caught by its SHA-256 alone.
 
 ## Versions
 
@@ -61,7 +68,9 @@ On an up-to-date `master` with no uncommitted changes, the script:
 
 1. Checks the preconditions: on `master`, no tracked changes, not behind `origin/master`, and the last CI build of
    `master`.
-2. Offers the next patch, minor or major version, e.g. `1.6.5` after `1.6.4`. You can type another.
+2. Offers the next patch, minor or major version, e.g. `1.6.5` after `1.6.4`. You can type another; one that isn't
+   newer than `VERSION` or the latest release tag needs a confirmation (except when it offers the same version
+   again, below).
 3. Writes `VERSION` and shows the change for review.
 4. Commits it as `chore(release): v1.6.5`.
 5. Creates the annotated tag `v1.6.5`.
@@ -76,3 +85,9 @@ If the tag build fails on a download, re-run it from its Actions page. If the co
 2. Delete the tag on GitHub and locally: `git push origin :refs/tags/v1.6.5`, then `git tag -d v1.6.5`.
 3. Fix `master`.
 4. Run the script again. It offers the same version again, for the fixed `master`.
+
+After changing `Release-D2BS.ps1`, run `pwsh -File build\tests\Test-ReleaseScript.ps1`. It releases into a throwaway
+sandbox (a bare clone of this repo without its tags as `origin`, with your working copy of the script) through every
+path above that needs no GitHub, including a rejected push and a re-release, and nothing reaches this repo or GitHub.
+The check of `master`'s CI build and the watch of the tag build need GitHub, so the test can't run them. Its exit
+code is the number of failed checks, or 1 if a git step in the sandbox itself fails.

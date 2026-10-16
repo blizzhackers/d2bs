@@ -53,6 +53,7 @@ jobs:
           key: ${{ steps.toolset.outputs.cache-primary-key }}
 
       - name: Build
+        id: build
         shell: pwsh
         env:
           REF_TYPE: ${{ github.ref_type }}
@@ -73,6 +74,19 @@ jobs:
             ${{ runner.temp }}/out/build.log
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 30 }}
+          overwrite: true # a re-run replaces the earlier attempt's artifact
+
+      # A failed build keeps its whole log (the job log shows only the failing tool's errors and last lines), under a
+      # name of its own so the release job never takes it for a build.
+      - name: Upload the build log of a failed build
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v7 # floating major; v7.0.2 was current on 2026-10-15
+        with:
+          name: D2BS-build-log-${{ github.ref_type == 'tag' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/out/build.log
+          if-no-files-found: ignore
+          retention-days: 30
+          overwrite: true
 
   release:
     # Only a pushed release tag: a manual run on a tag builds it but makes no second release.

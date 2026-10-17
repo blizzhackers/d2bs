@@ -731,42 +731,51 @@ JSAPI_FUNC(unit_cancel) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    DWORD automapOn = *p_D2CLIENT_AutomapOn;
     jsint mode = -1;
-
     if (argc > 0) {
         JS_BeginRequest(cx);
         if (JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0]))
             JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], (uint32*)&mode);
         JS_EndRequest(cx);
-    } else if (IsScrollingText())
-        mode = 3;
-    else if (D2CLIENT_GetCurrentInteractingNPC())
-        mode = 2;
-    else if (D2CLIENT_GetCursorItem())
-        mode = 1;
-    else
-        mode = 0;
+    }
 
-    switch (mode) {
-    case 0:
-        D2CLIENT_CloseInteract();
-        break;
-    case 1: {
-        // as ClickMap: the click runs game code that only the game thread may run unlocked
+    {
+        // Every case runs the game's own UI code, which only the game thread may run unlocked: a panel closed in the
+        // middle of a frame lets the frame skip its draw-list rebuild yet still draw, and a stale entry halts the game.
+        // Readiness is checked again under the lock: an area change may start while this waits for it, and
+        // IsScrollingText waits for a ready game that only the game thread, blocked on this lock, can bring about.
         AutoCriticalRoom cRoom;
-        D2CLIENT_ClickMap(0, 10, 10, 0x08);
-        break;
-    }
-    case 2:
-        D2CLIENT_CloseNPCInteract();
-        break;
-    case 3:
-        D2CLIENT_ClearScreen();
-        break;
-    }
+        DWORD automapOn = *p_D2CLIENT_AutomapOn;
+        if (!GameReady())
+            mode = -1;
+        else if (argc == 0) {
+            if (IsScrollingText())
+                mode = 3;
+            else if (D2CLIENT_GetCurrentInteractingNPC())
+                mode = 2;
+            else if (D2CLIENT_GetCursorItem())
+                mode = 1;
+            else
+                mode = 0;
+        }
 
-    *p_D2CLIENT_AutomapOn = automapOn;
+        switch (mode) {
+        case 0:
+            D2CLIENT_CloseInteract();
+            break;
+        case 1:
+            D2CLIENT_ClickMap(0, 10, 10, 0x08);
+            break;
+        case 2:
+            D2CLIENT_CloseNPCInteract();
+            break;
+        case 3:
+            D2CLIENT_ClearScreen();
+            break;
+        }
+
+        *p_D2CLIENT_AutomapOn = automapOn;
+    }
     JS_SET_RVAL(cx, vp, JSVAL_TRUE);
     return JS_TRUE;
 }
@@ -806,6 +815,11 @@ JSAPI_FUNC(unit_useMenu) {
     if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
 
+    // A menu entry runs the game's own UI code (opening a store sets the panel mode), which only the game thread may
+    // run unlocked, and only while the game is ready (an area change may start while this waits for the lock).
+    AutoCriticalRoom cRoom;
+    if (!GameReady())
+        return JS_TRUE;
     UnitAny* pUnit = D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType);
 
     if (!pUnit)
@@ -868,9 +882,17 @@ JSAPI_FUNC(unit_interact) {
             if (retVal == 255)
                 return JS_TRUE;
 
-        D2CLIENT_TakeWaypoint(pUnit->dwUnitId, nWaypointID);
-        if (!D2CLIENT_GetUIState(UI_GAME))
-            D2CLIENT_CloseInteract();
+        {
+            // Taking the waypoint closes its panel, game UI code that only the game thread may run unlocked, and only
+            // while the game is ready. The id comes from the script's unit: pUnit was found without the lock and may be
+            // gone by now.
+            AutoCriticalRoom cRoom;
+            if (!GameReady())
+                return JS_TRUE;
+            D2CLIENT_TakeWaypoint(lpUnit->dwUnitId, nWaypointID);
+            if (!D2CLIENT_GetUIState(UI_GAME))
+                D2CLIENT_CloseInteract();
+        }
 
         JS_SET_RVAL(cx, vp, JSVAL_TRUE);
         return JS_TRUE;

@@ -170,7 +170,8 @@ DWORD GetPlayerArea(void) {
 }
 
 Level* GetLevel(DWORD dwLevelNo) {
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
+    // On the stack, so every return gives the game lock back: a held lock freezes the game thread.
+    AutoCriticalRoom cRoom;
 
     if (!GameReady())
         return nullptr;
@@ -184,7 +185,6 @@ Level* GetLevel(DWORD dwLevelNo) {
 
             if (!pLevel->pRoom2First)
                 break;
-            delete cRoom;
             return pLevel;
         }
         pLevel = pLevel->pNextLevel;
@@ -192,7 +192,6 @@ Level* GetLevel(DWORD dwLevelNo) {
 
     // this crashes pretty much every time it's called
     // pLevel = D2COMMON_GetLevel(D2CLIENT_GetPlayerUnit()->pAct->pMisc, dwLevelNo);
-    delete cRoom;
     return pLevel;
 }
 

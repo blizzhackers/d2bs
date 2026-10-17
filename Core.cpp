@@ -95,18 +95,21 @@ void __fastcall Say(const wchar_t* szFormat, ...) {
     if (*p_D2CLIENT_PlayerUnit) {
         memcpy((wchar_t*)p_D2CLIENT_ChatMsg, szBuffer, (len + 1) * sizeof(wchar_t));
 
-        MSG* aMsg = new MSG;
-        aMsg->hwnd = D2GFX_GetHwnd();
-        aMsg->message = WM_CHAR;
-        aMsg->wParam = VK_RETURN;
-        aMsg->lParam = 0x11C0001;
-        aMsg->time = NULL;
-        aMsg->pt.x = 0x79;
-        aMsg->pt.y = 0x1;
+        // The game's chat handler takes Storm's message-handler parameters by address and writes their last two fields
+        // (+0x18 and +0x1C) on its way out; a MSG ends at +0x1C, so the block carries the result field as well.
+        struct {
+            MSG msg;
+            LRESULT result;
+        } params = {};
+        static_assert(sizeof(params) == 0x20, "the chat handler writes up to +0x1C of its parameters");
+        params.msg.hwnd = D2GFX_GetHwnd();
+        params.msg.message = WM_CHAR;
+        params.msg.wParam = VK_RETURN;
+        params.msg.lParam = 0x11C0001;
+        params.msg.pt.x = 0x79;
+        params.msg.pt.y = 0x1;
 
-        Say_ASM((DWORD)&aMsg);
-        delete aMsg;
-        aMsg = NULL;
+        Say_ASM((DWORD)&params);
 
         /*
         Vars.bDontCatchNextMsg = FALSE;

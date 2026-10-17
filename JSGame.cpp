@@ -217,9 +217,21 @@ JSAPI_FUNC(my_clickDialog) {
     tdl = (TransactionDialogsLine_t*)JSVAL_TO_PRIVATE(JS_GetReservedSlot(JSVAL_TO_OBJECT(JS_THIS(cx, vp)), 0));
 
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    if (tdl != NULL && tdl->bMaybeSelectable)
-        tdl->handler();
-    else
+    bool clicked = false;
+    {
+        // A dialog line's handler is the game's own UI code, which only the game thread may run unlocked. The line must
+        // be one of the open dialog's lines: one kept from an earlier getDialogLines() may point into a freed dialog.
+        AutoCriticalRoom cRoom;
+        TransactionDialogsInfo_t* pTdi = *p_D2CLIENT_pTransactionDialogsInfo;
+        DWORD lines = pTdi ? min(pTdi->numLines, (DWORD)_countof(pTdi->dialogLines)) : 0;
+        bool current = tdl != NULL && pTdi != NULL && tdl >= pTdi->dialogLines && tdl < pTdi->dialogLines + lines &&
+                       ((BYTE*)tdl - (BYTE*)pTdi->dialogLines) % sizeof(TransactionDialogsLine_t) == 0;
+        if (GameReady() && current && tdl->bMaybeSelectable) {
+            tdl->handler();
+            clicked = true;
+        }
+    }
+    if (!clicked)
         THROW_ERROR(cx, "That dialog is not currently clickable.");
 
     JS_SET_RVAL(cx, vp, JSVAL_TRUE);
@@ -1260,6 +1272,13 @@ JSAPI_FUNC(my_transmute) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
+    // Toggling the cube panel is game UI code (it sets the panel mode), which only the game thread may run unlocked,
+    // and only while the game is ready (an area change may start while this waits for the lock).
+    AutoCriticalRoom cRoom;
+    if (!GameReady()) {
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
     bool cubeOn = !!D2CLIENT_GetUIState(UI_CUBE);
     if (!cubeOn)
         D2CLIENT_SetUIState(UI_CUBE, TRUE);

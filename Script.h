@@ -20,7 +20,7 @@ typedef std::map<std::string, FunctionList> FunctionMap;
 typedef std::list<Script*> ScriptList;
 
 struct Event {
-    Event() : count(0){};
+    Event() : done(NULL), refs(1), freeArgs(NULL){};
     Script* owner;
     JSObject* object;
     FunctionList functions;
@@ -32,76 +32,20 @@ struct Event {
     void* arg3;
     void* arg4;
     void* arg5;
-    volatile long count;
-    inline void threadFinished() {
-        // clean up after both threads are done with the event
-        char* evtName = (char*)name;
-        InterlockedIncrement(&count);
-        if (count > 1) {
-            Event* evt = this;
-
-            if (strcmp(evtName, "itemaction") == 0) {
-                delete arg1;
-                free(arg2);
-                delete arg3;
-                delete arg4;
-            }
-            if (strcmp(evtName, "gameevent") == 0) {
-                delete evt->arg1;
-                delete evt->arg2;
-                delete evt->arg3;
-                free(evt->arg4);
-                free(evt->arg5);
-            }
-            if (strcmp(evtName, "copydata") == 0) {
-                delete evt->arg1;
-                free(evt->arg2);
-            }
-            if (strcmp(evtName, "chatmsg") == 0 || strcmp(evtName, "chatinput") == 0 || strcmp(evtName, "whispermsg") == 0 || strcmp(evtName, "chatmsgblocker") == 0 ||
-                strcmp(evtName, "chatinputblocker") == 0 || strcmp(evtName, "whispermsgblocker") == 0) {
-                free(evt->arg1);
-                free(evt->arg2);
-                delete evt->arg4;
-            }
-            if (strcmp(evtName, "mousemove") == 0 || strcmp(evtName, "ScreenHookHover") == 0) {
-                delete evt->arg1;
-                delete evt->arg2;
-            }
-            if (strcmp(evtName, "mouseclick") == 0) {
-                delete evt->arg1;
-                delete evt->arg2;
-                delete evt->arg3;
-                delete evt->arg4;
-            }
-            if (strcmp(evtName, "keyup") == 0 || strcmp(evtName, "keydownblocker") == 0 || strcmp(evtName, "keydown") == 0 || strcmp(evtName, "memana") == 0 ||
-                strcmp(evtName, "melife") == 0 || strcmp(evtName, "playerassign") == 0) {
-                delete evt->arg1;
-                delete evt->arg4;
-            }
-            if (strcmp(evtName, "ScreenHookClick") == 0) {
-                delete evt->arg1;
-                delete evt->arg2;
-                delete evt->arg3;
-                delete evt->arg4;
-            }
-            if (strcmp(evtName, "Command") == 0) {
-                // cleaned up in ExecScriptEvent
-            }
-            if (strcmp(evtName, "scriptmsg") == 0) {
-                delete evt->arg1;
-            }
-            if (strcmp(evtName, "gamepacket") == 0 || strcmp(evtName, "gamepacketsent") == 0 || strcmp(evtName, "realmpacket") == 0) {
-                delete[] evt->arg1;
-                delete evt->arg2;
-                delete evt->arg4;
-            }
-
-            free(evt->name);
-            delete evt;
-            Event::~Event();
-        }
-    };
+    // A blocker event (one whose listeners' verdict another thread waits for) has two owners, the waiting thread and
+    // the script that runs it, and whichever lets go last frees it: a wait that times out must not free an event the
+    // script still holds, and only the event's own completion may end its wait.
+    HANDLE done;
+    volatile long refs;
+    void (*freeArgs)(Event* evt);
 };
+
+// Fires a blocker event at its owner and waits up to timeoutMs for the verdict its listeners leave in *(DWORD*)arg4;
+// false (not blocked) when they take longer. evt->freeArgs must free the event's arguments.
+bool AwaitBlocker(Event* evt, DWORD timeoutMs, bool releaseGameLock);
+// The owning script's side, for a blocker event it ran or dropped: records the verdict and ends the wait.
+void CompleteBlocker(Event* evt, bool block);
+void ReleaseBlocker(Event* evt);
 
 class Script {
   private:

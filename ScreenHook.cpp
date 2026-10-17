@@ -211,6 +211,13 @@ Genhook::~Genhook(void) {
     // DeleteCriticalSection(&hookSection);
 }
 
+static void FreeClickArgs(Event* evt) {
+    delete (DWORD*)evt->arg1;
+    delete (DWORD*)evt->arg2;
+    delete (DWORD*)evt->arg3;
+    delete (DWORD*)evt->arg4;
+}
+
 bool Genhook::Click(int button, POINT* loc) {
     if (!IsInRange(loc))
         return false;
@@ -226,22 +233,9 @@ bool Genhook::Click(int button, POINT* loc) {
         evt->arg2 = new DWORD((DWORD)loc->x);
         evt->arg3 = new DWORD((DWORD)loc->y);
         evt->arg4 = new DWORD(false);
-
-        ResetEvent(Vars.eventSignal);
-        AutoRoot* root = new AutoRoot(evt->owner->GetContext(), clicked);
-        evt->functions.push_back(root);
-        owner->FireEvent(evt);
-
-        if (WaitForSingleObject(Vars.eventSignal, 3000) == WAIT_TIMEOUT)
-            return false;
-        bool* global = (bool*)evt->arg4;
-        block = *global;
-        delete evt->arg1;
-        delete evt->arg2;
-        delete evt->arg3;
-        delete evt->arg4;
-        delete root;
-        delete evt;
+        evt->functions.push_back(new AutoRoot(evt->owner->GetContext(), clicked));
+        evt->freeArgs = FreeClickArgs;
+        block = AwaitBlocker(evt, 3000, false);
     }
     return block;
 }

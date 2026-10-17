@@ -565,8 +565,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 JS_RemoveValueRoot(cx, &argv[j]);
         }
         if (strcmp(evtName, "chatmsgblocker") == 0 || strcmp(evtName, "chatinputblocker") == 0 || strcmp(evtName, "whispermsgblocker") == 0) {
-            *(DWORD*)evt->arg4 = block;
-            SetEvent(Vars.eventSignal);
+            CompleteBlocker(evt, block);
         } else {
             free(evt->arg1);
             free(evt->arg2);
@@ -648,8 +647,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_RemoveValueRoot(cx, &argv[0]);
         }
         if (strcmp(evtName, "keydownblocker") == 0) {
-            *(DWORD*)evt->arg4 = block;
-            SetEvent(Vars.eventSignal);
+            CompleteBlocker(evt, block);
         } else {
             delete evt->arg1;
             free(evt->name);
@@ -679,8 +677,11 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             for (int j = 0; j < 3; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
         }
-        *(DWORD*)evt->arg4 = block;
-        SetEvent(Vars.eventSignal);
+        // The hook's function roots belong to this script's context, so they go here, on its thread.
+        for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++)
+            delete *it;
+        evt->functions.clear();
+        CompleteBlocker(evt, block);
 
         return true;
     }
@@ -705,6 +706,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         free(evt->arg1);
         free(evt->name);
         delete evt;
+        return true;
     }
     if (strcmp(evtName, "scriptmsg") == 0) {
         if (!clearList) {
@@ -760,16 +762,10 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 1, &argv, &rval);
                 block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
             }
-            *(DWORD*)evt->arg4 = block;
             JS_RemoveRoot(cx, &arr);
-            SetEvent(Vars.eventSignal);
             JS_EndRequest(cx);
-            //	for(int j = 0 ; j < *argc; j++)
-            //	JS_RemoveValueRoot(cx, &argv[j]);
         }
-
-        // delete evt->arg1;
-        // delete evt->arg2;
+        CompleteBlocker(evt, block);
 
         return true;
     }
@@ -791,8 +787,12 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
     }
     if (strcmp(evtName, "DisposeMe") == 0) {
         ScriptEngine::DisposeScript(evt->owner);
+        return true;
     }
 
+    // A blocker event that no branch runs (keyupblocker has none) must still end its wait and drop its reference.
+    if (evt->freeArgs)
+        CompleteBlocker(evt, false);
     return true;
 }
 int ScriptEngine::AddDelayedEvent(Event* evt, int freq) {

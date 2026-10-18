@@ -30,7 +30,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      # A release tag's notes are its CHANGELOG.md section; a tag without one fails here, before the build.
+      # A release tag's notes are its CHANGELOG.md section; a tag without one, or with no entries in it, fails here,
+      # before the build.
       - name: Release notes
         if: github.ref_type == 'tag'
         shell: pwsh

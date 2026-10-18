@@ -40,6 +40,34 @@ function Invoke-Release([string[]]$Answers, [string[]]$ScriptArgs = @()) {
   $out = ($Answers -join "`n") | pwsh -NoProfile -File (Join-Path $work 'build' 'Release-D2BS.ps1') @ScriptArgs 2>&1
   [pscustomobject]@{ Code = $LASTEXITCODE; Text = (@($out) -join "`n") }
 }
+# Starts the release script with its input on a pipe, so a scenario can act while a prompt waits.
+function Start-Release {
+  $psi = [Diagnostics.ProcessStartInfo]::new('pwsh')
+  foreach ($a in '-NoProfile', '-File', (Join-Path $work 'build' 'Release-D2BS.ps1')) { $psi.ArgumentList.Add($a) }
+  $psi.RedirectStandardInput = $true
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
+  $psi.UseShellExecute = $false
+  $p = [Diagnostics.Process]::Start($psi)
+  [pscustomobject]@{ Proc = $p; Out = [Text.StringBuilder]::new(); Buf = [char[]]::new(4096); Err = $p.StandardError.ReadToEndAsync() }
+}
+# Reads the script's output until it ends with the prompt (a prompt has no newline after it).
+function Wait-Prompt($Run, [string]$Prompt, [int]$TimeoutSec = 60) {
+  $deadline = (Get-Date).AddSeconds($TimeoutSec)
+  while (-not $Run.Out.ToString().EndsWith($Prompt)) {
+    $read = $Run.Proc.StandardOutput.ReadAsync($Run.Buf, 0, $Run.Buf.Length)
+    if (-not $read.Wait([int][Math]::Max(0, ($deadline - (Get-Date)).TotalMilliseconds))) { throw "no '$Prompt' within $TimeoutSec s: $($Run.Out)" }
+    if ($read.Result -eq 0) { throw "the script ended before '$Prompt': $($Run.Out)" }
+    [void]$Run.Out.Append($Run.Buf, 0, $read.Result)
+  }
+}
+function Send-Answer($Run, [string]$Answer) { $Run.Proc.StandardInput.WriteLine($Answer); $Run.Proc.StandardInput.Flush() }
+function Complete-Release($Run) {
+  $Run.Proc.StandardInput.Close()
+  [void]$Run.Out.Append($Run.Proc.StandardOutput.ReadToEnd())
+  if (-not $Run.Proc.WaitForExit(60000)) { throw 'the release script did not end' }
+  [pscustomobject]@{ Code = $Run.Proc.ExitCode; Text = $Run.Out.ToString() + $Run.Err.Result }
+}
 function Invoke-Notes([string[]]$NotesArgs) {
   $out = & pwsh -NoProfile -File (Join-Path $work 'build' 'Get-ReleaseNotes.ps1') @NotesArgs 2>&1
   [pscustomobject]@{ Code = $LASTEXITCODE; Text = (@($out) -join "`n") }
@@ -146,6 +174,19 @@ function Invoke-Scenarios {
   Check 'headings without entries are no entries' ($r.Code -eq 0 -and $r.Text -match ($noEntries -replace '^\\\[xx\\\]', '\[!!\]')) $r.Text
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Add-Entry '- **Second fix.** One line.'
+  # Without the [Unreleased] link the release still dates the section, and says it adds no compare link.
+  $text = Get-Content -LiteralPath $file -Raw
+  [IO.File]::WriteAllText($file, ($text -replace '(?m)^\[Unreleased\]: .*\r?\n', ''))
+  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  Check 'a missing [Unreleased] link warns' ($r.Code -eq 0 -and $r.Text -match '\[!!\] CHANGELOG\.md has no \[Unreleased\] link at its end') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
+  Import-Module (Join-Path $work 'build' 'Changelog.psm1') -Force
+  $dated = Update-ChangelogForRelease -Text "## [Unreleased]`n`n- x`n" -Version '9.0.0' -Date 'D' -Tag 'v9.0.0'
+  Check 'and dates the section without adding a link' ($dated -eq "## [Unreleased]`n`n## [9.0.0] - D`n`n- x`n") $dated
+  $dated = Update-ChangelogForRelease -Text "## [Unreleased]`n`n- x`n`n[unreleased]: https://h/compare/abc...HEAD`n" -Version '9.0.0' -Date 'D' -Tag 'v9.0.0'
+  Check 'a lowercase [unreleased] link moves too' ($dated.EndsWith("[Unreleased]: https://h/compare/v9.0.0...HEAD`n[9.0.0]: https://h/compare/abc...v9.0.0`n")) $dated
+  $counts = Get-ChangelogEntryCounts "### Fixed`n- a`n  - sub`n  - sub`n- b`n<!--`n- hidden"
+  Check 'entries count top-level items only, and a comment left open hides the rest' ($counts.Count -eq 1 -and $counts['Fixed'] -eq 2) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
 
   # 3. Patch release with the review gate's diff: VERSION commit, tag and push.
   $r = Invoke-Release @('1', '', 'y', 'd', 'y')
@@ -185,7 +226,14 @@ function Invoke-Scenarios {
   [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "1.6.06`n")
   $r = Invoke-Release @() @('-DryRun')
   Check 'a VERSION with a leading zero is refused' ($r.Code -eq 1 -and $r.Text -match 'without leading zeros') $r.Text
+  [IO.File]::WriteAllText((Join-Path $work 'VERSION'), '')
+  $r = Invoke-Release @() @('-DryRun')
+  Check 'an empty VERSION is refused by name' ($r.Code -eq 1 -and $r.Text -match "VERSION must hold major\.minor\.patch without leading zeros, not ''") $r.Text
   G $work @('checkout', '--quiet', '--', 'VERSION') | Out-Null
+  [IO.File]::WriteAllText((Join-Path $work 'CHANGELOG.md'), '')
+  $r = Invoke-Release @() @('-DryRun')
+  Check 'an empty CHANGELOG.md is refused by name' ($r.Code -eq 1 -and $r.Text -match 'CHANGELOG\.md has no "## \[Unreleased\]" heading') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   # An untracked CHANGELOG.md: git could neither show it at the review nor put it back.
   G $work @('rm', '--quiet', '--cached', '--', 'CHANGELOG.md') | Out-Null
   G $work @('commit', '--quiet', '-m', 'sandbox: untrack CHANGELOG.md') | Out-Null
@@ -271,20 +319,55 @@ function Invoke-Scenarios {
   $n = Invoke-Notes @('-Version', '9.9.9')
   Check 'a missing section fails' ($n.Code -eq 1 -and $n.Text -match 'no \[9\.9\.9\] section') $n.Text
   $odd = Join-Path $Sandbox 'odd.md'
-  [IO.File]::WriteAllText($odd, ("## [Unreleased]`n`n## [3.0.0] - 2026-02-01`n`n### Added`n`n## [2.0.0] - 2026-01-01`n`n" +
+  $fence = '```'
+  [IO.File]::WriteAllText($odd, ("## [Unreleased]`n`n## [5.0.0] - 2026-04-01`n`n<!--`n- **Lead.** A template.`n-->`n`n* * *`n`n" +
+      "$fence`n- in a fence`n$fence`n`n## [3.0.0] - 2026-02-01`n`n### Added`n`n## [2.0.0] - 2026-01-01`n`n" +
       "## [1.0.0] - 2025-01-01`n`n- **Wrapped.** A line that goes`n  on here.`n  - a nested item`n[1]: https://example.invalid`n" +
-      "- **After a link.** Still in the section.`n`n[Unreleased]: https://example.invalid/compare/v3.0.0...HEAD`n"))
+      "- **After a link.** Still in the section.`n`n[unreleased]: https://example.invalid/compare/v3.0.0...HEAD`n"))
+  $n = Invoke-Notes @('-Version', '5.0.0', '-Changelog', $odd)
+  Check 'list lines in a comment or a fence, and a thematic break, are no entries' ($n.Code -eq 1 -and $n.Text -match '\[5\.0\.0\] section has no entries') $n.Text
   $n = Invoke-Notes @('-Version', '2.0.0', '-Changelog', $odd)
   Check 'an empty section fails' ($n.Code -eq 1 -and $n.Text -match '\[2\.0\.0\] section has no entries') $n.Text
   $n = Invoke-Notes @('-Version', '3.0.0', '-Changelog', $odd)
   Check 'a section of headings only fails' ($n.Code -eq 1 -and $n.Text -match '\[3\.0\.0\] section has no entries') $n.Text
   $n = Invoke-Notes @('-Version', '1.0.0', '-Changelog', $odd)
   Check 'a wrapped line warns once, a nested item not' ($n.Code -eq 0 -and ([regex]::Matches($n.Text, 'a wrapped line')).Count -eq 1 -and $n.Text -match 'join it to its entry: on here\.') $n.Text
-  Check 'a link inside a section does not end it; the version links do' ($n.Text -match 'After a link' -and $n.Text -notmatch 'example\.invalid/compare') $n.Text
+  Check 'a link inside a section does not end it; the version links do, in any case' ($n.Text -match 'After a link' -and $n.Text -notmatch 'example\.invalid/compare') $n.Text
   $one = Join-Path $Sandbox 'one-line.md'
   [IO.File]::WriteAllText($one, '## [4.0.0] - 2026-03-01')
   $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $one)
   Check 'a one-line file without a newline reads' ($n.Code -eq 1 -and $n.Text -match '\[4\.0\.0\] section has no entries') $n.Text
+  $empty = Join-Path $Sandbox 'empty.md'
+  [IO.File]::WriteAllText($empty, '')
+  $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $empty)
+  Check 'an empty file has no section' ($n.Code -eq 1 -and $n.Text -match 'no \[4\.0\.0\] section') $n.Text
+
+  # 13. A commit made while a prompt waits stops the release before anything is published: at "Proceed?" before
+  #     anything is written, and at the review, which puts the files back.
+  foreach ($at in 'Proceed? [Y/n] ', '(y) commit + tag + push  (d) show the diff  (n) abort: ') {
+    $where = if ($at -like 'Proceed*') { 'Proceed?' } else { 'the review' }
+    $originHead = G $origin @('rev-parse', 'master')
+    $run = Start-Release
+    try {
+      Wait-Prompt $run 'Choice [1]: '
+      Send-Answer $run '1'
+      Wait-Prompt $run 'Version [1.6.7]: '
+      Send-Answer $run ''
+      if ($where -eq 'the review') { Wait-Prompt $run 'Proceed? [Y/n] '; Send-Answer $run 'y' }
+      Wait-Prompt $run $at
+      Set-Content -LiteralPath (Join-Path $work 'unseen.txt') -Value 'x'
+      G $work @('add', '--', 'unseen.txt') | Out-Null
+      G $work @('commit', '--quiet', '-m', 'sandbox: a commit made while a prompt waited') | Out-Null
+      Send-Answer $run 'y'
+      $r = Complete-Release $run
+    } finally {
+      if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+    }
+    Check "a commit made at $where stops the release" ($r.Code -eq 1 -and $r.Text -match 'HEAD changed during the') $r.Text
+    Check "  and publishes nothing ($where)" (-not (G $work @('tag', '--list', 'v1.6.7')) -and (G $origin @('rev-parse', 'master')) -eq $originHead) ''
+    Check "  and leaves VERSION and CHANGELOG.md as committed ($where)" ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.6' -and -not (G $work @('status', '--porcelain'))) (G $work @('status', '--porcelain'))
+    G $work @('reset', '--quiet', '--keep', 'HEAD~1') | Out-Null
+  }
 }
 
 if (Test-Path -LiteralPath $Sandbox) { throw "$Sandbox already exists: pass another -Sandbox" }

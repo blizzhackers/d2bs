@@ -95,6 +95,7 @@ else { Ok 'fetched origin and its tags' }
 
 $branch = Read-Git @('rev-parse', '--abbrev-ref', 'HEAD')
 if ($branch -eq 'master') { Ok 'on branch master' } else { Fail "on branch '$branch', not master: releases ship only from master" }
+$headAtStart = Read-Git @('rev-parse', 'HEAD')
 
 $status = @((Read-Git @('status', '--porcelain', '--untracked-files=all')) -split "`n" | Where-Object { $_ })
 $tracked = @($status | Where-Object { -not $_.StartsWith('??') })
@@ -113,21 +114,23 @@ elseif ([int]$ahead -gt 0) {
   if (-not $DryRun -and -not (Confirm-Step 'Continue and publish these commits?' $false)) { Stop-Release }
 } else { Ok 'master is level with origin/master' }
 
-$current = if (Test-Path -LiteralPath $versionFile) { (Get-Content -LiteralPath $versionFile -Raw).Trim() } else { '' }
+# Get-Content -Raw returns $null for an empty file, and a [string] cast keeps it null. (No ??: Windows PowerShell
+# must parse this file to show #Requires' own message.)
+function Read-TextFile([string]$Path) { $text = Get-Content -LiteralPath $Path -Raw -Encoding utf8; if ($null -eq $text) { '' } else { $text } }
+$current = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
 $currentVersion = ConvertTo-Version $current
 if (-not $currentVersion -or $currentVersion.ToString() -ne $current) {
   Stop-Release "VERSION must hold major.minor.patch without leading zeros, not '$current'"
 }
 
-# An empty file reads as $null.
-function Read-Changelog { [string](Get-Content -LiteralPath $changelogFile -Raw -Encoding utf8) }
+function Read-Changelog { Read-TextFile $changelogFile }
 if (-not (Test-Path -LiteralPath $changelogFile -PathType Leaf)) { Stop-Release 'CHANGELOG.md is missing: the release notes come from it' }
 # The review and its undo work through git, which can't put back a file it doesn't track.
 if (-not (Read-Git @('ls-files', '--', 'CHANGELOG.md'))) { Fail 'CHANGELOG.md is not committed: commit it to master first' }
 $changelog = Read-Changelog
 $unreleased = Get-ChangelogSection -Text $changelog -Name 'Unreleased'
 if ($null -eq $unreleased) { Stop-Release 'CHANGELOG.md has no "## [Unreleased]" heading' }
-if ($changelog -cnotmatch '(?m)^\[Unreleased\]: ') { Warn 'CHANGELOG.md has no [Unreleased] link at its end, so the release adds no compare link' }
+if ($changelog -notmatch '(?m)^\[Unreleased\]: ') { Warn 'CHANGELOG.md has no [Unreleased] link at its end, so the release adds no compare link' }
 
 # GitHub extras (the CI check and watching the release build) need gh and a GitHub origin; without them they are skipped.
 $slug = $null
@@ -164,14 +167,9 @@ if ($latestTag) {
   if ($log.Count -gt 15) { Say "      ... and $($log.Count - 15) more" }
   if ($log.Count -eq 0) { Warn "nothing has changed since $latestTag" }
 } else { Say '  This is the first release tag.' }
-if (Test-ChangelogEntries $unreleased) {
-  # The entries per group, e.g. "Added 2, Fixed 5": Semantic Versioning makes an Added entry a minor version.
-  $groups = [ordered]@{}
-  $group = '(no group)'
-  foreach ($line in $unreleased -split "`n") {
-    if ($line -match '^### (.+)$') { $group = $Matches[1].Trim() }
-    elseif ($line -match '^([-*+]|\d+[.)]) ') { $groups[$group] = 1 + $(if ($groups.Contains($group)) { $groups[$group] } else { 0 }) }
-  }
+# The entries per group, e.g. "Added 2, Fixed 5": Semantic Versioning makes an Added entry a minor version.
+$groups = Get-ChangelogEntryCounts $unreleased
+if ($groups.Count) {
   Say "  CHANGELOG.md [Unreleased]: $(($groups.Keys | ForEach-Object { "$_ $($groups[$_])" }) -join ', ')"
   if ($groups.Contains('Added')) { Say '  It has Added entries: Semantic Versioning makes that a minor version.' }
 } else {
@@ -259,6 +257,12 @@ if ($notes) {
 }
 Say ('-' * 60)
 if (-not (Confirm-Step 'Proceed?' $true)) { Stop-Release }
+# The new CHANGELOG.md was made from the file as read at the start, and the plan named the commit to tag: an edit or
+# a commit made during the prompts would be lost or published unseen.
+if (-not $DryRun -and ((Read-Changelog) -cne $changelog -or (Read-Git @('status', '--porcelain', '--', 'VERSION', 'CHANGELOG.md')) -or
+    (Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart)) {
+  Stop-Release 'VERSION, CHANGELOG.md or HEAD changed during the prompts: run this again'
+}
 
 # === 5. Prepare and review ==========================================================================================
 if ($bump) {
@@ -270,10 +274,6 @@ if ($bump) {
   Say 'Review'
   if ($DryRun) { Say '  (dry run: nothing written, no review)' }
   else {
-    # The new CHANGELOG.md was made from the file as read at the start: an edit made during the prompts would be lost.
-    if ((Read-Changelog) -cne $changelog -or (Read-Git @('status', '--porcelain', '--', 'VERSION', 'CHANGELOG.md'))) {
-      Stop-Release 'VERSION or CHANGELOG.md changed during the prompts: commit the change and run this again'
-    }
     # Leaving the review any way but y (n, the end of piped input, Ctrl+C) puts both files back.
     $approved = $false
     try {
@@ -282,7 +282,11 @@ if ($bump) {
       & git -C $repo --no-pager diff --stat
       while ($true) {
         $answer = (Ask '(y) commit + tag + push  (d) show the diff  (n) abort: ').ToLower()
-        if ($answer -in 'y', 'yes') { $approved = $true; break }
+        if ($answer -in 'y', 'yes') {
+          # A commit made while this prompt waited would go out on top of the release unseen.
+          if ((Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart) { Stop-Release 'HEAD changed during the review: run this again' }
+          $approved = $true; break
+        }
         if ($answer -eq 'd') { & git -C $repo --no-pager diff -- VERSION CHANGELOG.md; continue }
         if ($answer -in 'n', 'no') { Stop-Release }
         Warn 'enter y, d or n'

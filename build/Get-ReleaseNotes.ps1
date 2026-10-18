@@ -26,8 +26,9 @@ function Stop-Notes([string]$Message) {
 $Version = $Version -replace '^v', ''
 $Changelog = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Changelog)
 if (-not (Test-Path -LiteralPath $Changelog -PathType Leaf)) { Stop-Notes "$Changelog does not exist" }
-# An empty file reads as $null.
-$notes = Get-ChangelogSection -Text ([string](Get-Content -LiteralPath $Changelog -Raw -Encoding utf8)) -Name $Version
+# Get-Content -Raw returns $null for an empty file, and a [string] cast keeps it null.
+$text = Get-Content -LiteralPath $Changelog -Raw -Encoding utf8
+$notes = Get-ChangelogSection -Text $(if ($null -eq $text) { '' } else { $text }) -Name $Version
 if ($null -eq $notes) { Stop-Notes "CHANGELOG.md has no [$Version] section: build\Release-D2BS.ps1 dates it at the release" }
 if (-not (Test-ChangelogEntries $notes)) { Stop-Notes "CHANGELOG.md's [$Version] section has no entries" }
 foreach ($line in Get-ChangelogWrappedLines $notes) {

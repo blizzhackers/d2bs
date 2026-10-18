@@ -1,9 +1,10 @@
 #Requires -Version 7.2
 <#
   Interactive release for D2BS. Checks that master is ready, proposes the next patch, minor or major version (or the
-  same version again, when its release commit exists but its tag was deleted), writes VERSION, and after a review
-  commits "chore(release): v<version>", tags it (annotated) and pushes master and the tag in one atomic push. The tag
-  push makes the build workflow create a DRAFT GitHub release with D2BS.dll and D2BS.pdb; publish it after a test.
+  same version again, when its release commit exists but its tag was deleted), writes VERSION, dates CHANGELOG.md's
+  Unreleased section as that version, and after a review commits both as "chore(release): v<version>", tags it
+  (annotated) and pushes master and the tag in one atomic push. The tag push makes the build workflow create a DRAFT
+  GitHub release with D2BS.dll and D2BS.pdb, whose notes are the version's CHANGELOG.md section; publish it after a test.
 
     pwsh -File build\Release-D2BS.ps1             interactive
     pwsh -File build\Release-D2BS.ps1 -DryRun     rehearse: prints every step that would change something, changes nothing
@@ -17,6 +18,8 @@ Set-StrictMode -Version 3
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $versionFile = Join-Path $repo 'VERSION'
+$changelogFile = Join-Path $repo 'CHANGELOG.md'
+Import-Module (Join-Path $PSScriptRoot 'Changelog.psm1') -Force
 
 function Say([string]$s = '') { Write-Host $s }
 function Ok([string]$s) { Write-Host '[ok] ' -ForegroundColor Green -NoNewline; Write-Host $s }
@@ -96,7 +99,7 @@ if ($branch -eq 'master') { Ok 'on branch master' } else { Fail "on branch '$bra
 $status = @((Read-Git @('status', '--porcelain', '--untracked-files=all')) -split "`n" | Where-Object { $_ })
 $tracked = @($status | Where-Object { -not $_.StartsWith('??') })
 $untracked = @($status | Where-Object { $_.StartsWith('??') } | ForEach-Object { $_.Substring(3) })
-if ($tracked.Count) { Fail "the working tree has $($tracked.Count) tracked change(s); the release commit must hold only VERSION" }
+if ($tracked.Count) { Fail "the working tree has $($tracked.Count) tracked change(s); the release commit must hold only VERSION and CHANGELOG.md" }
 else { Ok 'no tracked changes' }
 if ($untracked.Count) { Warn "untracked files (left out of the release): $(($untracked | Select-Object -First 5) -join ', ')$(if ($untracked.Count -gt 5) { ', ...' })" }
 
@@ -115,6 +118,16 @@ $currentVersion = ConvertTo-Version $current
 if (-not $currentVersion -or $currentVersion.ToString() -ne $current) {
   Stop-Release "VERSION must hold major.minor.patch without leading zeros, not '$current'"
 }
+
+# An empty file reads as $null.
+function Read-Changelog { [string](Get-Content -LiteralPath $changelogFile -Raw -Encoding utf8) }
+if (-not (Test-Path -LiteralPath $changelogFile -PathType Leaf)) { Stop-Release 'CHANGELOG.md is missing: the release notes come from it' }
+# The review and its undo work through git, which can't put back a file it doesn't track.
+if (-not (Read-Git @('ls-files', '--', 'CHANGELOG.md'))) { Fail 'CHANGELOG.md is not committed: commit it to master first' }
+$changelog = Read-Changelog
+$unreleased = Get-ChangelogSection -Text $changelog -Name 'Unreleased'
+if ($null -eq $unreleased) { Stop-Release 'CHANGELOG.md has no "## [Unreleased]" heading' }
+if ($changelog -cnotmatch '(?m)^\[Unreleased\]: ') { Warn 'CHANGELOG.md has no [Unreleased] link at its end, so the release adds no compare link' }
 
 # GitHub extras (the CI check and watching the release build) need gh and a GitHub origin; without them they are skipped.
 $slug = $null
@@ -151,6 +164,19 @@ if ($latestTag) {
   if ($log.Count -gt 15) { Say "      ... and $($log.Count - 15) more" }
   if ($log.Count -eq 0) { Warn "nothing has changed since $latestTag" }
 } else { Say '  This is the first release tag.' }
+if (Test-ChangelogEntries $unreleased) {
+  # The entries per group, e.g. "Added 2, Fixed 5": Semantic Versioning makes an Added entry a minor version.
+  $groups = [ordered]@{}
+  $group = '(no group)'
+  foreach ($line in $unreleased -split "`n") {
+    if ($line -match '^### (.+)$') { $group = $Matches[1].Trim() }
+    elseif ($line -match '^([-*+]|\d+[.)]) ') { $groups[$group] = 1 + $(if ($groups.Contains($group)) { $groups[$group] } else { 0 }) }
+  }
+  Say "  CHANGELOG.md [Unreleased]: $(($groups.Keys | ForEach-Object { "$_ $($groups[$_])" }) -join ', ')"
+  if ($groups.Contains('Added')) { Say '  It has Added entries: Semantic Versioning makes that a minor version.' }
+} else {
+  Warn 'CHANGELOG.md has no entries under [Unreleased]: a new version needs them there first'
+}
 
 # === 3. Version =====================================================================================================
 Say ''
@@ -196,6 +222,19 @@ while (-not $chosen) {
 }
 $tag = "v$chosen"
 $bump = $chosen -ne $current
+# The tag build posts the version's CHANGELOG.md section as the release notes and fails without one.
+$date = Get-Date -Format 'yyyy-MM-dd'
+$newChangelog = $null
+if ($bump) {
+  try { $newChangelog = Update-ChangelogForRelease -Text $changelog -Version $chosen -Date $date -Tag $tag }
+  catch { Fail $_.Exception.Message }
+  $notes = $unreleased
+} else {
+  $notes = Get-ChangelogSection -Text $changelog -Name $chosen
+  if (-not (Test-ChangelogEntries $notes)) { Fail "CHANGELOG.md has no entries under [$chosen]: the release would have no notes" }
+  # A fix made for a re-release belongs to the version it fixes, which is the section the release posts.
+  if (Test-ChangelogEntries $unreleased) { Warn "[Unreleased] has entries, and re-releasing $tag posts only [$chosen]: move a fix's entry there first" }
+}
 
 # === 4. Plan ========================================================================================================
 Say ''
@@ -205,13 +244,19 @@ Say "  Version: $chosen  (tag $tag)"
 Say '  Steps:'
 if ($bump) {
   Say "    1. write VERSION: $current -> $chosen"
-  Say '    2. review the change'
-  Say "    3. commit VERSION as `"chore(release): $tag`""
+  Say "    2. date CHANGELOG.md's Unreleased section: [$chosen] - $date"
+  Say '    3. review the change'
+  Say "    4. commit VERSION and CHANGELOG.md as `"chore(release): $tag`""
 } else {
   Say "    1. VERSION already says ${chosen}: the tag goes on HEAD ($(Read-Git @('log', '-1', '--format=%h %s')))"
 }
-Say "    $(if ($bump) { 4 } else { 2 }). annotated tag $tag"
-Say "    $(if ($bump) { 5 } else { 3 }). push master and $tag in one atomic push; the tag builds a DRAFT release"
+Say "    $(if ($bump) { 5 } else { 2 }). annotated tag $tag"
+Say "    $(if ($bump) { 6 } else { 3 }). push master and $tag in one atomic push; the tag builds a DRAFT release"
+if ($notes) {
+  Say "  Release notes (CHANGELOG.md [$(if ($bump) { 'Unreleased' } else { $chosen })]):"
+  $notes -split "`n" | ForEach-Object { Say "    $_" }
+  foreach ($line in Get-ChangelogWrappedLines $notes) { Warn "a wrapped line shows as its own line on GitHub; join it to its entry: $($line.Trim())" }
+}
 Say ('-' * 60)
 if (-not (Confirm-Step 'Proceed?' $true)) { Stop-Release }
 
@@ -220,26 +265,33 @@ if ($bump) {
   Say ''
   Say 'Preparing'
   Say "  > write VERSION: $chosen"
-  if (-not $DryRun) { [IO.File]::WriteAllText($versionFile, "$chosen`n") }
+  Say "  > write CHANGELOG.md: [Unreleased] -> [$chosen] - $date"
   Say ''
   Say 'Review'
   if ($DryRun) { Say '  (dry run: nothing written, no review)' }
   else {
-    # Leaving the review any way but y (n, the end of piped input, Ctrl+C) puts VERSION back.
+    # The new CHANGELOG.md was made from the file as read at the start: an edit made during the prompts would be lost.
+    if ((Read-Changelog) -cne $changelog -or (Read-Git @('status', '--porcelain', '--', 'VERSION', 'CHANGELOG.md'))) {
+      Stop-Release 'VERSION or CHANGELOG.md changed during the prompts: commit the change and run this again'
+    }
+    # Leaving the review any way but y (n, the end of piped input, Ctrl+C) puts both files back.
     $approved = $false
     try {
+      [IO.File]::WriteAllText($versionFile, "$chosen`n")
+      [IO.File]::WriteAllText($changelogFile, $newChangelog)
       & git -C $repo --no-pager diff --stat
       while ($true) {
         $answer = (Ask '(y) commit + tag + push  (d) show the diff  (n) abort: ').ToLower()
         if ($answer -in 'y', 'yes') { $approved = $true; break }
-        if ($answer -eq 'd') { & git -C $repo --no-pager diff -- VERSION; continue }
+        if ($answer -eq 'd') { & git -C $repo --no-pager diff -- VERSION CHANGELOG.md; continue }
         if ($answer -in 'n', 'no') { Stop-Release }
         Warn 'enter y, d or n'
       }
     } finally {
       if (-not $approved) {
-        & git -C $repo restore -- VERSION
-        Write-Host "VERSION put back to $current"
+        & git -C $repo restore -- VERSION CHANGELOG.md
+        if ($LASTEXITCODE) { Write-Host 'git could not put VERSION and CHANGELOG.md back: restore them by hand' -ForegroundColor Red }
+        else { Write-Host "VERSION put back to $current, and CHANGELOG.md with it" }
       }
     }
   }
@@ -249,9 +301,10 @@ if ($bump) {
 Say ''
 Say 'Committing, tagging, pushing'
 if ($bump) {
-  Invoke-GitStep @('add', '--', 'VERSION') @('git restore --staged --worktree -- VERSION')
-  # The pathspec commits VERSION only, whatever else may have been staged during the prompts.
-  Invoke-GitStep @('commit', '-m', "chore(release): $tag", '--', 'VERSION') @('git restore --staged --worktree -- VERSION')
+  $undoFiles = @('git restore --staged --worktree -- VERSION CHANGELOG.md')
+  Invoke-GitStep @('add', '--', 'VERSION', 'CHANGELOG.md') $undoFiles
+  # The pathspec commits these two only, whatever else may have been staged during the prompts.
+  Invoke-GitStep @('commit', '-m', "chore(release): $tag", '--', 'VERSION', 'CHANGELOG.md') $undoFiles
 }
 # --keep (not --hard) drops the release commit but keeps any edits made to other files during the prompts.
 $undoCommit = @(if ($bump) { 'git reset --keep HEAD~1' })
@@ -280,7 +333,7 @@ Say 'Next steps:'
 $repoArg = if ($slug) { $slug } else { '<owner>/<repo>' }
 Say '  1. Wait for the build to go green:'
 Say "     $url/actions/workflows/build.yml"
-Say "  2. Review the DRAFT release `"D2BS $tag`" (D2BS.dll, D2BS.pdb): $url/releases"
+Say "  2. Review the DRAFT release `"D2BS $tag`" (D2BS.dll, D2BS.pdb, the notes): $url/releases"
 Say '  3. Try the DLL on a test install, e.g. with one D2Bot profile.'
 Say '  4. Publish it and mark it Latest:'
 Say "     gh release edit $tag --repo $repoArg --draft=false --latest"

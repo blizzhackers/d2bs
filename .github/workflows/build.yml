@@ -30,6 +30,14 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      # A release tag's notes are its CHANGELOG.md section; a tag without one fails here, before the build.
+      - name: Release notes
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: ./build/Get-ReleaseNotes.ps1 -Version $env:REF_NAME -OutFile "$env:RUNNER_TEMP/out/release-notes.md"
+
       # The Visual C++ 2010 SP1 toolset, unpacked from Microsoft's downloads on a cache miss. The key changes
       # whenever the package list or the unpacking does.
       - name: Restore the VC++ 2010 toolset
@@ -72,6 +80,7 @@ jobs:
             ${{ runner.temp }}/out/D2BS.dll
             ${{ runner.temp }}/out/D2BS.pdb
             ${{ runner.temp }}/out/build.log
+            ${{ runner.temp }}/out/release-notes.md
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 30 }}
           overwrite: true # a re-run replaces the earlier attempt's artifact
@@ -105,5 +114,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        # A draft, published by hand after a smoke test (build/Release-D2BS.ps1 prints the command).
-        run: gh release create "$TAG" dist/D2BS.dll dist/D2BS.pdb --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "D2BS $TAG" --generate-notes
+        # A draft, published by hand after a smoke test (build/Release-D2BS.ps1 prints the command). The CHANGELOG.md
+        # notes come first, then GitHub's generated list of pull requests and its compare link.
+        run: gh release create "$TAG" dist/D2BS.dll dist/D2BS.pdb --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "D2BS $TAG" --notes-file dist/release-notes.md --generate-notes

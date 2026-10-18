@@ -42,6 +42,11 @@ PatchHook Patches[] = {
     {PatchJmp, GetDllOffset("Fog.dll", 0x82E0), (DWORD)FogCrash_Intercept, 6},        // NEW 1.14d //004082E0-BASE
     //{PatchJmp,  GetDllOffset("Fog.dll", 0x8900),		(DWORD)FogException/*D2GAME_exit0*/,		6}, //NEW 1.14d //00408900-BASE
     {PatchJmp, GetDllOffset("Fog.dll", 0x1790), (DWORD)ErrorReportLaunch, 6}, // NEW 1.14d //00401790-BASE
+
+    // Storm's read thread paces background reads to 256 KB/s, and leaving a game cancels every queued sprite read one
+    // by one, each waiting for the thread's next paced pass: hundreds queued froze the exit for tens of seconds.
+    // je -> jmp skips the pacing, as Storm's own rate 0 does; an empty queue still waits 250 ms.
+    {PatchBytes, GetDllOffset("Storm.dll", 0x1A588), (BYTE)0xEB, 1}, // NEW 1.14d //0041A588-BASE
 };
 
 PatchHook Conditional[] = {

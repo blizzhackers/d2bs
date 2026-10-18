@@ -120,6 +120,13 @@ JSAPI_FUNC(my_clearInterval) {
         ScriptEngine::ClearTimer((int)id);
     return JS_TRUE;
 }
+
+// The calling script's timers only; returns how many it cancelled.
+JSAPI_FUNC(my_clearAllTimers) {
+    Script* self = (Script*)JS_GetContextPrivate(cx);
+    JS_SET_RVAL(cx, vp, INT_TO_JSVAL(ScriptEngine::ClearTimers(self)));
+    return JS_TRUE;
+}
 JSAPI_FUNC(my_delay) {
     uint32 nDelay = 0;
     JS_BeginRequest(cx);

@@ -886,6 +886,24 @@ void ScriptEngine::ClearTimer(int id) {
     LeaveCriticalSection(&timerLock);
 }
 
+// Cancels like ClearTimer rather than freeing, so a callback may call it, its own record included.
+int ScriptEngine::ClearTimers(Script* owner) {
+    int count = 0;
+    EnterCriticalSection(&timerLock);
+    for (std::map<int, DelayedTimer*>::iterator it = timers.begin(); it != timers.end(); ++it) {
+        DelayedTimer* t = it->second;
+        if (t->owner != owner || t->cancelled)
+            continue;
+        t->cancelled = true;
+        CancelWaitableTimer(t->timer);
+        if (!t->queued)
+            QueueTimerEvent(t);
+        count++;
+    }
+    LeaveCriticalSection(&timerLock);
+    return count;
+}
+
 void ScriptEngine::RunTimer(Event* evt, bool clearList) {
     int id = *(int*)evt->arg1;
     DelayedTimer* t = NULL;

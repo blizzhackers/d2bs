@@ -67,6 +67,7 @@ class ScriptEngine {
     // frees it; any thread may cancel it by id. Returns the id, 0 when no timer could be set.
     static int AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat);
     static void ClearTimer(int id);
+    static int ClearTimers(Script* owner);
     static void RunTimer(Event* evt, bool clearList);
     static void DestroyTimers(Script* owner);
     JSGCCallback gcCallback(JSRuntime* rt, JSGCStatus status);

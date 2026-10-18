@@ -1,0 +1,25 @@
+{
+  "recipe": 2,
+  "packages": [
+    {
+      "name": "vc",
+      "description": "Visual C++ 2010 SP1 compiler update (KB2519277): cl 16.00.40219, x86",
+      "url": "https://download.microsoft.com/download/7/5/0/75040801-126C-4591-BCE4-4CD1FD1499AA/VC-Compiler-KB2519277.exe",
+      "file": "VC-Compiler-KB2519277.exe",
+      "size": 126890440,
+      "sha256": "46497A249DAC03F8A6D6B4F4A737546246752CA751AE16C34127A1D784232645",
+      "extract": ["vc_stdx86.msi", "vc_stdx86.cab"],
+      "msi": "vc_stdx86.msi"
+    },
+    {
+      "name": "sdk",
+      "description": "Windows SDK 7.1 (x64 DVD image): the WinSDKBuild headers and libraries",
+      "url": "https://download.microsoft.com/download/F/1/0/F10113F5-B750-4969-A255-274341AC6BCE/GRMSDKX_EN_DVD.iso",
+      "file": "GRMSDKX_EN_DVD.iso",
+      "size": 598589440,
+      "sha256": "9F495E52F33D68125277CBCA3565CE57904AF7D506758A14691FA6E2479AD65C",
+      "extract": ["Setup\\WinSDKBuild_amd64\\*"],
+      "msi": "WinSDKBuild_amd64.msi"
+    }
+  ]
+}

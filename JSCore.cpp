@@ -75,51 +75,49 @@ JSAPI_FUNC(my_print) {
     return JS_TRUE;
 }
 
-JSAPI_FUNC(my_setTimeout) {
+// setTimeout(callback, delay, ...args) / setInterval: returns the timer's id; the extra arguments go to the callback.
+static JSBool StartTimer(JSContext* cx, uint argc, jsval* vp, bool repeat) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
 
-    if (argc < 2 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]))
-        JS_ReportError(cx, "invalid params passed to setTimeout");
+    if (argc < 2 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1])) {
+        JS_ReportError(cx, "invalid params passed to %s", repeat ? "setInterval" : "setTimeout");
+        return JS_TRUE;
+    }
 
-    if (JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[0]) && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1])) {
+    if (JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[0])) {
+        jsdouble delay = 0;
+        JS_ValueToNumber(cx, JS_ARGV(cx, vp)[1], &delay);
+        // NaN and negative delays run at once, like 0.
+        int delayMs = delay >= 0x7FFFFFFF ? 0x7FFFFFFF : (delay > 0 ? (int)delay : 0);
         Script* self = (Script*)JS_GetContextPrivate(cx);
-        int freq = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-        self->RegisterEvent("setTimeout", JS_ARGV(cx, vp)[0]);
-        Event* evt = new Event;
-        evt->owner = self;
-        evt->name = _strdup("setTimeout");
-        evt->arg3 = new jsval(JS_ARGV(cx, vp)[0]);
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(ScriptEngine::AddDelayedEvent(evt, freq)));
+        int id = ScriptEngine::AddTimer(self, cx, JS_ARGV(cx, vp)[0], argc - 2, JS_ARGV(cx, vp) + 2, delayMs, repeat);
+        if (id)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(id));
     }
 
     return JS_TRUE;
+}
+
+JSAPI_FUNC(my_setTimeout) {
+    return StartTimer(cx, argc, vp, false);
 }
 
 JSAPI_FUNC(my_setInterval) {
-    JS_SET_RVAL(cx, vp, JSVAL_NULL);
-
-    if (argc < 2 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]))
-        JS_ReportError(cx, "invalid params passed to setInterval");
-
-    if (JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[0]) && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1])) {
-        Script* self = (Script*)JS_GetContextPrivate(cx);
-        int freq = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-        self->RegisterEvent("setInterval", JS_ARGV(cx, vp)[0]);
-        Event* evt = new Event;
-        evt->owner = self;
-        evt->name = _strdup("setInterval");
-        evt->arg3 = new jsval(JS_ARGV(cx, vp)[0]);
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(ScriptEngine::AddDelayedEvent(evt, freq)));
-    }
-
-    return JS_TRUE;
+    return StartTimer(cx, argc, vp, true);
 }
+
+// clearTimeout and clearInterval: any script's timer, by id.
 JSAPI_FUNC(my_clearInterval) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
-    if (argc != 1 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0]))
+    if (argc < 1 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0])) {
         JS_ReportError(cx, "invalid params passed to clearInterval");
+        return JS_TRUE;
+    }
 
-    ScriptEngine::RemoveDelayedEvent(JSVAL_TO_INT(JS_ARGV(cx, vp)[0]));
+    jsdouble id = 0;
+    JS_ValueToNumber(cx, JS_ARGV(cx, vp)[0], &id);
+    if (id >= 1 && id <= 0x7FFFFFFF)
+        ScriptEngine::ClearTimer((int)id);
     return JS_TRUE;
 }
 JSAPI_FUNC(my_delay) {

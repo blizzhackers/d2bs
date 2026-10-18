@@ -25,8 +25,6 @@ class ScriptEngine {
     static JSContext* context;
     static Script* console;
     static EngineState state;
-    static std::list<Event*> DelayedExecList;
-    static int delayedExecKey;
     static CRITICAL_SECTION scriptListLock;
 
   public:
@@ -65,8 +63,12 @@ class ScriptEngine {
                           JSPropertySpec* s_props);
     static void DefineConstant(JSContext* context, JSObject* globalObject, const char* name, int value);
     static void UpdateConsole();
-    static int AddDelayedEvent(Event* evt, int freq);
-    static void RemoveDelayedEvent(int key);
+    // setTimeout / setInterval. A timer belongs to the script that set it, whose thread alone runs its callback and
+    // frees it; any thread may cancel it by id. Returns the id, 0 when no timer could be set.
+    static int AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat);
+    static void ClearTimer(int id);
+    static void RunTimer(Event* evt, bool clearList);
+    static void DestroyTimers(Script* owner);
     JSGCCallback gcCallback(JSRuntime* rt, JSGCStatus status);
 };
 

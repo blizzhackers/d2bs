@@ -447,7 +447,7 @@ JSAPI_STRICT_PROP(line_setProperty) {
 
 // Function to create a text which gets called on a "new text ()"
 
-// Parameters: text, x, y, color, font, align, automap, onHover, onText
+// Parameters: text, x, y, color, font, align, automap, onClick, onHover
 JSAPI_FUNC(text_ctor) {
     Script* script = (Script*)JS_GetContextPrivate(cx);
 

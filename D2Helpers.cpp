@@ -519,6 +519,15 @@ UnitAny* D2CLIENT_FindUnit(DWORD dwId, DWORD dwType) {
     return pUnit ? pUnit : FindUnitInTables(p_D2CLIENT_ServerSideUnitHashTables, dwId, dwType);
 }
 
+// A missile's owner, looked up where the game's own lookup (0x4639D0) looks: a missile owner in the tables at
+// 0x7A5270, any other type in those at 0x7A5E70. That lookup halts on a type mismatch.
+UnitAny* FindMissileOwner(UnitAny* pMissile) {
+    if (!(pMissile->dwFlags2 & 0x400)) // set by the game with the owner
+        return NULL;
+    UnitHashTable* pTables = pMissile->dwOwnerType == UNIT_MISSILE ? p_D2CLIENT_ClientSideUnitHashTables : p_D2CLIENT_ServerSideUnitHashTables;
+    return FindUnitInTables(pTables, pMissile->dwOwnerId, pMissile->dwOwnerType);
+}
+
 // TODO: Rewrite this and split it into two functions
 CellFile* LoadCellFile(const char* lpszPath, DWORD bMPQ) {
     if (bMPQ == TRUE) {

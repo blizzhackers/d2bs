@@ -49,6 +49,7 @@ void GetItemCode(UnitAny* pUnit, char* szBuf);
 
 InventoryLayout* GetLayoutFromTable(DWORD dwTable);
 UnitAny* D2CLIENT_FindUnit(DWORD dwId, DWORD dwType);
+UnitAny* FindMissileOwner(UnitAny* pMissile);
 
 POINT GetScreenSize();
 int D2GetScreenSizeX();

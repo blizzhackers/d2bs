@@ -114,8 +114,8 @@ elseif ([int]$ahead -gt 0) {
   if (-not $DryRun -and -not (Confirm-Step 'Continue and publish these commits?' $false)) { Stop-Release }
 } else { Ok 'master is level with origin/master' }
 
-# Get-Content -Raw returns $null for an empty file, and a [string] cast keeps it null. (No ??: Windows PowerShell
-# must parse this file to show #Requires' own message.)
+# Get-Content -Raw outputs nothing for an empty file, which even a [string] cast leaves $null (unlike [string]$null),
+# so check for it. (No ??: Windows PowerShell must parse this file to show #Requires' own message.)
 function Read-TextFile([string]$Path) { $text = Get-Content -LiteralPath $Path -Raw -Encoding utf8; if ($null -eq $text) { '' } else { $text } }
 $current = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
 $currentVersion = ConvertTo-Version $current
@@ -293,9 +293,16 @@ if ($bump) {
       }
     } finally {
       if (-not $approved) {
+        # git restore copies from the index, so a commit made during the review that took the release files keeps
+        # them: compare with the commit the release started from before saying they are back.
         & git -C $repo restore -- VERSION CHANGELOG.md
-        if ($LASTEXITCODE) { Write-Host 'git could not put VERSION and CHANGELOG.md back: restore them by hand' -ForegroundColor Red }
-        else { Write-Host "VERSION put back to $current, and CHANGELOG.md with it" }
+        $restored = -not $LASTEXITCODE
+        & git -C $repo diff --quiet $headAtStart -- VERSION CHANGELOG.md
+        if ($restored -and -not $LASTEXITCODE) { Write-Host "VERSION put back to $current, and CHANGELOG.md with it" }
+        else {
+          Write-Host ('VERSION and CHANGELOG.md are not as the release found them (a commit made during the review may ' +
+            'hold them): check git log and git status') -ForegroundColor Red
+        }
       }
     }
   }

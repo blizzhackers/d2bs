@@ -188,7 +188,7 @@ function Invoke-Scenarios {
   $counts = Get-ChangelogEntryCounts "### Fixed`n- a`n  - sub`n  - sub`n- b`n<!--`n- hidden"
   Check 'entries count top-level items only, and a comment left open hides the rest' ($counts.Count -eq 1 -and $counts['Fixed'] -eq 2) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
 
-  # 3. Patch release with the review gate's diff: VERSION commit, tag and push.
+  # 3. Patch release with the review gate's diff: VERSION and CHANGELOG.md commit, tag and push.
   $r = Invoke-Release @('1', '', 'y', 'd', 'y')
   Check 'patch release exits 0' ($r.Code -eq 0) $r.Text
   Check 'patch release offered 1.6.6 first' ($r.Text -match '1\) patch -> v1\.6\.6') ''
@@ -272,10 +272,10 @@ function Invoke-Scenarios {
   }
   Check 'no tag from the mistyped flags' ((G $work @('tag', '--list', 'v*')) -eq $tagsBefore) ''
 
-  # 9. Input that ends at the review prompt puts VERSION back.
+  # 9. Input that ends at the review prompt puts VERSION and CHANGELOG.md back.
   $r = Invoke-Release @('1', '', 'y')
   Check 'end of input at review stops' ($r.Code -eq 1 -and $r.Text -match 'no more input') $r.Text
-  Check 'and puts VERSION back' ($r.Text -match 'VERSION put back' -and -not (G $work @('status', '--porcelain'))) $r.Text
+  Check 'and puts VERSION and CHANGELOG.md back' ($r.Text -match 'VERSION put back' -and -not (G $work @('status', '--porcelain'))) $r.Text
 
   # 10. A rejected push prints undo commands that work as printed.
   $hook = Join-Path $origin 'hooks' 'pre-receive'
@@ -368,6 +368,46 @@ function Invoke-Scenarios {
     Check "  and leaves VERSION and CHANGELOG.md as committed ($where)" ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.6' -and -not (G $work @('status', '--porcelain'))) (G $work @('status', '--porcelain'))
     G $work @('reset', '--quiet', '--keep', 'HEAD~1') | Out-Null
   }
+
+  # 13b. A commit made at the review that takes the release files with it (git commit -a) keeps them: the script
+  #      must not claim it put them back.
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.7]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run '(y) commit + tag + push  (d) show the diff  (n) abort: '
+    G $work @('commit', '--quiet', '-am', 'sandbox: a commit that takes the release files') | Out-Null
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'a commit that takes the release files stops the release' ($r.Code -eq 1 -and $r.Text -match 'HEAD changed during the review') $r.Text
+  Check '  and says the files are not as it found them' ($r.Text -match 'not as the release found them' -and $r.Text -notmatch 'VERSION put back') $r.Text
+  G $work @('reset', '--quiet', '--keep', 'HEAD~1') | Out-Null
+  if ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -ne '1.6.6' -or (G $work @('status', '--porcelain'))) { throw 'the sandbox did not return to 1.6.6' }
+
+  # 13c. An edit to CHANGELOG.md made while "Proceed?" waits stops the release, and the edit survives.
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.7]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Add-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Value '- **Edit made at Proceed.** One line.'
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'an edit made at Proceed? stops the release' ($r.Code -eq 1 -and $r.Text -match 'changed during the prompts') $r.Text
+  Check '  and keeps the edit' ((Read-Changelog).Contains('Edit made at Proceed.') -and (Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.6') ''
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
 }
 
 if (Test-Path -LiteralPath $Sandbox) { throw "$Sandbox already exists: pass another -Sandbox" }

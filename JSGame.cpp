@@ -1300,25 +1300,24 @@ JSAPI_FUNC(my_getPlayerFlag) {
     
     uint32 nFirstUnitId = (uint32)-1;
     uint32 nSecondUnitId = (uint32)-1;
+    uint32 nFlag = 0;
     JS_BeginRequest(cx);
     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &nFirstUnitId);
     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nSecondUnitId);
+    JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[2], &nFlag);
     JS_EndRequest(cx);
 
-    // If this gets called while a game already closed (happens with race conditions) the tables are garbage
-    // and thus the units wont be found either, as this is also cleared up.
-    // Easy race condition fix is to test if either is not found, already return early
-    UnitAny* pFirst = D2CLIENT_FindUnit(nFirstUnitId, 0);   // 0 = UNIT_PLAYER
-    UnitAny* pSecond = D2CLIENT_FindUnit(nSecondUnitId, 0);
-    if (pFirst == NULL || pSecond == NULL) {
-        JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(FALSE));
-        return JS_TRUE;
+    // The game's check walks the party roster, which lists every player wherever they are (their units exist only
+    // near this one) and which the game frees as it leaves: so it runs under the game lock while the game is up. An
+    // area change that starts while this waits for the lock is waited out rather than answered as "not flagged".
+    for (int tries = 0; tries < 3 && WaitForGameReady(); tries++) {
+        AutoCriticalRoom cRoom;
+        if (GameReady()) {
+            JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(D2CLIENT_TestPvpFlag(nFirstUnitId, nSecondUnitId, nFlag) != 0));
+            return JS_TRUE;
+        }
     }
-
-    DWORD nFlag = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-
-    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(D2CLIENT_TestPvpFlag(nFirstUnitId, nSecondUnitId, nFlag)));
-
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
     return JS_TRUE;
 }
 

@@ -346,7 +346,9 @@ enum {
     // D2Common Globals
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    VARPTR(D2COMMON, sgptDataTable, DWORD, 0x344304) // Updated 1.14d //00744304-BASE
+    VARPTR(D2COMMON, sgptDataTable, DWORD, 0x344304)  // Updated 1.14d //00744304-BASE
+    VARPTR(D2COMMON, LvlSubTxt, BYTE*, 0x56CA10)      // NEW 1.14d //0096CA10-BASE
+    VARPTR(D2COMMON, LvlSubTxtCount, DWORD, 0x56CA14) // NEW 1.14d //0096CA14-BASE
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // D2Common Stubs
@@ -354,6 +356,8 @@ enum {
 
     ASMPTR(D2COMMON, DisplayOverheadMsg_I, 0x2611A0) // Updated 1.14d //006611A0-BASE
     ASMPTR(D2COMMON, GetLevelIdFromRoom_I, 0x21A1B0) // Updated 1.14d //0061A1B0-BASE
+    ASMPTR(D2COMMON, LvlSubTypeLoop_I, 0x270774)     // NEW 1.14d //00670774-BASE
+    ASMPTR(D2COMMON, LvlSubTypeLoopDone_I, 0x270794) // NEW 1.14d //00670794-BASE
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // D2Net Functions

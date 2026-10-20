@@ -13,6 +13,7 @@ void Whisper_Intercept();
 void GameAttack_Intercept();
 void PlayerAssignment_Intercept();
 void GameCrashFix_Intercept();
+void LvlSubTypeLoop_Intercept();
 void GameDrawOOG_Intercept(void);
 void CongratsScreen_Intercept(void);
 void GameActChange_Intercept(void);

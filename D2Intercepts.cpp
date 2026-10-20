@@ -183,6 +183,29 @@ Skip:
     }
 }
 
+// The outdoor level generators share a LvlSub walker (0x670750) that walks the rows of one type until a row of another
+// type, with no end check. Act 5's barricade pass walks type 12, the table's last row, so it reads the uninitialized
+// dword past the table, a new leftover each game (the table is reloaded per game); a 12 there sends a garbage row to
+// the DS1 loader and crashes. This loop tail stops at the end of the table and walks the rows inside it as before.
+void __declspec(naked) LvlSubTypeLoop_Intercept() {
+    __asm {
+		add ebx, 0x15C // the next row
+		mov ecx, [p_D2COMMON_LvlSubTxtCount]
+		mov eax, [ecx]
+		imul eax, eax, 0x15C
+		mov ecx, [p_D2COMMON_LvlSubTxt]
+		add eax, [ecx]
+		cmp ebx, eax
+		jae Done
+		mov eax, [ebx]
+		cmp eax, [esi+0x18] // the type being walked
+		jne Done
+		jmp D2COMMON_LvlSubTypeLoop_I
+Done:
+		jmp D2COMMON_LvlSubTypeLoopDone_I
+    }
+}
+
 void GameDrawOOG_Intercept(void) {
     GameDrawOOG();
 }

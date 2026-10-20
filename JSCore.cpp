@@ -127,6 +127,15 @@ JSAPI_FUNC(my_clearAllTimers) {
     JS_SET_RVAL(cx, vp, INT_TO_JSVAL(ScriptEngine::ClearTimers(self)));
     return JS_TRUE;
 }
+
+// A script must end when stopped, or when it is an in-game script and its game is over. The same test sits in the
+// operation callback (ScriptEngine.cpp) and SetSkill's event loop (D2Helpers.cpp); keep them in step.
+static bool ScriptMustEnd(Script* script) {
+    return script->IsAborted() || (script->GetState() == InGame && ClientState() == ClientStateMenu);
+}
+
+// A stop interrupts the script once, and an event handler or timer callback this delay runs can take that interrupt
+// and end alone; so delay ends the script itself, by returning false with no exception.
 JSAPI_FUNC(my_delay) {
     uint32 nDelay = 0;
     JS_BeginRequest(cx);
@@ -144,16 +153,18 @@ JSAPI_FUNC(my_delay) {
         while (amt > 0) { // had a script deadlock here, make sure were positve with amt
             WaitForSingleObjectEx(script->eventSignal, amt, true);
             ResetEvent(script->eventSignal);
-            if (script->IsAborted())
-                break;
+            if (ScriptMustEnd(script))
+                return JS_FALSE;
 
-            while (script->EventList.size() > 0 && !!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu))) {
+            while (script->EventList.size() > 0 && !ScriptMustEnd(script)) {
                 EnterCriticalSection(&Vars.cEventSection);
                 Event* evt = script->EventList.back();
                 script->EventList.pop_back();
                 LeaveCriticalSection(&Vars.cEventSection);
                 ExecScriptEvent(evt, false);
             }
+            if (ScriptMustEnd(script))
+                return JS_FALSE;
             if (JS_GetGCParameter(script->GetRuntime(), JSGC_BYTES) - script->LastGC > 524288) // gc every .5 mb
             {
                 JS_GC(JS_GetRuntime(cx));
@@ -167,7 +178,7 @@ JSAPI_FUNC(my_delay) {
 
     } else
         JS_ReportWarning(cx, "delay(0) called, argument must be >= 1");
-    return JS_TRUE;
+    return ScriptMustEnd(script) ? JS_FALSE : JS_TRUE;
 }
 
 JSAPI_FUNC(my_load) {

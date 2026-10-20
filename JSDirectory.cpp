@@ -109,6 +109,7 @@ JSAPI_FUNC(dir_getFiles) {
             JS_SetElement(cx, jsarray, element++, &file);
         } while (_wfindnext(hFile, &found) == 0);
         JS_EndRequest(cx);
+        _findclose(hFile);
     }
 
     if (_wchdir(oldpath) == -1) {
@@ -157,6 +158,7 @@ JSAPI_FUNC(dir_getFolders) {
             JS_SetElement(cx, jsarray, element++, &file);
         } while (_wfindnext(hFile, &found) == 0);
         JS_EndRequest(cx);
+        _findclose(hFile);
     }
 
     if (_wchdir(oldpath) == -1) {

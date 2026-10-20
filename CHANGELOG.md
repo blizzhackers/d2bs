@@ -28,10 +28,12 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 
 - **Reliable timers.** Each timer calls only its own callback, once per firing, and scripts can set and clear timers, their own or each other's, at the same time.
 - **Any timer delay works.** `setTimeout()` and `setInterval()` accept fractional delays such as `1.5`, and a negative or NaN delay fires at once.
+- **Scripts end with their game.** A stopped script, or one whose game has ended, ends even when that happens during one of its timer callbacks or event handlers, and frees its thread, memory and timers.
 - **Safe slow listeners.** A key, chat, packet or screen-hook click listener that runs past its time limit (1 s for keys, 0.5 s for chat and packets, 3 s for clicks) lets the event through, and the game and the script carry on.
 - **Steadier shopping, cubing and walking.** `me.cancel()`, `unit.useMenu()`, `unit.interact()`, `unit.move()`, `clickMap()`, dialog-line handlers, `transmute()` and the inventory setup on joining a game act between game frames, so bots that shop, gamble, cube and walk keep running.
 - **Area lookups keep the game running.** `getArea()` and its properties such as `exits`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()` and `getCollision()` called while the game changes areas or leaves a game let the game carry on drawing.
 - **Stable Act 5 wilderness.** Frigid Highlands, Arreat Plateau, Frozen Tundra and the other Act 5 outdoor areas build reliably in every game, whether the character walks in, takes a waypoint or a script looks up a room there with `getRoom()`.
+- **Folder listings release their handles.** `dopen().getFiles()` and `getFolders()` close their folder search when done, so scripts can list folders as often as they like without adding to the game's handle count.
 - **Safe unit lookups.** Finding a unit by its id answers "not found" for a unit the game has just freed, as for any unit that's gone.
 - **Dependable `getPlayerFlag()`.** It returns `true` or `false`, so `=== true` works, and it is safe to call while a game closes.
 - **Missile casters.** A missile's `getParent()` returns the unit that cast it, or undefined when the caster is out of sight; `missile.owner` and `missile.ownertype` still give its id and type.

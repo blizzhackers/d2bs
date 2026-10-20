@@ -183,11 +183,12 @@ Skip:
     }
 }
 
-// The outdoor level generators share a LvlSub walker (0x670750) that walks the rows of one type until a row of another
-// type, with no end check. Act 5's barricade pass walks type 12, the table's last row, so it reads the uninitialized
-// dword past the table, a new leftover each game (the table is reloaded per game); a 12 there sends a garbage row to
-// the DS1 loader and crashes. This loop tail stops at the end of the table and walks the rows inside it as before.
-void __declspec(naked) LvlSubTypeLoop_Intercept() {
+// The outdoor level generators walk the LvlSub rows of one type until a row of another type, with no end check:
+// 0x670750 places a type's rows, 0x6706A0 rolls which of them a level gets. A walk of the table's last type, 12 (Act
+// 5's barricades, or a mod's level SubType 12), reads the uninitialized dword past the table, a new leftover each game
+// (the table is reloaded per game); a 12 there makes a garbage row, which 0x670750 hands to the DS1 loader and crashes
+// on. These loop tails stop at the end of the table and walk the rows inside it as before.
+void __declspec(naked) LvlSubPlaceLoop_Intercept() {
     __asm {
 		add ebx, 0x15C // the next row
 		mov ecx, [p_D2COMMON_LvlSubTxtCount]
@@ -200,9 +201,27 @@ void __declspec(naked) LvlSubTypeLoop_Intercept() {
 		mov eax, [ebx]
 		cmp eax, [esi+0x18] // the type being walked
 		jne Done
-		jmp D2COMMON_LvlSubTypeLoop_I
+		jmp D2COMMON_LvlSubPlaceLoop_I
 Done:
-		jmp D2COMMON_LvlSubTypeLoopDone_I
+		jmp D2COMMON_LvlSubPlaceLoopDone_I
+    }
+}
+
+void __declspec(naked) LvlSubPickLoop_Intercept() {
+    __asm {
+		add ebx, 0x15C // the next row
+		mov ecx, [p_D2COMMON_LvlSubTxtCount]
+		mov eax, [ecx]
+		imul eax, eax, 0x15C
+		mov ecx, [p_D2COMMON_LvlSubTxt]
+		add eax, [ecx]
+		cmp ebx, eax
+		jae Done
+		cmp [ebx], edx // edx = the type being walked
+		jne Done
+		jmp D2COMMON_LvlSubPickLoop_I
+Done:
+		jmp D2COMMON_LvlSubPickLoopDone_I
     }
 }
 

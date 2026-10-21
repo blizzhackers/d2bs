@@ -416,6 +416,28 @@ enum {
     FUNCPTR(D2CMP, InitCellFile, VOID __stdcall, (LPVOID File, CellFile** Out, LPSTR SourceFile, DWORD Line, DWORD FileVersion, LPSTR Filename),
             0x201340)                                                           // Updated 1.14d //00601340-BASE
     FUNCPTR(D2CMP, DeleteCellFile, void __stdcall, (CellFile * File), 0x201A50) // Updated 1.14d //00601A50-BASE
+    FUNCPTR(D2CMP, SpriteCacheAlloc, SpriteCacheEntry* __fastcall, (SpriteCache * pCache, DWORD dwSize, DWORD dwPayload, DWORD bUntouched),
+            0x1FFC40) // NEW 1.14d //005FFC40-BASE
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // D2Cmp Globals
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    VARPTR(D2CMP, SpriteCache, SpriteCache, 0x49DB60) // NEW 1.14d //0089DB60-BASE
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // D2Cmp Stubs
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    ASMPTR(D2CMP, SpriteCachePopOldest_I, 0x1FF0F0) // NEW 1.14d //005FF0F0-BASE
+    ASMPTR(D2CMP, SpriteCacheUnlink_I, 0x1FF1B0)    // NEW 1.14d //005FF1B0-BASE
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    // Fog Functions
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    FUNCPTR(FOG, FreeMemory, BOOL __fastcall, (void* pPool, void* pMemory, const char* szFile, DWORD dwLine, DWORD dwFlags),
+            0xB480) // NEW 1.14d //0040B480-BASE
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // D2Lang Ordinals

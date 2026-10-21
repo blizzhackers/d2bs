@@ -38,6 +38,19 @@ PatchHook Patches[] = {
     {PatchJmp, GetDllOffset("D2Common.dll", 0x270783), (DWORD)LvlSubPlaceLoop_Intercept, 17}, // NEW 1.14d //00670783-BASE
     {PatchJmp, GetDllOffset("D2Common.dll", 0x270724), (DWORD)LvlSubPickLoop_Intercept, 10},  // NEW 1.14d //00670724-BASE
 
+    // The sprite cache, shared by Storm's read thread and the threads that draw: see SpriteCacheChargeRead_Intercept.
+    {PatchCall, GetDllOffset("D2CMP.dll", 0x1FF6EF), (DWORD)SpriteCachePinRead_Intercept, 10},    // NEW 1.14d //005FF6EF-BASE
+    {PatchBytes, GetDllOffset("D2CMP.dll", 0x1FF726), (BYTE)0x90, 4},                             // NEW 1.14d //005FF726-BASE
+    {PatchCall, GetDllOffset("D2CMP.dll", 0x1FF73A), (DWORD)SpriteCacheChargeRead_Intercept, 5},  // NEW 1.14d //005FF73A-BASE
+    {PatchCall, GetDllOffset("D2CMP.dll", 0x20002E), (DWORD)SpriteCacheChargeIssue_Intercept, 5}, // NEW 1.14d //0060002E-BASE
+    {PatchCall, GetDllOffset("D2CMP.dll", 0x1FFFB2), (DWORD)SpriteCacheAllocRead_Intercept, 5},   // NEW 1.14d //005FFFB2-BASE
+    {PatchJmp, GetDllOffset("D2CMP.dll", 0x1FF4A0), (DWORD)SpriteCacheEvict_Intercept, 5},        // NEW 1.14d //005FF4A0-BASE
+    // The cache's unlink (0x5FF1B0) leaves a pinned list head in place, yet touching a sprite (0x5FF5B0) appends its
+    // entry to the touched list regardless, linking it into two lists; a sprite still being read is pinned, often a head.
+    // Without the check a pinned head unlinks like any other pinned entry; eviction skips pinned entries on its own.
+    {PatchBytes, GetDllOffset("D2CMP.dll", 0x1FF1EB), (BYTE)0x90, 10}, // NEW 1.14d //005FF1EB-BASE
+    {PatchBytes, GetDllOffset("D2CMP.dll", 0x1FF238), (BYTE)0x90, 6},  // NEW 1.14d //005FF238-BASE
+
     {PatchCall, GetDllOffset("D2MCPClient.dll", 0x4B1AE), (DWORD)RealmPacketRecv_Interception, 6},
 
     {PatchCall, GetDllOffset("Fog.dll", 0x8CC4), (DWORD)LogMessageBoxA_Intercept, 6}, // Updated 1.14d //00408CC4-BASE

@@ -107,7 +107,7 @@ bool SwitchToProfile(const wchar_t* profile) {
 void InitSettings(void) {
     wchar_t fname[_MAX_FNAME + _MAX_PATH], scriptPath[_MAX_PATH], defaultStarter[_MAX_FNAME], defaultGame[_MAX_FNAME], defaultConsole[_MAX_FNAME], hosts[256],
         debug[6], quitOnHostile[6], quitOnError[6], maxGameTime[6], gameTimeout[6], startAtMenu[6], disableCache[6], memUsage[6], gamePrint[6], useProfilePath[6],
-        logConsole[6], enableUnsupported[6], forwardMessageBox[6], consoleFont[6];
+        logConsole[6], enableUnsupported[6], forwardMessageBox[6], haltDumps[6], consoleFont[6];
 
     swprintf_s(fname, _countof(fname), L"%sd2bs.ini", Vars.szPath);
 
@@ -129,6 +129,7 @@ void InitSettings(void) {
     GetPrivateProfileStringW(L"settings", L"LogConsoleOutput", L"false", logConsole, 6, fname);
     GetPrivateProfileStringW(L"settings", L"EnableUnsupported", L"false", enableUnsupported, 6, fname);
     GetPrivateProfileStringW(L"settings", L"ForwardMessageBox", L"false", forwardMessageBox, 6, fname);
+    GetPrivateProfileStringW(L"settings", L"HaltDumps", L"false", haltDumps, 6, fname);
     GetPrivateProfileStringW(L"settings", L"ConsoleFont", L"0", consoleFont, 6, fname);
     swprintf_s(Vars.szScriptPath, _MAX_PATH, L"%s%s", Vars.szPath, scriptPath);
     wcscpy_s(Vars.szStarter, _MAX_FNAME, defaultStarter);
@@ -152,6 +153,7 @@ void InitSettings(void) {
     Vars.bLogConsole = StringToBool(logConsole);
     Vars.bEnableUnsupported = StringToBool(enableUnsupported);
     Vars.bForwardMessageBox = StringToBool(forwardMessageBox);
+    Vars.bHaltDumps = StringToBool(haltDumps);
     Vars.dwMemUsage = abs(_wtoi(memUsage));
     Vars.dwConsoleFont = abs(_wtoi(consoleFont));
     if (Vars.dwMemUsage < 1)

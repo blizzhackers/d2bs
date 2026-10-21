@@ -68,6 +68,7 @@ struct Variables {
     BOOL bLogConsole;
     BOOL bEnableUnsupported;
     BOOL bForwardMessageBox;
+    BOOL bHaltDumps;
     BOOL bUseRawCDKey;
     BOOL bQuitting;
     BOOL bCacheFix;

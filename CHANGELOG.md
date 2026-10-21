@@ -11,7 +11,8 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **`clearAllTimers()`** cancels every timer of the calling script, including the one whose callback is running, and returns how many it cancelled.
 - **Timer arguments.** `setTimeout(fn, delay, ...args)` and `setInterval(fn, delay, ...args)` pass their extra arguments to the callback.
 - **Crash details in the log.** When the game crashes, the D2BS log records the exception with its registers and every thread's stack, and the game ends with the real exception code, so Windows Error Reporting can write a dump of it.
-- **Halt dumps and packet logs.** When the game halts on one of its own error checks, D2BS writes a dump and a log of the last 512 game packets sent and received to its `logs` folder as `crash-<profile>-<time>-<pid>.dmp` and `.packets.txt`; a crash writes the packet log.
+- **Packet logs.** When the game crashes or halts on one of its own error checks, D2BS writes the last 512 game packets sent and received to its `logs` folder as `crash-<profile>-<time>-<pid>.packets.txt`.
+- **Halt dumps on request.** With `HaltDumps=true` in `d2bs.ini`, a halt also writes a memory dump beside its packet log, as `.dmp`. A dump can hold account details, so share it privately.
 - **Bounded crash files.** The `logs` folder, shared by every profile, keeps the 5 newest dumps (a few hundred MB each) and 50 packet logs, and D2BS skips the dump when the disk has less than 2 GB free.
 - **Debug symbols with every release.** `D2BS.pdb` ships beside `D2BS.dll`, so a crash or halt dump shows D2BS's own functions.
 - **Build identity.** `version()`, the startup log line, the on-screen logo and the DLL's file properties name the commit the DLL was built from, for example `1.7.0U (7c036ba)`.

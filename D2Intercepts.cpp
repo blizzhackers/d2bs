@@ -659,7 +659,11 @@ char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
     GetStackWalk();
     Log(L"Crash File: %hs\n", crash_file);
     // A Halt raises no exception, so Windows writes no dump of it: this one is the only record of the game's state.
-    WriteCrashReport("halt", crash_file, true);
+    // It is opt-in: a dump is a few hundred MB that only a debugger reads, and the game's memory in it can include
+    // account details.
+    WriteCrashReport("halt", crash_file, Vars.bHaltDumps != FALSE);
+    if (!Vars.bHaltDumps)
+        Log(L"Crash report: no dump; set HaltDumps=true in d2bs.ini to write one");
     exit(0);
 }
 

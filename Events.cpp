@@ -352,7 +352,19 @@ void FireBlocker(Event* evt) {
     evt->owner->FireEvent(evt);
 }
 
+// The critical section records its owner's thread id, which only the owning thread can find there.
+static bool HoldsGameLock(void) {
+    return (DWORD)(DWORD_PTR)Vars.cGameLoopSection.OwningThread == GetCurrentThreadId();
+}
+
 bool WaitForBlocker(Event* evt, DWORD timeoutMs) {
+    // A thread other than the game thread that holds the game lock (a script sending from inside clickMap(),
+    // me.cancel(), ...) can't let go of it in the middle of the game's code, and a listener that needs the lock could
+    // not answer: the listeners run afterwards, and the packet goes out without their verdict.
+    if (Vars.dwGameThreadId != GetCurrentThreadId() && HoldsGameLock()) {
+        ReleaseBlocker(evt);
+        return false;
+    }
     DWORD waited = WAIT_FAILED;
     if (evt->done) {
         // Held through the wait, the lock would stall a listener that takes it until the time limit, and drop its verdict.

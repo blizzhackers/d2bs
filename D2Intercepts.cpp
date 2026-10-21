@@ -631,7 +631,11 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
     // Old dumps go first, so they can't keep the free space under the guard for good.
     PruneCrashFiles(L"crash-*.dmp", kCrashDumpsKept - 1);
     ULARGE_INTEGER freeBytes;
-    if (!GetDiskFreeSpaceExW(Vars.szLogPath, &freeBytes, NULL, NULL) || freeBytes.QuadPart < kDumpMinFreeBytes) {
+    if (!GetDiskFreeSpaceExW(Vars.szLogPath, &freeBytes, NULL, NULL)) {
+        Log(L"Crash report: no dump, the free space in %s could not be read (%u)", Vars.szLogPath, GetLastError());
+        return;
+    }
+    if (freeBytes.QuadPart < kDumpMinFreeBytes) {
         Log(L"Crash report: no dump, less than 2 GB free in %s", Vars.szLogPath);
         return;
     }

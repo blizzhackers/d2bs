@@ -39,7 +39,7 @@
 `public String `[`getBaseStat`](#group__globalFunctions_1gac86c8437c691e21b5593552ab9def9ba)`(String szTableName,int32_t nClassId,int32_t nStat)`            | Get the base stat from the given table with the given class ID and stat ID.
 `public String `[`getBaseStat`](#group__globalFunctions_1gafcfdd2f8d3eb3a2c30436ddfc4add78b)`(int32_t nBaseStat,int32_t nClassId,int32_t nStat)`            | Get the base stat from the given table with the given class ID and stat ID.
 `public `[`Control`](#classControl)` `[`getControl`](#group__globalFunctions_1gaad0e54fb02bc1ce440b96204167da80f)`(int32_t nType,int32_t nX,int32_t nY,int32_t nXSize,int32_t nYSize)`            | Get the control specified by type, location and size.
-`public bool `[`getPlayerFlag`](#group__globalFunctions_1gaa18d78f3e5bb312f53b602247ec66fd3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFirstUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSecondUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFlag)`            | Get the relation between two units.
+`public bool `[`getPlayerFlag`](#group__globalFunctions_1gaa18d78f3e5bb312f53b602247ec66fd3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFirstUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSecondUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFlag)`            | Get the relation between two players, anywhere in the game.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getTickCount`](#group__globalFunctions_1gad6eff12ded45cc505954f4763a71eae3)`()`            | Get the tick count.
 `public `[`Unit`](#classUnit)` `[`getInteractedNPC`](#group__globalFunctions_1ga3338c7af7db3773f41edb61bf9c5873c)`()`            | Get the [Unit](#classUnit) that the controlled [Unit](#classUnit) is currently interacting with.
 `public void `[`print`](#group__globalFunctions_1ga428513e838de3670e09b242cde1f0f6b)`(...)`            | Print the String representation of the arguments to the console.
@@ -59,7 +59,12 @@
 `public void `[`addEventListener`](#group__globalFunctions_1gaef5f2e6f72ff80cc13fd4ab84ab34810)`(String event,Function eventHandler)`            | Add an event handler to the list of listeners for the given event.
 `public void `[`removeEventListener`](#group__globalFunctions_1gaee02cb255ac39d16c7035fb1b58c70ed)`(String event,Function eventHandler)`            | Removes a previously added event from the listener list.
 `public void `[`clearEvent`](#group__globalFunctions_1ga185f0dafe7fd58fd565b8ce3b460541b)`(String event)`            | Clear the event handler list for given event.
-`public void `[`clearAllEvents`](#group__globalFunctions_1ga229f0f1b263c13dc1a2c5bdcb51a5320)`()`            | Clear all event handlers (from all events).
+`public void `[`clearAllEvents`](#group__globalFunctions_1ga229f0f1b263c13dc1a2c5bdcb51a5320)`()`            | Clear all event handlers (from all events); timers keep running.
+`public int `[`setTimeout`](#group__globalFunctions_setTimeout)`(Function callback,double delay,...)`            | Call a function once, after a delay.
+`public int `[`setInterval`](#group__globalFunctions_setInterval)`(Function callback,double period,...)`            | Call a function every period until the timer is cleared or its script ends.
+`public void `[`clearTimeout`](#group__globalFunctions_clearTimeout)`(int id)`            | Cancel a timer by id.
+`public void `[`clearInterval`](#group__globalFunctions_clearInterval)`(int id)`            | Cancel a timer by id; the same function as clearTimeout().
+`public int `[`clearAllTimers`](#group__globalFunctions_clearAllTimers)`()`            | Cancel every timer of the calling script.
 `public bool `[`js_strict`](#group__globalFunctions_1ga7b204d249e4e2d8274bec860070f1be3)`()`            | Get whether or not the JSOPTION_STRICT flag is set.
 `public void `[`js_strict`](#group__globalFunctions_1gae9bcfbfe5b3392c7533b960c25720b4f)`(bool setStrictFlag)`            | Set or clear the JSOPTION_STRICT flag.
 `public String `[`version`](#group__globalFunctions_1ga8972d7cb64b90764c110de40e134cfbc)`()`            | Get the D2BS version string.
@@ -785,7 +790,7 @@ A [Control](#classControl) object representing the [Control](#classControl) foun
 
 #### `public bool `[`getPlayerFlag`](#group__globalFunctions_1gaa18d78f3e5bb312f53b602247ec66fd3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFirstUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSecondUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFlag)` 
 
-Get the relation between two units.
+Get the relation between two players. It reads the party roster, so it answers for any player in the game, near this one or not.
 
 #### Parameters
 * `nFirstUnitId` The unit id for the unit making the relationship.
@@ -796,10 +801,8 @@ Get the relation between two units.
 
 > Todo: Determine what the flags are.
 
-> Todo: Should this return bool instead of int? (i.e. change the d2bs code).
-
 #### Returns
-Whether or not the relationship is of the type specified.
+true when the relationship is of the type specified, otherwise false (also when the game closes meanwhile).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getTickCount`](#group__globalFunctions_1gad6eff12ded45cc505954f4763a71eae3)`()` 
 
@@ -1057,7 +1060,56 @@ Clear the event handler list for given event.
 
 #### `public void `[`clearAllEvents`](#group__globalFunctions_1ga229f0f1b263c13dc1a2c5bdcb51a5320)`()` 
 
-Clear all event handlers (from all events).
+Clear all event handlers (from all events). Timers keep running: they stop with clearTimeout(), clearInterval(), clearAllTimers() or the end of their script.
+
+#### `public int `[`setTimeout`](#group__globalFunctions_setTimeout)`(Function callback,double delay,...)` 
+
+Call a function once, after a delay.
+
+#### Parameters
+* `callback` The function to call.
+
+* `delay` The delay in milliseconds; a fraction is cut to whole milliseconds, and a negative or NaN delay calls it at once.
+
+* `...` Extra arguments, passed on to the callback.
+
+#### Returns
+The timer's id, for clearTimeout(); null, with an error reported, when the delay is missing or not a number, and null when the callback is not a function.
+
+#### `public int `[`setInterval`](#group__globalFunctions_setInterval)`(Function callback,double period,...)` 
+
+Call a function every period until the timer is cleared or its script ends. A period of 0 (or a negative or NaN one) repeats every millisecond. A call is not started while the previous one is still running (for example inside delay()), and periods missed while the script was busy give one call.
+
+#### Parameters
+* `callback` The function to call.
+
+* `period` The period in milliseconds; a fraction is cut to whole milliseconds.
+
+* `...` Extra arguments, passed on to the callback.
+
+#### Returns
+The timer's id, for clearInterval(); null, with an error reported, when the period is missing or not a number, and null when the callback is not a function.
+
+#### `public void `[`clearTimeout`](#group__globalFunctions_clearTimeout)`(int id)` 
+
+Cancel a timer by id. clearTimeout() and clearInterval() are the same function: either cancels a timer of either kind, and of any script.
+
+#### Parameters
+* `id` The id setTimeout() or setInterval() returned.
+
+#### `public void `[`clearInterval`](#group__globalFunctions_clearInterval)`(int id)` 
+
+Cancel a timer by id; the same function as clearTimeout().
+
+#### Parameters
+* `id` The id setTimeout() or setInterval() returned.
+
+#### `public int `[`clearAllTimers`](#group__globalFunctions_clearAllTimers)`()` 
+
+Cancel every timer of the calling script, including an interval whose callback is running.
+
+#### Returns
+How many timers it cancelled.
 
 #### `public bool `[`js_strict`](#group__globalFunctions_1ga7b204d249e4e2d8274bec860070f1be3)`()` 
 

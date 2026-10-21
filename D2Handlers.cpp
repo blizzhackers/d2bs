@@ -243,9 +243,9 @@ bool WritePacketLog(const wchar_t* path, const char* header) {
         n = _snprintf_s(line, sizeof(line), _TRUNCATE, "%10u %6u %c %-6s %8u %5u ", r.tick, r.thread, r.dir, verdict, micros, r.size);
         if (n <= 0)
             continue;
-        for (DWORD i = 0; i < r.size && i < kPacketBytes; i++) {
-            line[n++] = hex[r.data[i] >> 4];
-            line[n++] = hex[r.data[i] & 15];
+        for (DWORD b = 0; b < r.size && b < kPacketBytes; b++) {
+            line[n++] = hex[r.data[b] >> 4];
+            line[n++] = hex[r.data[b] & 15];
             line[n++] = ' ';
         }
         line[n++] = '\r';

@@ -87,5 +87,8 @@ JSBool contextCallback(JSContext* cx, uint contextOp);
 // gcCallback(JSContext* cx, JSGCStatus status);
 void reportError(JSContext* cx, const char* message, JSErrorReport* report);
 bool ExecScriptEvent(Event* evt, bool clearList);
+// A script must end when stopped, or when it is an in-game script and its game is over. The operation callback,
+// delay() and SetSkill's event loop all stop running a script's events on this test.
+bool ScriptMustEnd(Script* script);
 void CALLBACK EventTimerProc(LPVOID lpArg, DWORD dwTimerLowValue, DWORD dwTimerHighValue);
 #endif

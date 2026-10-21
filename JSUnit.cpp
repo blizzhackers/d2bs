@@ -902,6 +902,13 @@ JSAPI_FUNC(unit_interact) {
     // Accept Trade
     //	}
     else {
+        // ClickMap waits for the game lock, as long as a frame in which pUnit can be freed: find it again under the lock.
+        AutoCriticalRoom cRoom;
+        if (!GameReady())
+            return JS_TRUE;
+        pUnit = D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType);
+        if (!pUnit)
+            return JS_TRUE;
         JS_SET_RVAL(cx, vp, JSVAL_TRUE);
         ClickMap(0, D2CLIENT_GetUnitX(pUnit), D2CLIENT_GetUnitY(pUnit), FALSE, pUnit);
         // D2CLIENT_Interact(pUnit, 0x45);

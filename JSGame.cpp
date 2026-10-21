@@ -87,6 +87,10 @@ JSAPI_FUNC(my_clickMap) {
         if (!mypUnit || (mypUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
             return JS_TRUE;
 
+        // ClickMap waits for the game lock, as long as a frame in which the unit can be freed: find it under the lock.
+        AutoCriticalRoom cRoom;
+        if (!GameReady())
+            return JS_TRUE;
         UnitAny* pUnit = D2CLIENT_FindUnit(mypUnit->dwUnitId, mypUnit->dwType);
 
         if (!pUnit)
@@ -1292,6 +1296,7 @@ JSAPI_FUNC(my_transmute) {
 }
 
 JSAPI_FUNC(my_getPlayerFlag) {
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
     if (argc != 3 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0]) || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[2]))
         return JS_TRUE;
 

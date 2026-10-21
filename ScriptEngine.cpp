@@ -281,6 +281,10 @@ bool __fastcall StopIngameScript(Script* script, void*, uint) {
     return true;
 }
 
+bool ScriptMustEnd(Script* script) {
+    return script->IsAborted() || (script->GetState() == InGame && ClientState() == ClientStateMenu);
+}
+
 JSBool operationCallback(JSContext* cx) {
     Script* script = (Script*)JS_GetContextPrivate(cx);
     static int callBackCount = 0;
@@ -336,15 +340,15 @@ JSBool operationCallback(JSContext* cx) {
     if (pause)
         script->SetPauseState(false);
 
-    if (!!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu))) {
-        while (script->EventList.size() > 0 && !!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu))) {
+    if (!ScriptMustEnd(script)) {
+        while (script->EventList.size() > 0 && !ScriptMustEnd(script)) {
             EnterCriticalSection(&Vars.cEventSection);
             Event* evt = script->EventList.back();
             script->EventList.pop_back();
             LeaveCriticalSection(&Vars.cEventSection);
             ExecScriptEvent(evt, false);
         }
-        return !!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu));
+        return !ScriptMustEnd(script);
     } else {
         return false;
     }

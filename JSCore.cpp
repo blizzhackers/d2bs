@@ -128,12 +128,6 @@ JSAPI_FUNC(my_clearAllTimers) {
     return JS_TRUE;
 }
 
-// A script must end when stopped, or when it is an in-game script and its game is over. The same test sits in the
-// operation callback (ScriptEngine.cpp) and SetSkill's event loop (D2Helpers.cpp); keep them in step.
-static bool ScriptMustEnd(Script* script) {
-    return script->IsAborted() || (script->GetState() == InGame && ClientState() == ClientStateMenu);
-}
-
 // A stop interrupts the script once, and an event handler or timer callback this delay runs can take that interrupt
 // and end alone; so delay ends the script itself, by returning false with no exception.
 JSAPI_FUNC(my_delay) {

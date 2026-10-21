@@ -271,7 +271,7 @@ BOOL SetSkill(JSContext* cx, WORD wSkillId, BOOL bLeft, DWORD dwItemId) {
         while (amt > 0) { // had a script deadlock here, make sure were positve with amt
             WaitForSingleObjectEx(script->eventSignal, amt, true);
             ResetEvent(script->eventSignal);
-            while (script->EventList.size() > 0 && !!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu))) {
+            while (script->EventList.size() > 0 && !ScriptMustEnd(script)) {
                 EnterCriticalSection(&Vars.cEventSection);
                 Event* evt = script->EventList.back();
                 script->EventList.pop_back();
@@ -513,8 +513,8 @@ static UnitAny* FindUnitInTables(UnitHashTable* pTables, DWORD dwId, DWORD dwTyp
 UnitAny* D2CLIENT_FindUnit(DWORD dwId, DWORD dwType) {
     if (dwId == -1)
         return NULL;
-    // Same order as before: FindServerSideUnit (0x4639B0) walks the tables at 0x7A5270, which D2Ptrs.h names
-    // ClientSideUnitHashTables, then FindClientSideUnit (0x463990) walks ServerSideUnitHashTables (0x7A5E70).
+    // The tables FindServerSideUnit (0x4639B0) walks come first: 0x7A5270, which D2Ptrs.h names ClientSideUnitHashTables;
+    // then those of FindClientSideUnit (0x463990), ServerSideUnitHashTables (0x7A5E70).
     UnitAny* pUnit = FindUnitInTables(p_D2CLIENT_ClientSideUnitHashTables, dwId, dwType);
     return pUnit ? pUnit : FindUnitInTables(p_D2CLIENT_ServerSideUnitHashTables, dwId, dwType);
 }

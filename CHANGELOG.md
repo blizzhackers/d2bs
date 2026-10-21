@@ -8,7 +8,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 
 ### Added
 
-- **`clearAllTimers()`** cancels every timer of the calling script, including the one whose callback is running, and returns how many it cancelled.
+- **`clearAllTimers()`** cancels every timer of the calling script, including an interval whose callback is running, and returns how many it cancelled.
 - **Timer arguments.** `setTimeout(fn, delay, ...args)` and `setInterval(fn, delay, ...args)` pass their extra arguments to the callback.
 - **Crash details in the log.** When the game crashes, the D2BS log records the exception with its registers and every thread's stack, and the game ends with the real exception code, so Windows Error Reporting can write a dump of it. A stack overflow, which leaves no stack to work with, goes to Windows Error Reporting directly.
 - **Packet logs.** When the game crashes (except from a stack overflow) or halts on one of its own error checks, D2BS writes the last 512 game packets sent and received to its `logs` folder as `crash-<profile>-<time>-<pid>.packets.txt`.
@@ -24,6 +24,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **One call at a time per interval.** An interval whose callback is still running, for example inside `delay()`, is not started again on top of it, and periods missed while the script was busy give one call.
 - **Timers outlive `clearAllEvents()`.** Timers stop with `clearTimeout()`, `clearInterval()`, `clearAllTimers()` or the end of their script.
 - **Safer dialog lines.** A line from an earlier `getDialogLines()` runs its handler only while it is one of the open dialog's lines, and otherwise throws "That dialog is not currently clickable."
+- **Game actions don't wait for other scripts' sent-packet listeners.** A packet sent from inside a call that acts between game frames, such as `clickMap()`, `me.cancel()`, `clickItem()`, `item.shop()` or `transmute()`, reaches other scripts' `gamepacketsent` listeners without waiting for their answer, so they can't block it and the game keeps running; the calling script's own listeners still can.
 
 ### Fixed
 
@@ -31,7 +32,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Any timer delay works.** `setTimeout()` and `setInterval()` accept fractional delays such as `1.5`, and a negative or NaN delay fires at once.
 - **Scripts end with their game.** A stopped script, or one whose game has ended, ends even when that happens during one of its timer callbacks or event handlers, and frees its thread, memory and timers.
 - **Safe slow listeners.** A key, chat, packet or screen-hook click listener that runs past its time limit (1 s for keys, 0.5 s for chat and packets, 3 s for clicks) lets the event through, and the game and the script carry on.
-- **Steadier shopping, cubing and walking.** `me.cancel()`, `unit.useMenu()`, `unit.interact()`, `unit.move()`, `clickMap()`, dialog-line handlers, `transmute()` and the inventory setup on joining a game act between game frames, so bots that shop, gamble, cube and walk keep running.
+- **Steadier shopping, cubing and walking.** `me.cancel()`, `unit.useMenu()`, `unit.interact()` (except on an item the player holds, which only sends a packet), `unit.move()`, `clickMap()`, dialog-line handlers, `transmute()` and the inventory setup on joining a game act between game frames, so bots that shop, gamble, cube and walk keep running.
 - **Area lookups keep the game running.** `getArea()` and its properties such as `exits`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()` and `getCollision()` called while the game changes areas or leaves a game let the game carry on drawing.
 - **Stable Act 5 wilderness.** Frigid Highlands, Arreat Plateau, Frozen Tundra and the other Act 5 outdoor areas build reliably in every game, whether the character walks in, takes a waypoint or a script looks up a room there with `getRoom()`.
 - **Folder listings release their handles.** `dopen().getFiles()` and `getFolders()` close their folder search when done, so scripts can list folders as often as they like without adding to the game's handle count.

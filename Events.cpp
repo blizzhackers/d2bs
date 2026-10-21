@@ -66,7 +66,7 @@ bool __fastcall KeyEventCallback(Script* script, void* argv, uint argc) {
         evt->arg1 = new DWORD((DWORD)helper->key);
         evt->arg4 = new DWORD(false);
         evt->freeArgs = FreeKeyBlockerArgs;
-        block = AwaitBlocker(evt, 1000, false);
+        block = AwaitBlocker(evt, 1000);
     }
 
     return block;
@@ -196,7 +196,7 @@ bool __fastcall ChatEventCallback(Script* script, void* argv, uint argc) {
         evt->arg2 = _wcsdup(helper->msg);
         evt->arg4 = new DWORD(false);
         evt->freeArgs = FreeChatBlockerArgs;
-        block = AwaitBlocker(evt, 500, false);
+        block = AwaitBlocker(evt, 500);
     }
     return block;
 }
@@ -309,7 +309,7 @@ bool __fastcall PacketEventCallback(Script* script, void* argv, uint argc) {
             ReleaseBlocker(evt);
             return block;
         }
-        return AwaitBlocker(evt, 500, true);
+        return AwaitBlocker(evt, 500);
     }
 
     return false;
@@ -340,19 +340,25 @@ void TakeGameLock(void) {
         EnterCriticalSection(&Vars.cGameLoopSection);
 }
 
-bool AwaitBlocker(Event* evt, DWORD timeoutMs, bool releaseGameLock) {
+bool AwaitBlocker(Event* evt, DWORD timeoutMs) {
+    FireBlocker(evt);
+    return WaitForBlocker(evt, timeoutMs);
+}
+
+void FireBlocker(Event* evt) {
     // Both owners are counted before the script can see the event.
     evt->done = CreateEvent(NULL, TRUE, FALSE, NULL);
     evt->refs = 2;
     evt->owner->FireEvent(evt);
+}
 
+bool WaitForBlocker(Event* evt, DWORD timeoutMs) {
     DWORD waited = WAIT_FAILED;
     if (evt->done) {
-        if (releaseGameLock)
-            ReleaseGameLock();
+        // Held through the wait, the lock would stall a listener that takes it until the time limit, and drop its verdict.
+        ReleaseGameLock();
         waited = WaitForSingleObject(evt->done, timeoutMs);
-        if (releaseGameLock)
-            TakeGameLock();
+        TakeGameLock();
     }
     bool block = waited == WAIT_OBJECT_0 && *(DWORD*)evt->arg4 != 0;
     ReleaseBlocker(evt);

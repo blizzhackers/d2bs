@@ -10,10 +10,10 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 
 - **`clearAllTimers()`** cancels every timer of the calling script, including the one whose callback is running, and returns how many it cancelled.
 - **Timer arguments.** `setTimeout(fn, delay, ...args)` and `setInterval(fn, delay, ...args)` pass their extra arguments to the callback.
-- **Crash details in the log.** When the game crashes, the D2BS log records the exception with its registers and every thread's stack, and the game ends with the real exception code, so Windows Error Reporting can write a dump of it.
-- **Packet logs.** When the game crashes or halts on one of its own error checks, D2BS writes the last 512 game packets sent and received to its `logs` folder as `crash-<profile>-<time>-<pid>.packets.txt`.
+- **Crash details in the log.** When the game crashes, the D2BS log records the exception with its registers and every thread's stack, and the game ends with the real exception code, so Windows Error Reporting can write a dump of it. A stack overflow, which leaves no stack to work with, goes to Windows Error Reporting directly.
+- **Packet logs.** When the game crashes (except from a stack overflow) or halts on one of its own error checks, D2BS writes the last 512 game packets sent and received to its `logs` folder as `crash-<profile>-<time>-<pid>.packets.txt`.
 - **Halt dumps on request.** With `HaltDumps=true` in `d2bs.ini`, a halt also writes a memory dump beside its packet log, as `.dmp`. A dump can hold account details, so share it privately.
-- **Bounded crash files.** The `logs` folder, shared by every profile, keeps the 5 newest dumps (a few hundred MB each) and 50 packet logs, and D2BS skips the dump when the disk has less than 2 GB free.
+- **Bounded crash files.** The `logs` folder, shared by every profile, keeps at most 5 dumps (a few hundred MB each) and 50 packet logs, deleting the oldest first, and D2BS skips the dump when the disk has less than 2 GB free.
 - **Debug symbols with every release.** `D2BS.pdb` ships beside `D2BS.dll`, so a crash or halt dump shows D2BS's own functions.
 - **Build identity.** `version()`, the startup log line, the on-screen logo and the DLL's file properties name the commit the DLL was built from, for example `1.7.0U (7c036ba)`.
 
@@ -23,7 +23,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **`setInterval(fn, 0)` repeats.** A zero period makes a repeating timer, like any other period; use `setTimeout()` for a single call.
 - **One call at a time per interval.** An interval whose callback is still running, for example inside `delay()`, is not started again on top of it, and periods missed while the script was busy give one call.
 - **Timers outlive `clearAllEvents()`.** Timers stop with `clearTimeout()`, `clearInterval()`, `clearAllTimers()` or the end of their script.
-- **Safer dialog lines.** A line from an earlier `getDialogLines()` runs its handler only while its dialog is still the one open, and otherwise throws "That dialog is not currently clickable."
+- **Safer dialog lines.** A line from an earlier `getDialogLines()` runs its handler only while it is one of the open dialog's lines, and otherwise throws "That dialog is not currently clickable."
 
 ### Fixed
 
@@ -36,8 +36,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Stable Act 5 wilderness.** Frigid Highlands, Arreat Plateau, Frozen Tundra and the other Act 5 outdoor areas build reliably in every game, whether the character walks in, takes a waypoint or a script looks up a room there with `getRoom()`.
 - **Folder listings release their handles.** `dopen().getFiles()` and `getFolders()` close their folder search when done, so scripts can list folders as often as they like without adding to the game's handle count.
 - **Safe unit lookups.** Finding a unit by its id answers "not found" for a unit the game has just freed, as for any unit that's gone.
-- **Dependable `getPlayerFlag()`.** It returns `true` or `false`, so `=== true` works, and it is safe to call while a game closes.
+- **Dependable `getPlayerFlag()`.** It returns `true` or `false`, so `=== true` works, answers for players anywhere in the game rather than only those nearby, and is safe to call while a game closes.
 - **Missile casters.** A missile's `getParent()` returns the unit that cast it, or undefined when the caster is out of sight; `missile.owner` and `missile.ownertype` still give its id and type.
-- **Reliable hover handlers.** A screen hook's hover handler gets exactly the cursor's x and y, and hovering for hours uses no extra memory.
 
 [Unreleased]: https://github.com/blizzhackers/d2bs/compare/bf77a8f...HEAD

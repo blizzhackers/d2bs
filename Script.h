@@ -41,8 +41,13 @@ struct Event {
 };
 
 // Fires a blocker event at its owner and waits up to timeoutMs for the verdict its listeners leave in *(DWORD*)arg4;
-// false (not blocked) when they take longer. evt->freeArgs must free the event's arguments.
-bool AwaitBlocker(Event* evt, DWORD timeoutMs, bool releaseGameLock);
+// false (not blocked) when they take longer. evt->freeArgs must free the event's arguments. The game thread lets go
+// of the game lock while it waits, so a listener can call natives that take it (clickMap(), me.cancel(), ...), and
+// so the waiting thread must hold no lock that such a listener can need.
+bool AwaitBlocker(Event* evt, DWORD timeoutMs);
+// AwaitBlocker in two steps, for a caller that fires under a lock and waits after leaving it.
+void FireBlocker(Event* evt);
+bool WaitForBlocker(Event* evt, DWORD timeoutMs);
 // The owning script's side, for a blocker event it ran or dropped: records the verdict and ends the wait.
 void CompleteBlocker(Event* evt, bool block);
 void ReleaseBlocker(Event* evt);

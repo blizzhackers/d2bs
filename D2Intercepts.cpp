@@ -484,8 +484,13 @@ bool CrashReportStem(wchar_t* stem, size_t len) {
                         n ? profile : L"noprofile", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, GetCurrentProcessId()) >= 0;
 }
 
-// Deletes the oldest files matching pattern in the logs folder until at most keep remain.
+// Deletes the oldest files matching pattern in the logs folder until at most keep remain. A file it can't delete (one
+// open in a debugger) is passed over for the next oldest, up to kSkipMax of them; no allocations of its own, as in the
+// rest of the report.
 void PruneCrashFiles(const wchar_t* pattern, DWORD keep) {
+    const int kSkipMax = 8;
+    wchar_t skipped[kSkipMax][MAX_PATH];
+    int skippedCount = 0;
     wchar_t search[MAX_PATH], oldest[MAX_PATH], candidate[MAX_PATH];
     if (_snwprintf_s(search, _countof(search), _TRUNCATE, L"%s%s", Vars.szLogPath, pattern) < 0)
         return;
@@ -503,13 +508,23 @@ void PruneCrashFiles(const wchar_t* pattern, DWORD keep) {
             count++;
             if (CompareFileTime(&fd.ftLastWriteTime, &oldestTime) < 0 &&
                 _snwprintf_s(candidate, _countof(candidate), _TRUNCATE, L"%s%s", Vars.szLogPath, fd.cFileName) >= 0) {
-                oldestTime = fd.ftLastWriteTime;
-                wcscpy_s(oldest, candidate);
+                bool skip = false;
+                for (int i = 0; i < skippedCount && !skip; i++)
+                    skip = _wcsicmp(skipped[i], candidate) == 0;
+                if (!skip) {
+                    oldestTime = fd.ftLastWriteTime;
+                    wcscpy_s(oldest, candidate);
+                }
             }
         } while (FindNextFileW(hFind, &fd));
         FindClose(hFind);
-        if (count <= keep || !oldest[0] || !DeleteFileW(oldest))
+        if (count <= keep || !oldest[0])
             return;
+        if (!DeleteFileW(oldest)) {
+            if (skippedCount == kSkipMax)
+                return;
+            wcscpy_s(skipped[skippedCount++], oldest);
+        }
     }
 }
 
@@ -571,8 +586,10 @@ DWORD WINAPI WriteDumpThread(LPVOID param) {
 }
 
 // 0 no report yet, 1 one is being written, 2 written. A second thread that crashes meanwhile waits instead of ending
-// the process under the first one's dump.
+// the process under the first one's dump; a fault on the writing thread itself returns at once, as it would wait on
+// itself.
 volatile LONG g_crashReportState = 0;
+volatile DWORD g_crashReportThread = 0;
 
 struct CrashReportDone {
     ~CrashReportDone() {
@@ -582,13 +599,16 @@ struct CrashReportDone {
 
 // On x86 RtlCaptureContext takes the context from its caller's EBP frame, so this function keeps one.
 #pragma optimize("y", off)
-// Writes the packet log and, for a Halt, a dump of the calling thread's process.
+// Writes the packet log and, withDump, a dump of the calling thread's process.
 void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
     if (InterlockedCompareExchange(&g_crashReportState, 1, 0) != 0) {
+        if (g_crashReportThread == GetCurrentThreadId())
+            return;
         for (DWORD waited = 0; g_crashReportState == 1 && waited < kDumpTimeoutMs + 5000; waited += 100)
             Sleep(100);
         return;
     }
+    g_crashReportThread = GetCurrentThreadId();
     CrashReportDone done;
 
     wchar_t stem[MAX_PATH], path[MAX_PATH];
@@ -672,6 +692,10 @@ char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
 // Windows Error Reporting gets the real exception.
 DWORD __fastcall FogCrash_Intercept(BYTE* crashInfo, DWORD) {
     EXCEPTION_POINTERS* ptrs = *(EXCEPTION_POINTERS**)(crashInfo + 0x18);
+    // A stack overflow leaves this thread about a page of stack, too little for the stack walk and the report, which
+    // would fault again; Windows Error Reporting still gets the exception.
+    if (ptrs && ptrs->ExceptionRecord && ptrs->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW)
+        return 0;
     if (ptrs && ptrs->ExceptionRecord && ptrs->ContextRecord) {
         ExceptionHandler(ptrs);
         // Packets only: Windows Error Reporting dumps an exception, and a second dump from inside this filter could

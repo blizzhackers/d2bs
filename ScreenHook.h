@@ -53,7 +53,6 @@ class Genhook {
 
     friend bool __fastcall DrawHook(Genhook* hook, void* argv, uint argc);
     friend bool __fastcall CleanHook(Genhook* hook, void* argv, uint argc);
-    friend bool __fastcall ClickHook(Genhook* hook, void* argv, uint argc);
     friend bool __fastcall HoverHook(Genhook* hook, void* argv, uint argc);
 
     static void DrawAll(ScreenhookState type);
@@ -62,6 +61,8 @@ class Genhook {
     static bool ForEachVisibleHook(HookCallback proc, void* argv, uint argc);
     static bool ForEachInvisibleHook(HookCallback proc, void* argv, uint argc);
     static bool ForEachVisibleHookUnLocked(HookCallback proc, void* argv, uint argc);
+    // Runs the click handlers of the visible hooks under loc; true when one of them blocks the click.
+    static bool ClickVisibleHooks(int button, POINT* loc);
     static void Clean(Script* owner);
     static void Initialize(void) {
         InitializeCriticalSection(&globalSection);
@@ -76,7 +77,7 @@ class Genhook {
     virtual void Draw(void) = 0;
 
   public:
-    bool Click(int button, POINT* loc);
+    Event* ClickEvent(int button, POINT* loc);
     void Hover(POINT* loc);
 
     bool IsInRange(POINT* pt) {

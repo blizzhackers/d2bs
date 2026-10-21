@@ -716,23 +716,25 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         return true;
     }
     if (strcmp(evtName, "Command") == 0) {
-        wchar_t* cmd = (wchar_t*)evt->arg1;
-        std::wstring test;
+        if (!clearList) {
+            wchar_t* cmd = (wchar_t*)evt->arg1;
+            std::wstring test;
 
-        test.append(L"try{ ");
-        test.append(cmd);
-        test.append(L" } catch (error){print(error)}");
-        JS_BeginRequest(cx);
-        jsval rval;
+            test.append(L"try{ ");
+            test.append(cmd);
+            test.append(L" } catch (error){print(error)}");
+            JS_BeginRequest(cx);
+            jsval rval;
 
-        if (JS_EvaluateUCScript(cx, JS_GetGlobalObject(cx), test.data(), test.length(), "Command Line", 0, &rval)) {
-            if (!JSVAL_IS_NULL(rval) && !JSVAL_IS_VOID(rval)) {
-                JS_ConvertValue(cx, rval, JSTYPE_STRING, &rval);
-                const wchar_t* text = JS_GetStringCharsZ(cx, JS_ValueToString(cx, rval));
-                Print(L"%s", text);
+            if (JS_EvaluateUCScript(cx, JS_GetGlobalObject(cx), test.data(), test.length(), "Command Line", 0, &rval)) {
+                if (!JSVAL_IS_NULL(rval) && !JSVAL_IS_VOID(rval)) {
+                    JS_ConvertValue(cx, rval, JSTYPE_STRING, &rval);
+                    const wchar_t* text = JS_GetStringCharsZ(cx, JS_ValueToString(cx, rval));
+                    Print(L"%s", text);
+                }
             }
+            JS_EndRequest(cx);
         }
-        JS_EndRequest(cx);
         free(evt->arg1);
         free(evt->name);
         delete evt;
@@ -804,7 +806,11 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         return true;
     }
     if (strcmp(evtName, "DisposeMe") == 0) {
-        ScriptEngine::DisposeScript(evt->owner);
+        // Drained while its script is being destroyed, the request is already being carried out.
+        if (!clearList)
+            ScriptEngine::DisposeScript(evt->owner);
+        free(evt->name);
+        delete evt;
         return true;
     }
 

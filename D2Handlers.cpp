@@ -447,7 +447,7 @@ LRESULT CALLBACK MouseMove(int code, WPARAM wParam, LPARAM lParam) {
         case WM_LBUTTONDOWN:
             MouseClickEvent(0, pt, false);
             helper.button = 0;
-            if (Genhook::ForEachVisibleHook(ClickHook, &helper, 1))
+            if (Genhook::ClickVisibleHooks(helper.button, &helper.point))
                 clicked = true;
             break;
         case WM_LBUTTONUP:
@@ -456,7 +456,7 @@ LRESULT CALLBACK MouseMove(int code, WPARAM wParam, LPARAM lParam) {
         case WM_RBUTTONDOWN:
             MouseClickEvent(1, pt, false);
             helper.button = 1;
-            if (Genhook::ForEachVisibleHook(ClickHook, &helper, 1))
+            if (Genhook::ClickVisibleHooks(helper.button, &helper.point))
                 clicked = true;
             break;
         case WM_RBUTTONUP:
@@ -465,7 +465,7 @@ LRESULT CALLBACK MouseMove(int code, WPARAM wParam, LPARAM lParam) {
         case WM_MBUTTONDOWN:
             MouseClickEvent(2, pt, false);
             helper.button = 2;
-            if (Genhook::ForEachVisibleHook(ClickHook, &helper, 1))
+            if (Genhook::ClickVisibleHooks(helper.button, &helper.point))
                 clicked = true;
             break;
         case WM_MBUTTONUP:
@@ -544,8 +544,10 @@ void GameDraw(void) {
     if (Vars.SectionCount) {
         if (Vars.bGameLoopEntered)
             LeaveCriticalSection(&Vars.cGameLoopSection);
-        else
+        else {
             Vars.bGameLoopEntered = true;
+            Vars.dwGameThreadId = GetCurrentThreadId();
+        }
         Sleep(0);
         EnterCriticalSection(&Vars.cGameLoopSection);
     } else

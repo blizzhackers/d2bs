@@ -31,11 +31,6 @@ bool __fastcall HoverHook(Genhook* hook, void* argv, uint argc) {
     return true;
 }
 
-bool __fastcall ClickHook(Genhook* hook, void* argv, uint argc) {
-    HookClickHelper* helper = (HookClickHelper*)argv;
-    return hook->Click(helper->button, &helper->point);
-}
-
 bool __fastcall DrawHook(Genhook* hook, void* argv, uint argc) {
     if ((hook->GetGameState() == (ScreenhookState)(int)argv || hook->GetGameState() == Perm) &&
         (!hook->GetIsAutomap() || (hook->GetIsAutomap() && *p_D2CLIENT_AutomapOn)))
@@ -152,7 +147,7 @@ void Genhook::Clean(Script* owner) {
     while (it != visible.end()) {
         if ((*it)->owner->IsAborted()) {
             Genhook* i = *it;
-            it = invisible.erase(it);
+            it = visible.erase(it);
             //	delete(i);
         } else
             it++;
@@ -218,25 +213,45 @@ static void FreeClickArgs(Event* evt) {
     delete (DWORD*)evt->arg4;
 }
 
-bool Genhook::Click(int button, POINT* loc) {
-    if (!IsInRange(loc))
-        return false;
+Event* Genhook::ClickEvent(int button, POINT* loc) {
+    // A paused or ending owner runs no events, so the click would only wait out the time limit.
+    if (!IsInRange(loc) || !owner || !owner->IsRunning() || !JSVAL_IS_FUNCTION(owner->GetContext(), clicked))
+        return NULL;
+
+    Event* evt = new Event;
+    evt->owner = owner;
+    evt->argc = 3;
+    evt->name = _strdup("ScreenHookClick");
+    evt->arg1 = new DWORD((DWORD)button);
+    evt->arg2 = new DWORD((DWORD)loc->x);
+    evt->arg3 = new DWORD((DWORD)loc->y);
+    evt->arg4 = new DWORD(false);
+    evt->functions.push_back(new AutoRoot(evt->owner->GetContext(), clicked));
+    evt->freeArgs = FreeClickArgs;
+    return evt;
+}
+
+// The events are fired under globalSection, which keeps each hook and its owner alive, and waited on after leaving
+// it: the wait lets go of the game lock, and retaking that while holding globalSection would invert the draw path's
+// order (game lock, then globalSection) against a handler that touches a hook.
+bool Genhook::ClickVisibleHooks(int button, POINT* loc) {
+    std::vector<Event*> fired;
+    EnterCriticalSection(&globalSection);
+    std::vector<Genhook*> list(visible.begin(), visible.end());
+    std::sort(list.begin(), list.end(), zOrderSort);
+    for (size_t i = 0; i < list.size(); i++) {
+        Event* evt = list[i]->ClickEvent(button, loc);
+        if (evt) {
+            FireBlocker(evt);
+            fired.push_back(evt);
+        }
+    }
+    LeaveCriticalSection(&globalSection);
 
     bool block = false;
-    if (owner && JSVAL_IS_FUNCTION(owner->GetContext(), clicked)) {
-
-        Event* evt = new Event;
-        evt->owner = owner;
-        evt->argc = 3;
-        evt->name = _strdup("ScreenHookClick");
-        evt->arg1 = new DWORD((DWORD)button);
-        evt->arg2 = new DWORD((DWORD)loc->x);
-        evt->arg3 = new DWORD((DWORD)loc->y);
-        evt->arg4 = new DWORD(false);
-        evt->functions.push_back(new AutoRoot(evt->owner->GetContext(), clicked));
-        evt->freeArgs = FreeClickArgs;
-        block = AwaitBlocker(evt, 3000, false);
-    }
+    for (size_t i = 0; i < fired.size(); i++)
+        if (WaitForBlocker(fired[i], 3000))
+            block = true;
     return block;
 }
 

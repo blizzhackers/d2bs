@@ -68,6 +68,7 @@ struct Variables {
     BOOL bLogConsole;
     BOOL bEnableUnsupported;
     BOOL bForwardMessageBox;
+    BOOL bHaltDumps;
     BOOL bUseRawCDKey;
     BOOL bQuitting;
     BOOL bCacheFix;
@@ -76,7 +77,6 @@ struct Variables {
     BOOL bReduceFTJ;
     int dwMemUsage;
     int dwConsoleFont;
-    HANDLE eventSignal;
     Module* pModule;
     HMODULE hModule;
     HWND hHandle;

@@ -18,6 +18,7 @@
 #include "Offset.h"
 #include "CommandLine.h"
 #include "Control.h"
+#include "CriticalSections.h"
 
 using namespace std;
 
@@ -80,7 +81,13 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
 
                 Sleep(500);
 
-                D2CLIENT_InitInventory();
+                {
+                    // Loads inventory graphics through the game's sprite caches, which only the game thread may use
+                    // unlocked; the game may also have ended during the sleep.
+                    AutoCriticalRoom cRoom;
+                    if (ClientState() == ClientStateInGame)
+                        D2CLIENT_InitInventory();
+                }
                 ScriptEngine::ForEachScript(UpdatePlayerGid, NULL, 0);
                 ScriptEngine::UpdateConsole();
                 Vars.bQuitting = false;
@@ -142,7 +149,133 @@ DWORD __fastcall ChannelInput(wchar_t* wMsg) {
     return send; // false means ignore, true means send
 }
 
+// The last packets in both directions, written out by a crash report. The game thread records received packets and any
+// thread that sends records sent ones, so slots are claimed with an interlocked counter. A record counts only once its
+// seq is stamped: the crash-time reader skips torn records without a lock, as the crashing thread may hold any lock.
+namespace {
+const LONG kPacketRing = 512; // a power of two
+const DWORD kPacketBytes = 48;
+
+struct PacketRecord {
+    volatile LONG seq;
+    DWORD tick;
+    DWORD thread;
+    DWORD size;
+    DWORD qpcSpent; // performance-counter ticks D2BS spent on the packet
+    char dir;       // 'R' received, 'S' sent
+    char verdict;   // 0 still in D2BS, 1 passed on, 2 blocked by D2BS
+    BYTE data[kPacketBytes];
+};
+
+PacketRecord g_packets[kPacketRing];
+volatile LONG g_packetNext = 0;
+volatile LONG g_packetsFrozen = 0;
+
+LONG PacketBegin(char dir, const BYTE* pPacket, DWORD dwSize) {
+    if (g_packetsFrozen)
+        return 0;
+    LONG seq = InterlockedIncrement(&g_packetNext);
+    PacketRecord& r = g_packets[seq & (kPacketRing - 1)];
+    r.seq = 0;
+    MemoryBarrier();
+    r.tick = GetTickCount();
+    r.thread = GetCurrentThreadId();
+    r.size = dwSize;
+    r.qpcSpent = 0;
+    r.dir = dir;
+    r.verdict = 0;
+    if (pPacket && dwSize)
+        memcpy(r.data, pPacket, dwSize < kPacketBytes ? dwSize : kPacketBytes);
+    MemoryBarrier();
+    r.seq = seq;
+    return seq;
+}
+
+void PacketEnd(LONG seq, DWORD pass, const LARGE_INTEGER& start) {
+    LARGE_INTEGER end;
+    QueryPerformanceCounter(&end);
+    PacketRecord& r = g_packets[seq & (kPacketRing - 1)];
+    if (seq && r.seq == seq) {
+        r.qpcSpent = (DWORD)(end.QuadPart - start.QuadPart);
+        r.verdict = pass ? 1 : 2;
+    }
+}
+
+DWORD ReceivedPacket(BYTE* pPacket, DWORD dwSize);
+DWORD SentPacket(BYTE* pPacket, DWORD dwSize);
+} // namespace
+
+bool WritePacketLog(const wchar_t* path, const char* header) {
+    InterlockedExchange(&g_packetsFrozen, 1);
+    ULONG last = (ULONG)g_packetNext;
+    HANDLE hFile = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE)
+        return false;
+
+    LARGE_INTEGER freq;
+    if (!QueryPerformanceFrequency(&freq) || !freq.QuadPart)
+        freq.QuadPart = 1000000;
+    char line[512];
+    DWORD written;
+    int n = _snprintf_s(line, sizeof(line), _TRUNCATE,
+                        "%s\r\nGetTickCount at the crash: %u\r\n"
+                        "tick thread dir verdict d2bs-us size first-bytes (R = received, S = sent; oldest first)\r\n",
+                        header, GetTickCount());
+    if (n < 0)
+        n = (int)strlen(line); // a long header is cut, not dropped
+    WriteFile(hFile, line, n, &written, NULL);
+
+    static const char hex[] = "0123456789ABCDEF";
+    // Counted, not compared against the counter, so a wrapped counter still ends the loop.
+    ULONG count = last < (ULONG)kPacketRing ? last : (ULONG)kPacketRing;
+    for (ULONG i = 0; i < count; i++) {
+        ULONG seq = last - count + 1 + i;
+        const PacketRecord& slot = g_packets[seq & (kPacketRing - 1)];
+        if ((ULONG)slot.seq != seq)
+            continue;
+        // A thread that got past the frozen check can still reuse the oldest slot: copy, then check it again.
+        PacketRecord r = slot;
+        MemoryBarrier();
+        if ((ULONG)slot.seq != seq)
+            continue;
+        const char* verdict = r.verdict == 1 ? "pass" : r.verdict == 2 ? "BLOCK" : "inD2BS";
+        DWORD micros = (DWORD)((ULONGLONG)r.qpcSpent * 1000000 / (ULONGLONG)freq.QuadPart);
+        n = _snprintf_s(line, sizeof(line), _TRUNCATE, "%10u %6u %c %-6s %8u %5u ", r.tick, r.thread, r.dir, verdict, micros, r.size);
+        if (n <= 0)
+            continue;
+        for (DWORD b = 0; b < r.size && b < kPacketBytes; b++) {
+            line[n++] = hex[r.data[b] >> 4];
+            line[n++] = hex[r.data[b] & 15];
+            line[n++] = ' ';
+        }
+        line[n++] = '\r';
+        line[n++] = '\n';
+        WriteFile(hFile, line, n, &written, NULL);
+    }
+    CloseHandle(hFile);
+    return true;
+}
+
 DWORD __fastcall GamePacketReceived(BYTE* pPacket, DWORD dwSize) {
+    LARGE_INTEGER start;
+    QueryPerformanceCounter(&start);
+    LONG seq = PacketBegin('R', pPacket, dwSize);
+    DWORD pass = ReceivedPacket(pPacket, dwSize);
+    PacketEnd(seq, pass, start);
+    return pass;
+}
+
+DWORD __fastcall GamePacketSent(BYTE* pPacket, DWORD dwSize) {
+    LARGE_INTEGER start;
+    QueryPerformanceCounter(&start);
+    LONG seq = PacketBegin('S', pPacket, dwSize);
+    DWORD pass = SentPacket(pPacket, dwSize);
+    PacketEnd(seq, pass, start);
+    return pass;
+}
+
+namespace {
+DWORD ReceivedPacket(BYTE* pPacket, DWORD dwSize) {
     switch (pPacket[0]) {
     case 0xAE:
         Log(L"Warden activity detected! Terminating Diablo to ensure your safety :)");
@@ -169,9 +302,10 @@ DWORD __fastcall GamePacketReceived(BYTE* pPacket, DWORD dwSize) {
     return !GamePacketEvent(pPacket, dwSize);
 }
 
-DWORD __fastcall GamePacketSent(BYTE* pPacket, DWORD dwSize) {
+DWORD SentPacket(BYTE* pPacket, DWORD dwSize) {
     return !GamePacketSentEvent(pPacket, dwSize);
 }
+} // namespace
 
 LONG WINAPI GameEventHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     COPYDATASTRUCT* pCopy;
@@ -313,7 +447,7 @@ LRESULT CALLBACK MouseMove(int code, WPARAM wParam, LPARAM lParam) {
         case WM_LBUTTONDOWN:
             MouseClickEvent(0, pt, false);
             helper.button = 0;
-            if (Genhook::ForEachVisibleHook(ClickHook, &helper, 1))
+            if (Genhook::ClickVisibleHooks(helper.button, &helper.point))
                 clicked = true;
             break;
         case WM_LBUTTONUP:
@@ -322,7 +456,7 @@ LRESULT CALLBACK MouseMove(int code, WPARAM wParam, LPARAM lParam) {
         case WM_RBUTTONDOWN:
             MouseClickEvent(1, pt, false);
             helper.button = 1;
-            if (Genhook::ForEachVisibleHook(ClickHook, &helper, 1))
+            if (Genhook::ClickVisibleHooks(helper.button, &helper.point))
                 clicked = true;
             break;
         case WM_RBUTTONUP:
@@ -331,7 +465,7 @@ LRESULT CALLBACK MouseMove(int code, WPARAM wParam, LPARAM lParam) {
         case WM_MBUTTONDOWN:
             MouseClickEvent(2, pt, false);
             helper.button = 2;
-            if (Genhook::ForEachVisibleHook(ClickHook, &helper, 1))
+            if (Genhook::ClickVisibleHooks(helper.button, &helper.point))
                 clicked = true;
             break;
         case WM_MBUTTONUP:
@@ -410,8 +544,10 @@ void GameDraw(void) {
     if (Vars.SectionCount) {
         if (Vars.bGameLoopEntered)
             LeaveCriticalSection(&Vars.cGameLoopSection);
-        else
+        else {
             Vars.bGameLoopEntered = true;
+            Vars.dwGameThreadId = GetCurrentThreadId();
+        }
         Sleep(0);
         EnterCriticalSection(&Vars.cGameLoopSection);
     } else

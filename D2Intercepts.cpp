@@ -183,6 +183,48 @@ Skip:
     }
 }
 
+// The outdoor level generators walk the LvlSub rows of one type until a row of another type, with no end check:
+// 0x670750 places a type's rows, 0x6706A0 rolls which of them a level gets. A walk of the table's last type, 12 (Act
+// 5's barricades, or a mod's level SubType 12), reads the uninitialized dword past the table, a new leftover each game
+// (the table is reloaded per game); a 12 there makes a garbage row, which 0x670750 hands to the DS1 loader and crashes
+// on. These loop tails stop at the end of the table and walk the rows inside it as before.
+void __declspec(naked) LvlSubPlaceLoop_Intercept() {
+    __asm {
+		add ebx, 0x15C // the next row
+		mov ecx, [p_D2COMMON_LvlSubTxtCount]
+		mov eax, [ecx]
+		imul eax, eax, 0x15C
+		mov ecx, [p_D2COMMON_LvlSubTxt]
+		add eax, [ecx]
+		cmp ebx, eax
+		jae Done
+		mov eax, [ebx]
+		cmp eax, [esi+0x18] // the type being walked
+		jne Done
+		jmp D2COMMON_LvlSubPlaceLoop_I
+Done:
+		jmp D2COMMON_LvlSubPlaceLoopDone_I
+    }
+}
+
+void __declspec(naked) LvlSubPickLoop_Intercept() {
+    __asm {
+		add ebx, 0x15C // the next row
+		mov ecx, [p_D2COMMON_LvlSubTxtCount]
+		mov eax, [ecx]
+		imul eax, eax, 0x15C
+		mov ecx, [p_D2COMMON_LvlSubTxt]
+		add eax, [ecx]
+		cmp ebx, eax
+		jae Done
+		cmp [ebx], edx // edx = the type being walked
+		jne Done
+		jmp D2COMMON_LvlSubPickLoop_I
+Done:
+		jmp D2COMMON_LvlSubPickLoopDone_I
+    }
+}
+
 void GameDrawOOG_Intercept(void) {
     GameDrawOOG();
 }
@@ -413,8 +455,256 @@ void FogException() {
     }
 }
 
+namespace {
+// Marks the exception stream of a Halt's dump: a Halt raises no exception of its own.
+const DWORD kHaltDumpCode = 0xE0D20001;
+// Heap, stacks and the game's data: what tracing a Halt back to its unit or item needs; images come from the binaries.
+const MINIDUMP_TYPE kCrashDumpType =
+    (MINIDUMP_TYPE)(MiniDumpWithPrivateReadWriteMemory | MiniDumpWithDataSegs | MiniDumpWithHandleData | MiniDumpWithFullMemoryInfo |
+                    MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules | MiniDumpIgnoreInaccessibleMemory);
+const DWORD kCrashDumpsKept = 5;        // a dump is a few hundred MB, and every profile writes to the same logs folder
+const DWORD kPacketLogsKept = 50;
+const ULONGLONG kDumpMinFreeBytes = 2ULL << 30;
+const DWORD kDumpTimeoutMs = 60000;
+
+// The longest suffix a report adds to its stem.
+const wchar_t kLongestSuffix[] = L".packets.txt";
+
+// <logs>crash-<profile>-<yyyymmdd-hhmmss>-<pid>, one stem per report. False when the logs path leaves no room for it:
+// the CRT's _s functions end the process on overflow, so every path here is built truncating and checked.
+bool CrashReportStem(wchar_t* stem, size_t len) {
+    wchar_t profile[48];
+    size_t n = 0;
+    for (const wchar_t* p = Vars.szProfile; *p && n < _countof(profile) - 1; p++)
+        profile[n++] = (iswalnum(*p) || *p == L'-' || *p == L'_') ? *p : L'_';
+    profile[n] = L'\0';
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    return _snwprintf_s(stem, len - (_countof(kLongestSuffix) - 1), _TRUNCATE, L"%scrash-%s-%04u%02u%02u-%02u%02u%02u-%u", Vars.szLogPath,
+                        n ? profile : L"noprofile", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, GetCurrentProcessId()) >= 0;
+}
+
+// Deletes the oldest files matching pattern in the logs folder until at most keep remain. A file it can't delete (one
+// open in a debugger) is passed over for the next oldest, up to kSkipMax of them; no allocations of its own, as in the
+// rest of the report.
+void PruneCrashFiles(const wchar_t* pattern, DWORD keep) {
+    const int kSkipMax = 8;
+    wchar_t skipped[kSkipMax][MAX_PATH];
+    int skippedCount = 0;
+    wchar_t search[MAX_PATH], oldest[MAX_PATH], candidate[MAX_PATH];
+    if (_snwprintf_s(search, _countof(search), _TRUNCATE, L"%s%s", Vars.szLogPath, pattern) < 0)
+        return;
+    for (;;) {
+        WIN32_FIND_DATAW fd;
+        HANDLE hFind = FindFirstFileW(search, &fd);
+        if (hFind == INVALID_HANDLE_VALUE)
+            return;
+        DWORD count = 0;
+        FILETIME oldestTime = {0xFFFFFFFF, 0xFFFFFFFF};
+        oldest[0] = L'\0';
+        do {
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                continue;
+            count++;
+            if (CompareFileTime(&fd.ftLastWriteTime, &oldestTime) < 0 &&
+                _snwprintf_s(candidate, _countof(candidate), _TRUNCATE, L"%s%s", Vars.szLogPath, fd.cFileName) >= 0) {
+                bool skip = false;
+                for (int i = 0; i < skippedCount && !skip; i++)
+                    skip = _wcsicmp(skipped[i], candidate) == 0;
+                if (!skip) {
+                    oldestTime = fd.ftLastWriteTime;
+                    wcscpy_s(oldest, candidate);
+                }
+            }
+        } while (FindNextFileW(hFind, &fd));
+        FindClose(hFind);
+        if (count <= keep || !oldest[0])
+            return;
+        if (!DeleteFileW(oldest)) {
+            if (skippedCount == kSkipMax)
+                return;
+            wcscpy_s(skipped[skippedCount++], oldest);
+        }
+    }
+}
+
+// Process snapshots (Windows 8.1, ProcessSnapShot.h and minidumpapiset.h), which this toolset's headers predate.
+const DWORD kSnapshotFlags = 0x00000001 /* PSS_CAPTURE_VA_CLONE */ | 0x00000004 /* PSS_CAPTURE_HANDLES */ |
+                             0x00000008 /* PSS_CAPTURE_HANDLE_NAME_INFORMATION */ | 0x00000010 /* PSS_CAPTURE_HANDLE_BASIC_INFORMATION */ |
+                             0x00000020 /* PSS_CAPTURE_HANDLE_TYPE_SPECIFIC_INFORMATION */ | 0x00000040 /* PSS_CAPTURE_HANDLE_TRACE */ |
+                             0x00000080 /* PSS_CAPTURE_THREADS */ | 0x00000100 /* PSS_CAPTURE_THREAD_CONTEXT */ |
+                             0x00000200 /* PSS_CAPTURE_THREAD_CONTEXT_EXTENDED */ | 0x04000000 /* PSS_CREATE_BREAKAWAY_OPTIONAL */ |
+                             0x08000000 /* PSS_CREATE_BREAKAWAY */ | 0x20000000 /* PSS_CREATE_USE_VM_ALLOCATIONS */ |
+                             0x80000000 /* PSS_CREATE_RELEASE_SECTION */;
+const int kIsProcessSnapshotCallback = 16;
+typedef DWORD(WINAPI* PssCaptureSnapshotFn)(HANDLE process, DWORD flags, DWORD threadContextFlags, HANDLE* snapshot);
+typedef DWORD(WINAPI* PssFreeSnapshotFn)(HANDLE process, HANDLE snapshot);
+
+// The callback parameter is non-NULL when dbghelp was given a snapshot.
+BOOL CALLBACK DumpCallback(PVOID fromSnapshot, PMINIDUMP_CALLBACK_INPUT input, PMINIDUMP_CALLBACK_OUTPUT output) {
+    if (input && output) {
+        if ((int)input->CallbackType == kIsProcessSnapshotCallback && fromSnapshot)
+            output->Status = S_FALSE;
+        else if (input->CallbackType == ReadMemoryFailureCallback)
+            output->Status = S_OK; // without a snapshot: leave out memory that changed mid-dump instead of failing
+    }
+    return TRUE;
+}
+
+struct DumpJob {
+    const wchar_t* path;
+    MINIDUMP_EXCEPTION_INFORMATION info;
+    BOOL written;
+    BOOL fromSnapshot;
+    DWORD error; // GetLastError when not written; dbghelp reports an HRESULT there
+};
+
+DWORD WINAPI WriteDumpThread(LPVOID param) {
+    DumpJob* job = (DumpJob*)param;
+    HANDLE hFile = CreateFileW(job->path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        job->error = GetLastError();
+        return 0;
+    }
+    // dbghelp reads a snapshot (a copy-on-write clone of the process) the way it reads another process. Dumping the
+    // live process from inside it fails with ERROR_PARTIAL_COPY: dbghelp's own allocations change what it is reading.
+    HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+    PssCaptureSnapshotFn capture = (PssCaptureSnapshotFn)GetProcAddress(kernel32, "PssCaptureSnapshot");
+    PssFreeSnapshotFn release = (PssFreeSnapshotFn)GetProcAddress(kernel32, "PssFreeSnapshot");
+    HANDLE snapshot = NULL;
+    if (!capture || !release || capture(GetCurrentProcess(), kSnapshotFlags, CONTEXT_ALL, &snapshot) != ERROR_SUCCESS)
+        snapshot = NULL;
+    job->fromSnapshot = snapshot != NULL;
+    MINIDUMP_CALLBACK_INFORMATION callback = {DumpCallback, snapshot};
+    job->written = MiniDumpWriteDump(snapshot ? snapshot : GetCurrentProcess(), GetCurrentProcessId(), hFile, kCrashDumpType, &job->info, NULL, &callback);
+    if (!job->written)
+        job->error = GetLastError();
+    if (snapshot)
+        release(GetCurrentProcess(), snapshot);
+    CloseHandle(hFile);
+    return 0;
+}
+
+// 0 no report yet, 1 one is being written, 2 written. A second thread that crashes meanwhile waits instead of ending
+// the process under the first one's dump; a fault on the writing thread itself returns at once, as it would wait on
+// itself.
+volatile LONG g_crashReportState = 0;
+volatile DWORD g_crashReportThread = 0;
+
+struct CrashReportDone {
+    ~CrashReportDone() {
+        InterlockedExchange(&g_crashReportState, 2);
+    }
+};
+
+// On x86 RtlCaptureContext takes the context from its caller's EBP frame, so this function keeps one.
+#pragma optimize("y", off)
+// Writes the packet log and, withDump, a dump of the calling thread's process.
+void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
+    if (InterlockedCompareExchange(&g_crashReportState, 1, 0) != 0) {
+        if (g_crashReportThread == GetCurrentThreadId())
+            return;
+        for (DWORD waited = 0; g_crashReportState == 1 && waited < kDumpTimeoutMs + 5000; waited += 100)
+            Sleep(100);
+        return;
+    }
+    g_crashReportThread = GetCurrentThreadId();
+    CrashReportDone done;
+
+    wchar_t stem[MAX_PATH], path[MAX_PATH];
+    if (!CrashReportStem(stem, _countof(stem))) {
+        Log(L"Crash report: none, the logs path %s is too long", Vars.szLogPath);
+        return;
+    }
+    char header[512];
+    _snprintf_s(header, sizeof(header), _TRUNCATE, "D2BS crash report: %s (%s), profile %ls, process %u, thread %u", reason, detail ? detail : "",
+                Vars.szProfile, GetCurrentProcessId(), GetCurrentThreadId());
+    PruneCrashFiles(L"crash-*.packets.txt", kPacketLogsKept - 1);
+    _snwprintf_s(path, _countof(path), _TRUNCATE, L"%s.packets.txt", stem);
+    if (WritePacketLog(path, header))
+        Log(L"Crash report: packet log %s", path);
+    else
+        Log(L"Crash report: no packet log, %s could not be created (%u)", path, GetLastError());
+    if (!withDump)
+        return;
+
+    // Old dumps go first, so they can't keep the free space under the guard for good.
+    PruneCrashFiles(L"crash-*.dmp", kCrashDumpsKept - 1);
+    ULARGE_INTEGER freeBytes;
+    if (!GetDiskFreeSpaceExW(Vars.szLogPath, &freeBytes, NULL, NULL)) {
+        Log(L"Crash report: no dump, the free space in %s could not be read (%u)", Vars.szLogPath, GetLastError());
+        return;
+    }
+    if (freeBytes.QuadPart < kDumpMinFreeBytes) {
+        Log(L"Crash report: no dump, less than 2 GB free in %s", Vars.szLogPath);
+        return;
+    }
+    _snwprintf_s(path, _countof(path), _TRUNCATE, L"%s.dmp", stem);
+
+    // The dump is written from a helper thread so this thread's stack is recorded as it is at the Halt, and so a dump
+    // that hangs (a thread suspended inside the heap lock) cannot keep the process alive.
+    CONTEXT context;
+    RtlCaptureContext(&context);
+    EXCEPTION_RECORD record;
+    memset(&record, 0, sizeof(record));
+    record.ExceptionCode = kHaltDumpCode;
+    record.ExceptionAddress = (PVOID)context.Eip;
+    EXCEPTION_POINTERS pointers = {&record, &context};
+    DumpJob job;
+    job.path = path;
+    job.info.ThreadId = GetCurrentThreadId();
+    job.info.ExceptionPointers = &pointers;
+    job.info.ClientPointers = FALSE;
+    job.written = FALSE;
+    job.fromSnapshot = FALSE;
+    job.error = 0;
+    // Logged before the dump: a timed-out dump may leave a thread suspended inside the heap lock, so nothing after a
+    // timeout may allocate, and this line is then the only trace.
+    Log(L"Crash report: writing dump %s", path);
+    DWORD started = GetTickCount();
+    HANDLE hThread = CreateThread(NULL, 0, WriteDumpThread, &job, 0, NULL);
+    if (!hThread) {
+        Log(L"Crash report: no dump, CreateThread failed (%u)", GetLastError());
+        return;
+    }
+    if (WaitForSingleObject(hThread, kDumpTimeoutMs) != WAIT_OBJECT_0)
+        TerminateProcess(GetCurrentProcess(), 0);
+    CloseHandle(hThread);
+    const wchar_t* source = job.fromSnapshot ? L"a snapshot" : L"the live process";
+    if (job.written)
+        Log(L"Crash report: dump %s written from %s in %u ms", path, source, GetTickCount() - started);
+    else
+        Log(L"Crash report: dump %s FAILED (0x%08X) from %s after %u ms", path, job.error, source, GetTickCount() - started);
+}
+#pragma optimize("", on)
+} // namespace
+
 char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
     GetStackWalk();
     Log(L"Crash File: %hs\n", crash_file);
+    // A Halt raises no exception, so Windows writes no dump of it: this one is the only record of the game's state.
+    // It is opt-in: a dump is a few hundred MB that only a debugger reads, and the game's memory in it can include
+    // account details.
+    WriteCrashReport("halt", crash_file, Vars.bHaltDumps != FALSE);
+    if (!Vars.bHaltDumps)
+        Log(L"Crash report: no dump; set HaltDumps=true in d2bs.ini to write one");
     exit(0);
+}
+
+// Fog's crash handler: Fog's top-level exception filter, which replaces D2BS's at startup, calls it with its crash
+// info in ECX (+0x18 = the EXCEPTION_POINTERS). Returning 0 makes that filter answer EXCEPTION_CONTINUE_SEARCH, so
+// Windows Error Reporting gets the real exception.
+DWORD __fastcall FogCrash_Intercept(BYTE* crashInfo, DWORD) {
+    EXCEPTION_POINTERS* ptrs = *(EXCEPTION_POINTERS**)(crashInfo + 0x18);
+    // A stack overflow leaves this thread about a page of stack, too little for the stack walk and the report, which
+    // would fault again; Windows Error Reporting still gets the exception.
+    if (ptrs && ptrs->ExceptionRecord && ptrs->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW)
+        return 0;
+    if (ptrs && ptrs->ExceptionRecord && ptrs->ContextRecord) {
+        ExceptionHandler(ptrs);
+        // Packets only: Windows Error Reporting dumps an exception, and a second dump from inside this filter could
+        // fault again on a damaged heap and hide the first exception.
+        WriteCrashReport("exception", NULL, false);
+    }
+    return 0;
 }

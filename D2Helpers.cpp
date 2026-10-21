@@ -170,7 +170,8 @@ DWORD GetPlayerArea(void) {
 }
 
 Level* GetLevel(DWORD dwLevelNo) {
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
+    // On the stack, so every return gives the game lock back: a held lock freezes the game thread.
+    AutoCriticalRoom cRoom;
 
     if (!GameReady())
         return nullptr;
@@ -184,7 +185,6 @@ Level* GetLevel(DWORD dwLevelNo) {
 
             if (!pLevel->pRoom2First)
                 break;
-            delete cRoom;
             return pLevel;
         }
         pLevel = pLevel->pNextLevel;
@@ -192,7 +192,6 @@ Level* GetLevel(DWORD dwLevelNo) {
 
     // this crashes pretty much every time it's called
     // pLevel = D2COMMON_GetLevel(D2CLIENT_GetPlayerUnit()->pAct->pMisc, dwLevelNo);
-    delete cRoom;
     return pLevel;
 }
 
@@ -272,7 +271,7 @@ BOOL SetSkill(JSContext* cx, WORD wSkillId, BOOL bLeft, DWORD dwItemId) {
         while (amt > 0) { // had a script deadlock here, make sure were positve with amt
             WaitForSingleObjectEx(script->eventSignal, amt, true);
             ResetEvent(script->eventSignal);
-            while (script->EventList.size() > 0 && !!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu))) {
+            while (script->EventList.size() > 0 && !ScriptMustEnd(script)) {
                 EnterCriticalSection(&Vars.cEventSection);
                 Event* evt = script->EventList.back();
                 script->EventList.pop_back();
@@ -497,11 +496,36 @@ UnitAny* GetMercUnit(UnitAny* pUnit) {
 #endif
 }
 
+// The game's lookup (0x463940) halts (Halt 90) when the first node with the id has another type: a unit freed and
+// reused while a script thread reads the tables without the game lock. This walks the same chains, but answers
+// "not found" for that node, an unknown type or a chain that does not end.
+static UnitAny* FindUnitInTables(UnitHashTable* pTables, DWORD dwId, DWORD dwType) {
+    static_assert(offsetof(UnitAny, pListNext) == 0xE4, "the game chains its unit tables through +0xE4");
+    if (dwType > UNIT_TILE)
+        return NULL;
+    UnitAny* pUnit = pTables[dwType].table[dwId & 0x7F];
+    for (int n = 0; pUnit && n < 0x10000; n++, pUnit = pUnit->pListNext)
+        if (pUnit->dwUnitId == dwId)
+            return pUnit->dwType == dwType ? pUnit : NULL;
+    return NULL;
+}
+
 UnitAny* D2CLIENT_FindUnit(DWORD dwId, DWORD dwType) {
     if (dwId == -1)
         return NULL;
-    UnitAny* pUnit = D2CLIENT_FindServerSideUnit(dwId, dwType);
-    return pUnit ? pUnit : D2CLIENT_FindClientSideUnit(dwId, dwType);
+    // The tables FindServerSideUnit (0x4639B0) walks come first: 0x7A5270, which D2Ptrs.h names ClientSideUnitHashTables;
+    // then those of FindClientSideUnit (0x463990), ServerSideUnitHashTables (0x7A5E70).
+    UnitAny* pUnit = FindUnitInTables(p_D2CLIENT_ClientSideUnitHashTables, dwId, dwType);
+    return pUnit ? pUnit : FindUnitInTables(p_D2CLIENT_ServerSideUnitHashTables, dwId, dwType);
+}
+
+// A missile's owner, looked up where the game's own lookup (0x4639D0) looks: a missile owner in the tables at
+// 0x7A5270, any other type in those at 0x7A5E70. That lookup halts on a type mismatch.
+UnitAny* FindMissileOwner(UnitAny* pMissile) {
+    if (!(pMissile->dwFlags2 & 0x400)) // set by the game with the owner
+        return NULL;
+    UnitHashTable* pTables = pMissile->dwOwnerType == UNIT_MISSILE ? p_D2CLIENT_ClientSideUnitHashTables : p_D2CLIENT_ServerSideUnitHashTables;
+    return FindUnitInTables(pTables, pMissile->dwOwnerId, pMissile->dwOwnerType);
 }
 
 // TODO: Rewrite this and split it into two functions

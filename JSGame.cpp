@@ -87,6 +87,10 @@ JSAPI_FUNC(my_clickMap) {
         if (!mypUnit || (mypUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
             return JS_TRUE;
 
+        // ClickMap waits for the game lock, as long as a frame in which the unit can be freed: find it under the lock.
+        AutoCriticalRoom cRoom;
+        if (!GameReady())
+            return JS_TRUE;
         UnitAny* pUnit = D2CLIENT_FindUnit(mypUnit->dwUnitId, mypUnit->dwType);
 
         if (!pUnit)
@@ -217,9 +221,21 @@ JSAPI_FUNC(my_clickDialog) {
     tdl = (TransactionDialogsLine_t*)JSVAL_TO_PRIVATE(JS_GetReservedSlot(JSVAL_TO_OBJECT(JS_THIS(cx, vp)), 0));
 
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    if (tdl != NULL && tdl->bMaybeSelectable)
-        tdl->handler();
-    else
+    bool clicked = false;
+    {
+        // A dialog line's handler is the game's own UI code, which only the game thread may run unlocked. The line must
+        // be one of the open dialog's lines: one kept from an earlier getDialogLines() may point into a freed dialog.
+        AutoCriticalRoom cRoom;
+        TransactionDialogsInfo_t* pTdi = *p_D2CLIENT_pTransactionDialogsInfo;
+        DWORD lines = pTdi ? min(pTdi->numLines, (DWORD)_countof(pTdi->dialogLines)) : 0;
+        bool current = tdl != NULL && pTdi != NULL && tdl >= pTdi->dialogLines && tdl < pTdi->dialogLines + lines &&
+                       ((BYTE*)tdl - (BYTE*)pTdi->dialogLines) % sizeof(TransactionDialogsLine_t) == 0;
+        if (GameReady() && current && tdl->bMaybeSelectable) {
+            tdl->handler();
+            clicked = true;
+        }
+    }
+    if (!clicked)
         THROW_ERROR(cx, "That dialog is not currently clickable.");
 
     JS_SET_RVAL(cx, vp, JSVAL_TRUE);
@@ -1260,6 +1276,13 @@ JSAPI_FUNC(my_transmute) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
+    // Toggling the cube panel is game UI code (it sets the panel mode), which only the game thread may run unlocked,
+    // and only while the game is ready (an area change may start while this waits for the lock).
+    AutoCriticalRoom cRoom;
+    if (!GameReady()) {
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
     bool cubeOn = !!D2CLIENT_GetUIState(UI_CUBE);
     if (!cubeOn)
         D2CLIENT_SetUIState(UI_CUBE, TRUE);
@@ -1273,6 +1296,7 @@ JSAPI_FUNC(my_transmute) {
 }
 
 JSAPI_FUNC(my_getPlayerFlag) {
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
     if (argc != 3 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0]) || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[2]))
         return JS_TRUE;
 
@@ -1281,25 +1305,24 @@ JSAPI_FUNC(my_getPlayerFlag) {
     
     uint32 nFirstUnitId = (uint32)-1;
     uint32 nSecondUnitId = (uint32)-1;
+    uint32 nFlag = 0;
     JS_BeginRequest(cx);
     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &nFirstUnitId);
     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nSecondUnitId);
+    JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[2], &nFlag);
     JS_EndRequest(cx);
 
-    // If this gets called while a game already closed (happens with race conditions) the tables are garbage
-    // and thus the units wont be found either, as this is also cleared up.
-    // Easy race condition fix is to test if either is not found, already return early
-    UnitAny* pFirst = D2CLIENT_FindUnit(nFirstUnitId, 0);   // 0 = UNIT_PLAYER
-    UnitAny* pSecond = D2CLIENT_FindUnit(nSecondUnitId, 0);
-    if (pFirst == NULL || pSecond == NULL) {
-        JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(FALSE));
-        return JS_TRUE;
+    // The game's check walks the party roster, which lists every player wherever they are (their units exist only
+    // near this one) and which the game frees as it leaves: so it runs under the game lock while the game is up. An
+    // area change that starts while this waits for the lock is waited out rather than answered as "not flagged".
+    for (int tries = 0; tries < 3 && WaitForGameReady(); tries++) {
+        AutoCriticalRoom cRoom;
+        if (GameReady()) {
+            JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(D2CLIENT_TestPvpFlag(nFirstUnitId, nSecondUnitId, nFlag) != 0));
+            return JS_TRUE;
+        }
     }
-
-    DWORD nFlag = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-
-    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(D2CLIENT_TestPvpFlag(nFirstUnitId, nSecondUnitId, nFlag)));
-
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
     return JS_TRUE;
 }
 

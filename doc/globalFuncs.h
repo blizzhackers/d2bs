@@ -729,7 +729,8 @@ double getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
 Control getControl(int32_t nType = -1, int32_t nX = -1, int32_t nY = -1,
 	int32_t nXSize = -1, int32_t nYSize = -1);
 
-/** Get the relation between two units.
+/** Get the relation between two players. It reads the party roster, so it answers for any player in the game, near
+ * this one or not.
  *
  * \ingroup globalFunctions
  *
@@ -741,9 +742,7 @@ Control getControl(int32_t nType = -1, int32_t nX = -1, int32_t nY = -1,
  *
  * \todo Determine what the flags are.
  *
- * \todo Should this return bool instead of int? (i.e. change the d2bs code).
- *
- * \return Whether or not the relationship is of the type specified.
+ * \return true when the relationship is of the type specified, otherwise false (also when the game closes meanwhile).
  */
 bool getPlayerFlag(int nFirstUnitId, int nSecondUnitId, int nFlag);
 
@@ -1042,11 +1041,70 @@ void removeEventListener(String event, Function eventHandler);
  */
 void clearEvent(String event);
 
-/** Clear all event handlers (from all events).
+/** Clear all event handlers (from all events). Timers keep running: they stop with clearTimeout(), clearInterval(),
+ * clearAllTimers() or the end of their script.
  *
  * \ingroup globalFunctions
  */
 void clearAllEvents();
+
+/** Call a function once, after a delay.
+ *
+ * \ingroup globalFunctions
+ *
+ * \param callback The function to call.
+ *
+ * \param delay The delay in milliseconds; a fraction is cut to whole milliseconds, and a negative or NaN delay calls
+ * it at once.
+ *
+ * \param ... Extra arguments, passed on to the callback.
+ *
+ * \return The timer's id, for clearTimeout(); null, with an error reported, when the delay is missing or not a
+ * number, and null when the callback is not a function.
+ */
+int setTimeout(Function callback, double delay, ...);
+
+/** Call a function every period until the timer is cleared or its script ends. A period of 0 (or a negative or NaN
+ * one) repeats every millisecond. A call is not started while the previous one is still running (for example inside
+ * delay()), and periods missed while the script was busy give one call.
+ *
+ * \ingroup globalFunctions
+ *
+ * \param callback The function to call.
+ *
+ * \param period The period in milliseconds; a fraction is cut to whole milliseconds.
+ *
+ * \param ... Extra arguments, passed on to the callback.
+ *
+ * \return The timer's id, for clearInterval(); null, with an error reported, when the period is missing or not a
+ * number, and null when the callback is not a function.
+ */
+int setInterval(Function callback, double period, ...);
+
+/** Cancel a timer by id. clearTimeout() and clearInterval() are the same function: either cancels a timer of either
+ * kind, and of any script.
+ *
+ * \ingroup globalFunctions
+ *
+ * \param id The id setTimeout() or setInterval() returned.
+ */
+void clearTimeout(int id);
+
+/** Cancel a timer by id; the same function as clearTimeout().
+ *
+ * \ingroup globalFunctions
+ *
+ * \param id The id setTimeout() or setInterval() returned.
+ */
+void clearInterval(int id);
+
+/** Cancel every timer of the calling script, including an interval whose callback is running.
+ *
+ * \ingroup globalFunctions
+ *
+ * \return How many timers it cancelled.
+ */
+int clearAllTimers();
 
 /** Get whether or not the JSOPTION_STRICT flag is set.
  *

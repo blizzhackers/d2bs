@@ -34,14 +34,21 @@ PatchHook Patches[] = {
 
     {PatchCall, GetDllOffset("D2Win.dll", 0xF9A0D), (DWORD)GameDrawOOG_Intercept, 5}, // Updated 1.14d //004F9A0D-BASE
 
-    {PatchCall, GetDllOffset("D2CMP.dll", 0x2091E5), (DWORD)GameCrashFix_Intercept, 10}, // 1.14d //006091E5-BASE
+    {PatchCall, GetDllOffset("D2CMP.dll", 0x2091E5), (DWORD)GameCrashFix_Intercept, 10},      // 1.14d //006091E5-BASE
+    {PatchJmp, GetDllOffset("D2Common.dll", 0x270783), (DWORD)LvlSubPlaceLoop_Intercept, 17}, // NEW 1.14d //00670783-BASE
+    {PatchJmp, GetDllOffset("D2Common.dll", 0x270724), (DWORD)LvlSubPickLoop_Intercept, 10},  // NEW 1.14d //00670724-BASE
 
     {PatchCall, GetDllOffset("D2MCPClient.dll", 0x4B1AE), (DWORD)RealmPacketRecv_Interception, 6},
 
     {PatchCall, GetDllOffset("Fog.dll", 0x8CC4), (DWORD)LogMessageBoxA_Intercept, 6}, // Updated 1.14d //00408CC4-BASE
-    {PatchJmp, GetDllOffset("Fog.dll", 0x82E0), (DWORD)D2GAME_exit0, 6},              // NEW 1.14d //004082E0-BASE
+    {PatchJmp, GetDllOffset("Fog.dll", 0x82E0), (DWORD)FogCrash_Intercept, 6},        // NEW 1.14d //004082E0-BASE
     //{PatchJmp,  GetDllOffset("Fog.dll", 0x8900),		(DWORD)FogException/*D2GAME_exit0*/,		6}, //NEW 1.14d //00408900-BASE
     {PatchJmp, GetDllOffset("Fog.dll", 0x1790), (DWORD)ErrorReportLaunch, 6}, // NEW 1.14d //00401790-BASE
+
+    // Storm's read thread paces background reads to 256 KB/s, and leaving a game cancels every queued sprite read one
+    // by one, each waiting for the thread's next paced pass: hundreds queued froze the exit for tens of seconds.
+    // je -> jmp skips the pacing, as Storm's own rate 0 does; an empty queue still waits 250 ms.
+    {PatchBytes, GetDllOffset("Storm.dll", 0x1A588), (BYTE)0xEB, 1}, // NEW 1.14d //0041A588-BASE
 };
 
 PatchHook Conditional[] = {

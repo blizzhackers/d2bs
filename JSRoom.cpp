@@ -153,8 +153,13 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
     JSObject* jsobjy = JS_NewUint16Array(cx, (pRoom2->dwSizeX * 5) * (pRoom2->dwSizeY * 5));
     JS_AddRoot(cx, &jsobjy);
 
-    if (!jsobjy)
+    if (!jsobjy) {
+        JS_RemoveRoot(cx, &jsobjy);
+        if (bAdded)
+            D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+        delete cRoom;
         return JS_TRUE;
+    }
 
     if (pRoom2->pRoom1)
         pCol = pRoom2->pRoom1->Coll;
@@ -224,8 +229,11 @@ JSAPI_FUNC(room_getCollision) {
 
     JSObject* jsobjy = JS_NewArrayObject(cx, NULL, NULL);
     JS_AddRoot(cx, &jsobjy);
-    if (!jsobjy)
+    if (!jsobjy) {
+        JS_RemoveRoot(cx, &jsobjy);
+        delete cRoom;
         return JS_TRUE;
+    }
 
     if (!pRoom2->pRoom1) {
         bAdded = TRUE;

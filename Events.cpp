@@ -39,6 +39,11 @@ void ManaEvent(DWORD dwMana) {
     ScriptEngine::ForEachScript(ManaEventCallback, &helper, 1);
 }
 
+static void FreeKeyBlockerArgs(Event* evt) {
+    delete (DWORD*)evt->arg1;
+    delete (DWORD*)evt->arg4;
+}
+
 bool __fastcall KeyEventCallback(Script* script, void* argv, uint argc) {
     KeyEventHelper* helper = (KeyEventHelper*)argv;
     char* name = (helper->up ? "keyup" : "keydown");
@@ -60,18 +65,8 @@ bool __fastcall KeyEventCallback(Script* script, void* argv, uint argc) {
         evt->name = _strdup(name);
         evt->arg1 = new DWORD((DWORD)helper->key);
         evt->arg4 = new DWORD(false);
-        ResetEvent(Vars.eventSignal);
-        script->FireEvent(evt);
-
-        if (WaitForSingleObject(Vars.eventSignal, 1000) == WAIT_TIMEOUT)
-            return false;
-
-        bool* global = (bool*)evt->arg4;
-        block = *global;
-        free(evt->name);
-        delete evt->arg1;
-        delete evt->arg4;
-        delete evt;
+        evt->freeArgs = FreeKeyBlockerArgs;
+        block = AwaitBlocker(evt, 1000);
     }
 
     return block;
@@ -170,6 +165,12 @@ void ScriptBroadcastEvent(JSContext* cx, uint argc, jsval* args) {
     ScriptEngine::ForEachScript(BCastEventCallback, &helper, argc);
 }
 
+static void FreeChatBlockerArgs(Event* evt) {
+    free(evt->arg1);
+    free(evt->arg2);
+    delete (DWORD*)evt->arg4;
+}
+
 bool __fastcall ChatEventCallback(Script* script, void* argv, uint argc) {
     ChatEventHelper* helper = (ChatEventHelper*)argv;
     if (script->IsRunning() && script->IsListenerRegistered(helper->name)) {
@@ -194,18 +195,8 @@ bool __fastcall ChatEventCallback(Script* script, void* argv, uint argc) {
         evt->arg1 = _strdup(helper->nick);
         evt->arg2 = _wcsdup(helper->msg);
         evt->arg4 = new DWORD(false);
-        ResetEvent(Vars.eventSignal);
-        script->FireEvent(evt);
-
-        if (WaitForSingleObject(Vars.eventSignal, 500) == WAIT_TIMEOUT)
-            return false;
-
-        block = (*(DWORD*)evt->arg4);
-        free(evt->name);
-        free(evt->arg1);
-        free(evt->arg2);
-        delete evt->arg4;
-        delete evt;
+        evt->freeArgs = FreeChatBlockerArgs;
+        block = AwaitBlocker(evt, 500);
     }
     return block;
 }
@@ -290,6 +281,12 @@ void GameActionEvent(BYTE mode, DWORD param1, DWORD param2, char* name1, wchar_t
     ScriptEngine::ForEachScript(GameActionEventCallback, &helper, 5);
 }
 
+static void FreePacketArgs(Event* evt) {
+    delete[] (BYTE*)evt->arg1;
+    delete (DWORD*)evt->arg2;
+    delete (DWORD*)evt->arg4;
+}
+
 bool __fastcall PacketEventCallback(Script* script, void* argv, uint argc) {
     PacketEventHelper* helper = (PacketEventHelper*)argv;
 
@@ -301,29 +298,18 @@ bool __fastcall PacketEventCallback(Script* script, void* argv, uint argc) {
         evt->arg1 = new BYTE[helper->dwSize];
         evt->arg2 = new DWORD(helper->dwSize);
         evt->arg4 = new DWORD(false);
+        evt->freeArgs = FreePacketArgs;
         memcpy(evt->arg1, helper->pPacket, helper->dwSize);
 
-        if (GetCurrentThreadId() == evt->owner->threadId)
+        // On the script's own thread (a packet its native sent) the listeners run here: a wait would only time out.
+        if (GetCurrentThreadId() == evt->owner->threadId) {
+            evt->refs = 2;
             ExecScriptEvent(evt, false);
-        else {
-            ResetEvent(Vars.eventSignal);
-            script->FireEvent(evt);
-            static DWORD result;
-            ReleaseGameLock();
-            result = WaitForSingleObject(Vars.eventSignal, 500);
-            TakeGameLock();
-
-            if (result == WAIT_TIMEOUT)
-                return false;
+            bool block = *(DWORD*)evt->arg4 != 0;
+            ReleaseBlocker(evt);
+            return block;
         }
-
-        bool retval = (*(DWORD*)evt->arg4);
-        free(evt->name);
-        delete[] evt->arg1;
-        delete evt->arg2;
-        delete evt->arg4;
-        delete evt;
-        return retval;
+        return AwaitBlocker(evt, 500);
     }
 
     return false;
@@ -352,4 +338,59 @@ void ReleaseGameLock(void) {
 void TakeGameLock(void) {
     if (Vars.bGameLoopEntered && Vars.dwGameThreadId == GetCurrentThreadId())
         EnterCriticalSection(&Vars.cGameLoopSection);
+}
+
+bool AwaitBlocker(Event* evt, DWORD timeoutMs) {
+    FireBlocker(evt);
+    return WaitForBlocker(evt, timeoutMs);
+}
+
+void FireBlocker(Event* evt) {
+    // Both owners are counted before the script can see the event.
+    evt->done = CreateEvent(NULL, TRUE, FALSE, NULL);
+    evt->refs = 2;
+    evt->owner->FireEvent(evt);
+}
+
+// The critical section records its owner's thread id, which only the owning thread can find there.
+static bool HoldsGameLock(void) {
+    return (DWORD)(DWORD_PTR)Vars.cGameLoopSection.OwningThread == GetCurrentThreadId();
+}
+
+bool WaitForBlocker(Event* evt, DWORD timeoutMs) {
+    // A thread other than the game thread that holds the game lock (a script sending from inside clickMap(),
+    // me.cancel(), ...) can't let go of it in the middle of the game's code, and a listener that needs the lock could
+    // not answer: the listeners run afterwards, and the packet goes out without their verdict.
+    if (Vars.dwGameThreadId != GetCurrentThreadId() && HoldsGameLock()) {
+        ReleaseBlocker(evt);
+        return false;
+    }
+    DWORD waited = WAIT_FAILED;
+    if (evt->done) {
+        // Held through the wait, the lock would stall a listener that takes it until the time limit, and drop its verdict.
+        ReleaseGameLock();
+        waited = WaitForSingleObject(evt->done, timeoutMs);
+        TakeGameLock();
+    }
+    bool block = waited == WAIT_OBJECT_0 && *(DWORD*)evt->arg4 != 0;
+    ReleaseBlocker(evt);
+    return block;
+}
+
+void CompleteBlocker(Event* evt, bool block) {
+    *(DWORD*)evt->arg4 = block;
+    if (evt->done)
+        SetEvent(evt->done);
+    ReleaseBlocker(evt);
+}
+
+void ReleaseBlocker(Event* evt) {
+    if (InterlockedDecrement(&evt->refs) != 0)
+        return;
+    if (evt->done)
+        CloseHandle(evt->done);
+    if (evt->freeArgs)
+        evt->freeArgs(evt);
+    free(evt->name);
+    delete evt;
 }

@@ -21,9 +21,28 @@ ScriptMap ScriptEngine::scripts = ScriptMap();
 EngineState ScriptEngine::state = Stopped;
 CRITICAL_SECTION ScriptEngine::lock = {0};
 CRITICAL_SECTION ScriptEngine::scriptListLock = {0};
-std::list<Event*> ScriptEngine::DelayedExecList;
-int ScriptEngine::delayedExecKey;
 JSContext* ScriptEngine::context = NULL;
+
+namespace {
+struct DelayedTimer {
+    int id;
+    Script* owner;
+    HANDLE timer;
+    AutoRoot* callback;
+    AutoRoot* args; // array of the extra arguments, or NULL
+    bool repeat;
+    bool queued; // a "timer" event for it waits in the owner's EventList
+    bool cancelled;
+};
+
+// Guards timers and every DelayedTimer field but the AutoRoots, which only the owner's thread touches. Taken before
+// Vars.cEventSection, never inside it. A record leaves the map before its owner's thread frees it, and the timer's
+// completion routine is passed the id, not the record, so a late one finds nothing.
+std::map<int, DelayedTimer*> timers;
+CRITICAL_SECTION timerLock;
+bool timerLockReady = false;
+volatile LONG lastTimerId = 0;
+} // namespace
 // internal ForEachScript helpers
 bool __fastcall DisposeScript(Script* script, void*, uint);
 bool __fastcall StopScript(Script* script, void* argv, uint argc);
@@ -118,6 +137,11 @@ BOOL ScriptEngine::Startup(void) {
     if (GetState() == Stopped) {
         state = Starting;
         InitializeCriticalSection(&scriptListLock);
+        // Kept across a Shutdown: scripts still tearing down on their own threads may take it.
+        if (!timerLockReady) {
+            InitializeCriticalSection(&timerLock);
+            timerLockReady = true;
+        }
         // InitializeCriticalSection(&lock);
         // EnterCriticalSection(&lock);
         LockScriptList("startup - enter");
@@ -257,6 +281,10 @@ bool __fastcall StopIngameScript(Script* script, void*, uint) {
     return true;
 }
 
+bool ScriptMustEnd(Script* script) {
+    return script->IsAborted() || (script->GetState() == InGame && ClientState() == ClientStateMenu);
+}
+
 JSBool operationCallback(JSContext* cx) {
     Script* script = (Script*)JS_GetContextPrivate(cx);
     static int callBackCount = 0;
@@ -312,15 +340,15 @@ JSBool operationCallback(JSContext* cx) {
     if (pause)
         script->SetPauseState(false);
 
-    if (!!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu))) {
-        while (script->EventList.size() > 0 && !!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu))) {
+    if (!ScriptMustEnd(script)) {
+        while (script->EventList.size() > 0 && !ScriptMustEnd(script)) {
             EnterCriticalSection(&Vars.cEventSection);
             Event* evt = script->EventList.back();
             script->EventList.pop_back();
             LeaveCriticalSection(&Vars.cEventSection);
             ExecScriptEvent(evt, false);
         }
-        return !!!(JSBool)(script->IsAborted() || ((script->GetState() == InGame) && ClientState() == ClientStateMenu));
+        return !ScriptMustEnd(script);
     } else {
         return false;
     }
@@ -376,6 +404,8 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
     if (contextOp == JSCONTEXT_DESTROY) {
         Script* script = (Script*)JS_GetContextPrivate(cx);
         script->hasActiveCX = false;
+        // First, so no other thread can queue a timer event behind the drain below.
+        ScriptEngine::DestroyTimers(script);
         while (script->EventList.size() > 0) {
             EnterCriticalSection(&Vars.cEventSection);
             Event* evt = script->EventList.back();
@@ -565,8 +595,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 JS_RemoveValueRoot(cx, &argv[j]);
         }
         if (strcmp(evtName, "chatmsgblocker") == 0 || strcmp(evtName, "chatinputblocker") == 0 || strcmp(evtName, "whispermsgblocker") == 0) {
-            *(DWORD*)evt->arg4 = block;
-            SetEvent(Vars.eventSignal);
+            CompleteBlocker(evt, block);
         } else {
             free(evt->arg1);
             free(evt->arg2);
@@ -588,7 +617,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             jsval rval;
             if (strcmp(evtName, "ScreenHookHover") == 0) {
                 for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++)
-                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), evt->argc + 1, argv, &rval);
+                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv, &rval);
             } else {
                 for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++)
                     JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv, &rval);
@@ -596,7 +625,11 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_EndRequest(cx);
             for (int j = 0; j < 2; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
+            delete[] argv;
         }
+        // A hover hook's function root belongs to this script's context, so it goes here, on its thread.
+        for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++)
+            delete *it;
         delete evt->arg1;
         delete evt->arg2;
         free(evt->name);
@@ -648,8 +681,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_RemoveValueRoot(cx, &argv[0]);
         }
         if (strcmp(evtName, "keydownblocker") == 0) {
-            *(DWORD*)evt->arg4 = block;
-            SetEvent(Vars.eventSignal);
+            CompleteBlocker(evt, block);
         } else {
             delete evt->arg1;
             free(evt->name);
@@ -679,32 +711,38 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             for (int j = 0; j < 3; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
         }
-        *(DWORD*)evt->arg4 = block;
-        SetEvent(Vars.eventSignal);
+        // The hook's function roots belong to this script's context, so they go here, on its thread.
+        for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++)
+            delete *it;
+        evt->functions.clear();
+        CompleteBlocker(evt, block);
 
         return true;
     }
     if (strcmp(evtName, "Command") == 0) {
-        wchar_t* cmd = (wchar_t*)evt->arg1;
-        std::wstring test;
+        if (!clearList) {
+            wchar_t* cmd = (wchar_t*)evt->arg1;
+            std::wstring test;
 
-        test.append(L"try{ ");
-        test.append(cmd);
-        test.append(L" } catch (error){print(error)}");
-        JS_BeginRequest(cx);
-        jsval rval;
+            test.append(L"try{ ");
+            test.append(cmd);
+            test.append(L" } catch (error){print(error)}");
+            JS_BeginRequest(cx);
+            jsval rval;
 
-        if (JS_EvaluateUCScript(cx, JS_GetGlobalObject(cx), test.data(), test.length(), "Command Line", 0, &rval)) {
-            if (!JSVAL_IS_NULL(rval) && !JSVAL_IS_VOID(rval)) {
-                JS_ConvertValue(cx, rval, JSTYPE_STRING, &rval);
-                const wchar_t* text = JS_GetStringCharsZ(cx, JS_ValueToString(cx, rval));
-                Print(L"%s", text);
+            if (JS_EvaluateUCScript(cx, JS_GetGlobalObject(cx), test.data(), test.length(), "Command Line", 0, &rval)) {
+                if (!JSVAL_IS_NULL(rval) && !JSVAL_IS_VOID(rval)) {
+                    JS_ConvertValue(cx, rval, JSTYPE_STRING, &rval);
+                    const wchar_t* text = JS_GetStringCharsZ(cx, JS_ValueToString(cx, rval));
+                    Print(L"%s", text);
+                }
             }
+            JS_EndRequest(cx);
         }
-        JS_EndRequest(cx);
         free(evt->arg1);
         free(evt->name);
         delete evt;
+        return true;
     }
     if (strcmp(evtName, "scriptmsg") == 0) {
         if (!clearList) {
@@ -760,81 +798,198 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 1, &argv, &rval);
                 block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
             }
-            *(DWORD*)evt->arg4 = block;
             JS_RemoveRoot(cx, &arr);
-            SetEvent(Vars.eventSignal);
             JS_EndRequest(cx);
-            //	for(int j = 0 ; j < *argc; j++)
-            //	JS_RemoveValueRoot(cx, &argv[j]);
         }
-
-        // delete evt->arg1;
-        // delete evt->arg2;
+        CompleteBlocker(evt, block);
 
         return true;
     }
-    if (strcmp(evtName, "setTimeout") == 0 || strcmp(evtName, "setInterval") == 0) {
-        if (!clearList) {
-            JS_BeginRequest(cx);
-            jsval rval;
-            for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 0, &rval, &rval);
-            }
-            JS_EndRequest(cx);
-        }
-
-        if (strcmp(evtName, "setTimeout") == 0) {
-            ScriptEngine::RemoveDelayedEvent(*(DWORD*)evt->arg1);
-        }
-
+    if (strcmp(evtName, "timer") == 0) {
+        ScriptEngine::RunTimer(evt, clearList);
         return true;
     }
     if (strcmp(evtName, "DisposeMe") == 0) {
-        ScriptEngine::DisposeScript(evt->owner);
+        // Drained while its script is being destroyed, the request is already being carried out.
+        if (!clearList)
+            ScriptEngine::DisposeScript(evt->owner);
+        free(evt->name);
+        delete evt;
+        return true;
     }
 
+    // A blocker event that no branch runs (keyupblocker has none) must still end its wait and drop its reference.
+    if (evt->freeArgs)
+        CompleteBlocker(evt, false);
     return true;
 }
-int ScriptEngine::AddDelayedEvent(Event* evt, int freq) {
-    delayedExecKey++;
-    evt->arg1 = new DWORD(delayedExecKey);
-    evt->arg2 = CreateWaitableTimer(NULL, true, NULL);
-
-    __int64 start;
-    start = freq * -10000;
-    LARGE_INTEGER lStart;
-    // Copy the relative time into a LARGE_INTEGER.
-    lStart.LowPart = (DWORD)(start & 0xFFFFFFFF);
-    lStart.HighPart = (LONG)(start >> 32);
-    freq = (strcmp(evt->name, "setInterval") == 0) ? freq : 0;
-    EnterCriticalSection(&Vars.cEventSection);
-    DelayedExecList.push_back(evt);
-    SetWaitableTimer((HANDLE*)evt->arg2, &lStart, freq, &EventTimerProc, evt, false);
-    LeaveCriticalSection(&Vars.cEventSection);
-
-    return delayedExecKey;
+namespace {
+// With timerLock held.
+void QueueTimerEvent(DelayedTimer* t) {
+    t->queued = true;
+    Event* evt = new Event;
+    evt->owner = t->owner;
+    evt->argc = 0;
+    evt->name = _strdup("timer");
+    evt->arg1 = new int(t->id);
+    t->owner->FireEvent(evt);
 }
 
-void ScriptEngine::RemoveDelayedEvent(int key) {
-    list<Event*>::iterator it;
-    it = DelayedExecList.begin();
-    while (it != DelayedExecList.end()) {
-        if (*(DWORD*)(*it)->arg1 == key) {
-            CancelWaitableTimer((HANDLE*)(*it)->arg2);
-            CloseHandle((HANDLE*)(*it)->arg2);
-            Event* evt = *it;
-            evt->owner->UnregisterEvent(evt->name, *(jsval*)evt->arg3);
-            delete evt->arg1;
-            delete evt->arg3;
-            free(evt->name);
-            delete evt;
-            it = DelayedExecList.erase(it);
-        } else
-            it++;
+// On the owner's thread, after the record has left the map.
+void FreeTimer(DelayedTimer* t) {
+    CancelWaitableTimer(t->timer);
+    CloseHandle(t->timer);
+    delete t->callback;
+    delete t->args;
+    delete t;
+}
+} // namespace
+
+int ScriptEngine::AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat) {
+    HANDLE timer = CreateWaitableTimer(NULL, TRUE, NULL);
+    if (!timer)
+        return 0;
+    DelayedTimer* t = new DelayedTimer;
+    t->owner = owner;
+    t->timer = timer;
+    t->callback = new AutoRoot(cx, callback);
+    t->args = NULL;
+    if (argc > 0) {
+        JSObject* args = JS_NewArrayObject(cx, (int)argc, argv);
+        if (args)
+            t->args = new AutoRoot(cx, OBJECT_TO_JSVAL(args));
     }
-    LeaveCriticalSection(&Vars.cEventSection);
+    t->repeat = repeat;
+    t->queued = false;
+    t->cancelled = false;
+    int id = t->id = (int)InterlockedIncrement(&lastTimerId);
+
+    LARGE_INTEGER due;
+    due.QuadPart = -(LONGLONG)delayMs * 10000; // relative, in 100 ns units
+    // A period of 0 makes a one-shot timer, so an interval repeats at least every millisecond.
+    LONG period = repeat ? (delayMs > 0 ? delayMs : 1) : 0;
+    EnterCriticalSection(&timerLock);
+    timers[id] = t;
+    // The completion routine runs on this thread, the owner's, while it waits alertably (delay()).
+    BOOL set = SetWaitableTimer(timer, &due, period, EventTimerProc, (LPVOID)(INT_PTR)id, FALSE);
+    if (!set)
+        timers.erase(id);
+    LeaveCriticalSection(&timerLock);
+    if (!set) {
+        FreeTimer(t);
+        return 0;
+    }
+    return id;
 }
+
+void ScriptEngine::ClearTimer(int id) {
+    EnterCriticalSection(&timerLock);
+    std::map<int, DelayedTimer*>::iterator it = timers.find(id);
+    if (it != timers.end() && !it->second->cancelled) {
+        DelayedTimer* t = it->second;
+        t->cancelled = true;
+        CancelWaitableTimer(t->timer);
+        // The owner frees it, through the timer event already queued or this one.
+        if (!t->queued)
+            QueueTimerEvent(t);
+    }
+    LeaveCriticalSection(&timerLock);
+}
+
+// Cancels like ClearTimer rather than freeing, so a callback may call it, its own record included.
+int ScriptEngine::ClearTimers(Script* owner) {
+    int count = 0;
+    EnterCriticalSection(&timerLock);
+    for (std::map<int, DelayedTimer*>::iterator it = timers.begin(); it != timers.end(); ++it) {
+        DelayedTimer* t = it->second;
+        if (t->owner != owner || t->cancelled)
+            continue;
+        t->cancelled = true;
+        CancelWaitableTimer(t->timer);
+        if (!t->queued)
+            QueueTimerEvent(t);
+        count++;
+    }
+    LeaveCriticalSection(&timerLock);
+    return count;
+}
+
+void ScriptEngine::RunTimer(Event* evt, bool clearList) {
+    int id = *(int*)evt->arg1;
+    DelayedTimer* t = NULL;
+    bool run = false, done = false;
+    EnterCriticalSection(&timerLock);
+    std::map<int, DelayedTimer*>::iterator it = timers.find(id);
+    if (it != timers.end() && it->second->owner == evt->owner) {
+        t = it->second;
+        run = !t->cancelled && !clearList;
+        done = !run || !t->repeat;
+        if (done)
+            timers.erase(it);
+    }
+    LeaveCriticalSection(&timerLock);
+
+    // Only this thread frees a record, so t stays valid through the callback, even if it clears its own timer. An
+    // interval stays queued meanwhile: one that fires again while its callback runs (in a delay()) is not re-entered.
+    if (run) {
+        JSContext* cx = evt->owner->GetContext();
+        JS_BeginRequest(cx);
+        uint32_t argc = 0;
+        jsval* argv = NULL;
+        if (t->args) {
+            JSObject* args = JSVAL_TO_OBJECT(*t->args->value());
+            if (JS_GetArrayLength(cx, args, &argc) && argc > 0) {
+                argv = new jsval[argc];
+                for (uint32_t i = 0; i < argc; i++)
+                    if (!JS_GetElement(cx, args, i, &argv[i]))
+                        argv[i] = JSVAL_VOID;
+            }
+        }
+        jsval rval;
+        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *t->callback->value(), argc, argv, &rval);
+        delete[] argv;
+        JS_EndRequest(cx);
+    }
+    if (t && !done) {
+        EnterCriticalSection(&timerLock);
+        t->queued = false;
+        // Cleared while its callback ran: no event was queued for it, so it goes now.
+        if (t->cancelled) {
+            timers.erase(id);
+            done = true;
+        }
+        LeaveCriticalSection(&timerLock);
+    }
+    if (done && t)
+        FreeTimer(t);
+    free(evt->name);
+    delete (int*)evt->arg1;
+    delete evt;
+}
+
+void ScriptEngine::DestroyTimers(Script* owner) {
+    if (!timerLockReady)
+        return;
+    std::vector<DelayedTimer*> mine;
+    EnterCriticalSection(&timerLock);
+    for (std::map<int, DelayedTimer*>::iterator it = timers.begin(); it != timers.end();) {
+        if (it->second->owner == owner) {
+            mine.push_back(it->second);
+            timers.erase(it++);
+        } else
+            ++it;
+    }
+    LeaveCriticalSection(&timerLock);
+    for (size_t i = 0; i < mine.size(); i++)
+        FreeTimer(mine[i]);
+}
+
 void CALLBACK EventTimerProc(LPVOID lpArg, DWORD dwTimerLowValue, DWORD dwTimerHighValue) {
-    Event* evt = (Event*)lpArg;
-    evt->owner->FireEvent(evt);
+    int id = (int)(INT_PTR)lpArg;
+    EnterCriticalSection(&timerLock);
+    std::map<int, DelayedTimer*>::iterator it = timers.find(id);
+    // One queued firing is enough: a script running behind gets one call, not a backlog.
+    if (it != timers.end() && !it->second->cancelled && !it->second->queued)
+        QueueTimerEvent(it->second);
+    LeaveCriticalSection(&timerLock);
 }

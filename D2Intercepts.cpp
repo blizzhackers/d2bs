@@ -250,7 +250,7 @@ static void __fastcall SpriteCachePinForRead(SpriteCacheEntry* pEntry) {
 void __declspec(naked) SpriteCachePinRead_Intercept() {
     __asm {
 		mov edi, [ebx+0x94] // the sprite's cache entry
-		push eax
+		push eax            // live at 0x5FF6F9, where ecx and edx are written before they are read
 		mov ecx, edi
 		call SpriteCachePinForRead
 		pop eax
@@ -301,9 +301,8 @@ static SpriteCacheEntry* SpriteCacheEvict(SpriteCache* pCache, SpriteCacheEntry*
         }
         SpriteCacheEntry* pHead = bUntouched ? pCache->pUntouchedHead : pCache->pTouchedHead;
         SpriteCacheEntry* pKeep = bKeepLastUsed ? pCache->pTouchedTail : NULL;
-        pEntry = pHead && pHead != pExcept && pHead != pKeep ? SpriteCachePopOldest(pCache, bUntouched) : NULL;
-        if (pEntry && (pEntry->dwFlags & 2))
-            pEntry = NULL;
+        bool bCanGo = pHead && !(pHead->dwFlags & 2) && pHead != pExcept && pHead != pKeep;
+        pEntry = bCanGo ? SpriteCachePopOldest(pCache, bUntouched) : NULL;
     }
     LeaveCriticalSection(&pCache->Lock);
     if (!pEntry)

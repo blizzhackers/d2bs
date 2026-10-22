@@ -803,7 +803,7 @@ struct SpriteCacheEntry {
     DWORD dwSize;            // 0x04 bytes charged to the cache
     void* pPayload;          // 0x08 handed to the release callback on eviction
     DWORD dwFlags;           // 0x0C 1 = on the untouched list, 2 = pinned (never evicted)
-    DWORD dwTouched;         // 0x10 GetTickCount at the last use
+    DWORD dwTouched;         // 0x10 GetTickCount at the last use, or at the allocation on the untouched list
     SpriteCacheEntry* pNext; // 0x14
     SpriteCacheEntry* pPrev; // 0x18
 };

@@ -843,9 +843,8 @@ public:
 	 */
 	String gameserverip;
 
-	/** Some sort of representation of the start time of the game.
-	 *
-	 * \todo Figure out what this represents.
+	/** When the character entered the current game, as a getTickCount() value: 0 at the menu after a game, and when
+	 * D2BS loaded before the first one.
 	 */
 	double gamestarttime;
 

@@ -64,6 +64,17 @@ PatchHook Patches[] = {
     {PatchBytes, GetDllOffset("Storm.dll", 0x1A588), (BYTE)0xEB, 1}, // NEW 1.14d //0041A588-BASE
 };
 
+// Fixes to the game's own bytes that stay when D2BS unloads: restoring them under a running game would leave the server
+// step's last run time on a clock the original step can't catch up with.
+PatchHook Permanent[] = {
+    // The single-player server step (0x52FC20) masks timeGetTime to 31 bits, then runs a game frame once now - last
+    // reaches 40 ms by a signed compare: past each multiple of 2^31 ms of Windows uptime (24.8 days), now stays below
+    // last and the game never steps again. An all-ones mask keeps the full clock. jge -> jae lets a last taken on the
+    // masked clock, as when D2BS is injected into a game in progress, cost one frame and a resync instead.
+    {PatchBytes, GetDllOffset("D2Game.dll", 0x12FC4B), (BYTE)0xFF, 1}, // NEW 1.14d //0052FC4B-BASE
+    {PatchBytes, GetDllOffset("D2Game.dll", 0x12FC64), (BYTE)0x73, 1}, // NEW 1.14d //0052FC64-BASE
+};
+
 PatchHook Conditional[] = {
     {PatchJmp, GetDllOffset("BNCLIENT.DLL", 0x12366C), (DWORD)ClassicSTUB, 5, &Vars.bUseRawCDKey}, // Updated 1.14d //0052366C-BASE
     {PatchJmp, GetDllOffset("BNCLIENT.DLL", 0x123958), (DWORD)LodSTUB, 5, &Vars.bUseRawCDKey},     // Updated 1.14d //00523958-BASE

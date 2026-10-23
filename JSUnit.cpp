@@ -102,9 +102,16 @@ JSAPI_PROP(unit_getProperty) {
             return JS_TRUE;
         vp.setString(JS_NewStringCopyZ(cx, pInfo->szGameServerIp));
         break;
-    case ME_GAMESTARTTIME:
-        vp.setDouble((jsdouble)Vars.dwGameTime);
+    case ME_GAMESTARTTIME: {
+        // On getTickCount()'s clock: dwGameTime holds GetTickCount's 32 bits, and a game is far shorter than their
+        // 49.7-day wrap, so the time since it started restores the high part. Windows XP's 32-bit TickCount64 can be
+        // below that time after its wrap, and its start time is dwGameTime itself. 0 (out of game) stays 0.
+        DWORD dwStart = Vars.dwGameTime;
+        ULONGLONG qwNow = TickCount64();
+        DWORD dwAgo = (DWORD)qwNow - dwStart;
+        vp.setDouble(!dwStart ? 0 : qwNow >= dwAgo ? (jsdouble)(qwNow - dwAgo) : (jsdouble)dwStart);
         break;
+    }
     case ME_GAMETYPE:
         vp.setInt32(*p_D2CLIENT_ExpCharFlag);
         break;

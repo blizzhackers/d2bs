@@ -13,6 +13,16 @@
 #include <tlhelp32.h>
 #include <wctype.h>
 
+// Resolved while the DLL loads, before any script thread runs: Windows XP has no GetTickCount64.
+typedef ULONGLONG(WINAPI* GetTickCount64Fn)();
+static GetTickCount64Fn pGetTickCount64 = (GetTickCount64Fn)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetTickCount64");
+
+// Milliseconds since Windows started, for the times scripts see: GetTickCount restarts from 0 every 49.7 days of
+// uptime, and a script's getTickCount() - start then never reaches its timeout. Windows XP keeps that restart.
+ULONGLONG TickCount64() {
+    return pGetTickCount64 ? pGetTickCount64() : GetTickCount();
+}
+
 wchar_t* AnsiToUnicode(const char* str, UINT codepage) {
     wchar_t* buf = NULL;
     int len = MultiByteToWideChar(codepage, 0, str, -1, buf, 0);

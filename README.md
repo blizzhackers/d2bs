@@ -40,7 +40,7 @@
 `public String `[`getBaseStat`](#group__globalFunctions_1gafcfdd2f8d3eb3a2c30436ddfc4add78b)`(int32_t nBaseStat,int32_t nClassId,int32_t nStat)`            | Get the base stat from the given table with the given class ID and stat ID.
 `public `[`Control`](#classControl)` `[`getControl`](#group__globalFunctions_1gaad0e54fb02bc1ce440b96204167da80f)`(int32_t nType,int32_t nX,int32_t nY,int32_t nXSize,int32_t nYSize)`            | Get the control specified by type, location and size.
 `public bool `[`getPlayerFlag`](#group__globalFunctions_1gaa18d78f3e5bb312f53b602247ec66fd3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFirstUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSecondUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFlag)`            | Get the relation between two players, anywhere in the game.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getTickCount`](#group__globalFunctions_1gad6eff12ded45cc505954f4763a71eae3)`()`            | Get the tick count.
+`public double `[`getTickCount`](#group__globalFunctions_1gad6eff12ded45cc505954f4763a71eae3)`()`            | Get the tick count.
 `public `[`Unit`](#classUnit)` `[`getInteractedNPC`](#group__globalFunctions_1ga3338c7af7db3773f41edb61bf9c5873c)`()`            | Get the [Unit](#classUnit) that the controlled [Unit](#classUnit) is currently interacting with.
 `public void `[`print`](#group__globalFunctions_1ga428513e838de3670e09b242cde1f0f6b)`(...)`            | Print the String representation of the arguments to the console.
 `public void `[`delay`](#group__globalFunctions_1ga95cd2552eeef0300ab5bae0ee284f82d)`(uint32_t nDelay)`            | Delay for nDelay milliseconds.
@@ -804,11 +804,11 @@ Get the relation between two players. It reads the party roster, so it answers f
 #### Returns
 true when the relationship is of the type specified, otherwise false (also when the game closes meanwhile).
 
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getTickCount`](#group__globalFunctions_1gad6eff12ded45cc505954f4763a71eae3)`()` 
+#### `public double `[`getTickCount`](#group__globalFunctions_1gad6eff12ded45cc505954f4763a71eae3)`()` 
 
 Get the tick count.
 
-Returns GetTickCount().
+Milliseconds since Windows started (GetTickCount64); it keeps counting past 2^32 (49.7 days), except on Windows XP.
 
 #### Returns
 The tick count.
@@ -3223,7 +3223,7 @@ Technically, also called [Unit](#classUnit), but since C++ doesn't support class
 `public String `[`gamename`](#classMe_1a82b4d94b4cf1d7310bb910919347eefd) | The name of the game.
 `public String `[`gamepassword`](#classMe_1aa872a1fbaa9f8aa85d01963f71813324) | The password of the game.
 `public String `[`gameserverip`](#classMe_1a3debf45fa879b24fad68925e53256c2b) | A string representation of the IPv4 address of the game server.
-`public double `[`gamestarttime`](#classMe_1a2fed13a602e6882f51553b8d4c3042be) | Some sort of representation of the start time of the game.
+`public double `[`gamestarttime`](#classMe_1a2fed13a602e6882f51553b8d4c3042be) | When the character entered the current game, as a getTickCount() value.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`gametype`](#classMe_1ad31342341ab64e1444961ff1059c8a05) | The game type, expansion or not.
 `public bool `[`itemoncursor`](#classMe_1abd16276ae4f171422e7185fdc3bb49cc) | Whether or not there is an item on the cursor.
 `public bool `[`ladder`](#classMe_1ab9d7b4028e92dc9e8e8a124ae434ca82) | Whether or not the game is a ladder game.
@@ -3607,9 +3607,9 @@ A string representation of the IPv4 address of the game server.
 
 #### `public double `[`gamestarttime`](#classMe_1a2fed13a602e6882f51553b8d4c3042be) 
 
-Some sort of representation of the start time of the game.
+When the character entered the current game, as a getTickCount() value.
 
-> Todo: Figure out what this represents.
+For a game D2BS was loaded into, it is when D2BS first saw that game; before the first game, when D2BS loaded; at the menu after a game, 0.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`gametype`](#classMe_1ad31342341ab64e1444961ff1059c8a05) 
 

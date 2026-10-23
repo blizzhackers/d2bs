@@ -843,8 +843,8 @@ public:
 	 */
 	String gameserverip;
 
-	/** When the character entered the current game, as a getTickCount() value: 0 at the menu after a game, and when
-	 * D2BS loaded before the first one.
+	/** When the character entered the current game, as a getTickCount() value. For a game D2BS was loaded into, it is
+	 * when D2BS first saw that game; before the first game, when D2BS loaded; at the menu after a game, 0.
 	 */
 	double gamestarttime;
 

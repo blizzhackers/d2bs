@@ -746,7 +746,7 @@ Control getControl(int32_t nType = -1, int32_t nX = -1, int32_t nY = -1,
  */
 bool getPlayerFlag(int nFirstUnitId, int nSecondUnitId, int nFlag);
 
-/** Get the tick count: milliseconds since Windows started (GetTickCount64). It keeps counting past 2^32 (49.7 days),
+/** Get the tick count. Milliseconds since Windows started (GetTickCount64); it keeps counting past 2^32 (49.7 days),
  * except on Windows XP.
  *
  * \ingroup globalFunctions

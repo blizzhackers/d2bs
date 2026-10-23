@@ -225,6 +225,149 @@ Done:
     }
 }
 
+// The sprite cache is shared by Storm's read thread and the threads that ask for sprites. The game's eviction (0x5FF4A0)
+// picks and unlinks its victim without the cache's lock, and a read thread that evicts can release an entry another
+// thread is releasing (closing its file request twice halts, 657) or free a sprite the game thread is using. So the
+// read thread only charges its read and pins the sprite it decodes, both under the lock; only the threads that ask for
+// sprites evict, and eviction does its list work under the lock.
+void __fastcall SpriteCacheChargeRead_Intercept(SpriteCache* pCache, SpriteCacheEntry* pEntry, DWORD dwSize, DWORD) {
+    EnterCriticalSection(&pCache->Lock);
+    pEntry->dwSize += dwSize;
+    pCache->dwBytes += dwSize;
+    pEntry->dwFlags &= ~2; // the decode's pin; the game's own clear (0x5FF726) runs without the lock and is patched out
+    LeaveCriticalSection(&pCache->Lock);
+}
+
+// The decode's pin (flag 2) shares its word with the list flag the game thread rewrites, under the lock, when it uses a
+// sprite; set without the lock, either write could undo the other and leave an entry flagged for the wrong list.
+static void __fastcall SpriteCachePinForRead(SpriteCacheEntry* pEntry) {
+    SpriteCache* pCache = p_D2CMP_SpriteCache;
+    EnterCriticalSection(&pCache->Lock);
+    pEntry->dwFlags |= 2;
+    LeaveCriticalSection(&pCache->Lock);
+}
+
+void __declspec(naked) SpriteCachePinRead_Intercept() {
+    __asm {
+		mov edi, [ebx+0x94] // the sprite's cache entry
+		push eax            // live at 0x5FF6F9, where ecx and edx are written before they are read
+		mov ecx, edi
+		call SpriteCachePinForRead
+		pop eax
+		add dword ptr [esp], 5 // return to 0x5FF6F9, an instruction start whether or not the patch is in place
+		ret
+    }
+}
+
+static SpriteCacheEntry* SpriteCachePopOldest(SpriteCache* pCache, DWORD bUntouched) {
+    SpriteCacheEntry* pEntry;
+    __asm {
+		push bUntouched
+		mov edx, pCache
+		call D2CMP_SpriteCachePopOldest_I
+		mov pEntry, eax
+    }
+    return pEntry;
+}
+
+static void SpriteCacheUnlink(SpriteCache* pCache, SpriteCacheEntry* pEntry) {
+    __asm {
+		mov eax, pEntry
+		mov ecx, pCache
+		call D2CMP_SpriteCacheUnlink_I
+    }
+}
+
+// 0x5FF4A0 with the lock around its list work, never taking pExcept or, for a trim, the touched list's tail. Releasing
+// stays outside the lock, as in the game: releasing a sprite whose read is still queued waits for the read thread, which
+// takes the lock to charge a read.
+static SpriteCacheEntry* SpriteCacheEvict(SpriteCache* pCache, SpriteCacheEntry* pEntry, DWORD bUntouchedFirst, SpriteCacheEntry* pExcept, bool bKeepLastUsed) {
+    EnterCriticalSection(&pCache->Lock);
+    if (!pCache->dwCount)
+        pEntry = NULL;
+    else if (pEntry) {
+        if (pEntry->dwFlags & 2)
+            pEntry = NULL;
+        else
+            SpriteCacheUnlink(pCache, pEntry);
+    } else {
+        // the game's pick: the touched list's head, or the untouched one's when asked for and older
+        DWORD bUntouched = 0;
+        if (pCache->pUntouchedHead) {
+            if (!pCache->pTouchedHead)
+                bUntouched = bUntouchedFirst;
+            else if (bUntouchedFirst)
+                bUntouched = pCache->pUntouchedHead->dwTouched < pCache->pTouchedHead->dwTouched;
+        }
+        SpriteCacheEntry* pHead = bUntouched ? pCache->pUntouchedHead : pCache->pTouchedHead;
+        SpriteCacheEntry* pKeep = bKeepLastUsed ? pCache->pTouchedTail : NULL;
+        bool bCanGo = pHead && !(pHead->dwFlags & 2) && pHead != pExcept && pHead != pKeep;
+        pEntry = bCanGo ? SpriteCachePopOldest(pCache, bUntouched) : NULL;
+    }
+    LeaveCriticalSection(&pCache->Lock);
+    if (!pEntry)
+        return NULL;
+
+    if (pEntry->pPayload) {
+        pCache->pfnRelease(pEntry->pPayload);
+        pEntry->pPayload = NULL;
+    }
+    if (pEntry->pBuffer) {
+        FOG_FreeMemory(pCache->pPool, pEntry->pBuffer, "D2BS", __LINE__, 0);
+        pEntry->pBuffer = NULL;
+    }
+
+    EnterCriticalSection(&pCache->Lock);
+    // the size leaves the total only after the release, which waits for a queued read: that read's charge is in it
+    pCache->dwBytes -= pEntry->dwSize;
+    if (pCache->pFreeTail) {
+        pCache->pFreeTail->pNext = pEntry;
+        pEntry->pPrev = pCache->pFreeTail;
+    } else
+        pCache->pFreeHead = pEntry;
+    pCache->pFreeTail = pEntry;
+    pCache->dwCount--;
+    LeaveCriticalSection(&pCache->Lock);
+    return pEntry;
+}
+
+SpriteCacheEntry* __fastcall SpriteCacheEvict_Intercept(SpriteCache* pCache, SpriteCacheEntry* pEntry, DWORD bUntouchedFirst) {
+    return SpriteCacheEvict(pCache, pEntry, bUntouchedFirst, NULL, false);
+}
+
+// Evicts the oldest entries until the cache's bytes plus dwRoom fit its budget, stopping at an oldest entry that can't
+// go: pinned, pExcept, or the touched list's tail. Trims run on the threads that ask for sprites, and the lookup 0x6001F0
+// queues reads after touching the sprite it hands to the draw, which leaves that sprite the touched tail until the draw.
+static void SpriteCacheTrim(SpriteCache* pCache, DWORD bUntouchedFirst, SpriteCacheEntry* pExcept, DWORD dwRoom) {
+    for (;;) {
+        EnterCriticalSection(&pCache->Lock);
+        bool bOver = pCache->dwBytes + dwRoom > pCache->dwBudget;
+        LeaveCriticalSection(&pCache->Lock);
+        if (!bOver || !SpriteCacheEvict(pCache, NULL, bUntouchedFirst, pExcept, true))
+            return;
+    }
+}
+
+// 0x5FF630 right after a sprite's read is queued: charge it, then trim. The game pins the sprite (flag 2) to keep its
+// trim off it, but the read's completion clears that flag, so a read finishing mid-trim could evict the sprite being
+// charged (Halt 2631); the sprite is excluded by address instead, and the flag belongs to the completion alone.
+void __fastcall SpriteCacheChargeIssue_Intercept(SpriteCache* pCache, SpriteCacheEntry* pEntry, DWORD dwSize, DWORD bUntouchedFirst) {
+    EnterCriticalSection(&pCache->Lock);
+    pEntry->dwSize += dwSize;
+    pCache->dwBytes += dwSize;
+    LeaveCriticalSection(&pCache->Lock);
+    SpriteCacheTrim(pCache, bUntouchedFirst, pEntry, 0);
+}
+
+// 0x5FFC40 called from 0x5FFFA0: the entry for a sprite about to be read. Finished reads are charged without a trim, and
+// an allocation that doesn't fit refuses, rather than evicts, while the oldest list head was used or allocated in the
+// last 15 s (0x5FFCBD), leaving the sprite undrawn; so the cache first makes room, least recently used first across both
+// lists.
+SpriteCacheEntry* __fastcall SpriteCacheAllocRead_Intercept(SpriteCache* pCache, DWORD dwSize, DWORD dwPayload, DWORD bUntouched) {
+    SpriteCacheTrim(pCache, 1, NULL, dwSize);
+    return D2CMP_SpriteCacheAlloc(pCache, dwSize, dwPayload, bUntouched);
+}
+
 void GameDrawOOG_Intercept(void) {
     GameDrawOOG();
 }

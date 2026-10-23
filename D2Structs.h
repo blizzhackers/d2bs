@@ -797,6 +797,33 @@ struct TransactionDialogsInfo_t {
     void* something;                          // 0xB08
 };
 
+// The game's DCC sprite cache (1.14d: 0x89DB60) and its entries, an array of 0x1400 made when the cache starts.
+struct SpriteCacheEntry {
+    void* pBuffer;           // 0x00 the sprite and its frames
+    DWORD dwSize;            // 0x04 bytes charged to the cache
+    void* pPayload;          // 0x08 handed to the release callback on eviction
+    DWORD dwFlags;           // 0x0C 1 = on the untouched list, 2 = pinned (never evicted)
+    DWORD dwTouched;         // 0x10 GetTickCount at the last use, or at the allocation on the untouched list
+    SpriteCacheEntry* pNext; // 0x14
+    SpriteCacheEntry* pPrev; // 0x18
+};
+
+struct SpriteCache {
+    void* pPool;                                  // 0x00 Fog pool of the buffers
+    DWORD dwBudget;                               // 0x04 bytes
+    DWORD dwBytes;                                // 0x08
+    DWORD dwCount;                                // 0x0C entries in use
+    SpriteCacheEntry* pEntries;                   // 0x10
+    SpriteCacheEntry* pTouchedHead;               // 0x14 least recently used first
+    SpriteCacheEntry* pTouchedTail;               // 0x18
+    SpriteCacheEntry* pUntouchedHead;             // 0x1C loaded and not used since
+    SpriteCacheEntry* pUntouchedTail;             // 0x20
+    SpriteCacheEntry* pFreeHead;                  // 0x24
+    SpriteCacheEntry* pFreeTail;                  // 0x28
+    void(__fastcall* pfnRelease)(void* pPayload); // 0x2C
+    CRITICAL_SECTION Lock;                        // 0x30
+};
+
 #pragma warning(pop)
 #pragma optimize("", on)
 

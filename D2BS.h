@@ -11,6 +11,9 @@
 #ifndef D2BS_VERSION
 #define D2BS_VERSION L"local build"
 #endif
+#ifndef D2BS_SHORT_VERSION
+#define D2BS_SHORT_VERSION D2BS_VERSION
+#endif
 
 #include <windows.h>
 #include <vector>

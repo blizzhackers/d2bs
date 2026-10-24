@@ -17,7 +17,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Halt dumps on request.** With `HaltDumps=true` in `d2bs.ini`, a halt also writes a memory dump beside its packet log, as `.dmp`. A dump can hold account details, so share it privately.
 - **Bounded crash files.** The `logs` folder, shared by every profile, keeps at most 5 dumps (a few hundred MB each) and 50 packet logs, deleting the oldest first, and D2BS skips the dump when the disk has less than 2 GB free.
 - **Debug symbols with every release.** `D2BS.pdb` ships beside `D2BS.dll`, so a crash or halt dump shows D2BS's own functions.
-- **Build identity.** `version()`, the startup log line, the on-screen logo and the DLL's file properties name the commit the DLL was built from, for example `1.7.0U (7c036ba)`.
+- **Build identity.** `version()`, the startup log line and the DLL's file properties name the commit the DLL was built from, for example `1.7.0U (7c036ba)`; the on-screen logo shows the version alone.
 
 ### Changed
 

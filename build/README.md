@@ -46,17 +46,17 @@ bumps `recipe` in `toolset.json`; a package change is caught by its SHA-256 alon
 ## Versions
 
 `VERSION` holds the latest release (`major.minor.patch`), and the release script bumps it. It starts at `1.6.4`, the
-last version shipped (as 1.6.4U). The build stamps it, with the commit, into the startup log line, `version()`, the
-on-screen logo, and the DLL's version information. The product version string in the file's Properties carries the
-same text as the log line. The last file-version number is 0 only for a release.
+last version shipped (as 1.6.4U). The build stamps it, with the commit, into the startup log line, `version()` and the
+DLL's version information; the on-screen logo shows it without the commit. The product version string in the file's
+Properties carries the same text as the log line. The last file-version number is 0 only for a release.
 
-| Build | Shows | File version |
-| --- | --- | --- |
-| Release (tag `v1.6.5`) | `1.6.5U (7c036ba)` | 1.6.5.0 |
-| CI build after that release | `1.6.5U+dev (7c036ba)` | 1.6.5.<run number> |
-| Local script build | `1.6.5U+dev (7c036ba)` | 1.6.5.65535, or the `-BuildNumber` you pass |
-| Built with uncommitted changes to tracked files | `... (7c036ba+dirty)` | |
-| Visual Studio, without the scripts | `local build` | 0.0.0.0 |
+| Build | Log line and `version()` | Logo | File version |
+| --- | --- | --- | --- |
+| Release (tag `v1.6.5`) | `1.6.5U (7c036ba)` | `D2BS 1.6.5U` | 1.6.5.0 |
+| CI build after that release | `1.6.5U+dev (7c036ba)` | `D2BS 1.6.5U+dev` | 1.6.5.<run number> |
+| Local script build | `1.6.5U+dev (7c036ba)` | `D2BS 1.6.5U+dev` | 1.6.5.65535, or the `-BuildNumber` you pass |
+| Built with uncommitted changes to tracked files | `... (7c036ba+dirty)` | | |
+| Visual Studio, without the scripts | `local build` | `D2BS local build` | 0.0.0.0 |
 
 The version block is in `version.rc2`, not `version.rc`. Visual Studio's resource editor rewrites `version.rc` and
 would turn its macros into fixed numbers. As a backstop, the build fails if the DLL's version doesn't match.

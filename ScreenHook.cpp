@@ -14,7 +14,7 @@ HookList Genhook::invisible = HookList();
 CRITICAL_SECTION Genhook::globalSection = {0};
 
 void DrawLogo(void) {
-    static wchar_t version[] = L"D2BS " D2BS_VERSION;
+    static wchar_t version[] = L"D2BS " D2BS_SHORT_VERSION;
     static int len = CalculateTextLen(version, 0).x;
     int dx = GetScreenSize().x - len - 1;
     int dy = GetScreenSize().y - 1;

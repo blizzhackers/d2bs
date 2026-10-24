@@ -59,7 +59,8 @@ $commit = (git -C $repo rev-parse --short=7 HEAD 2>$null)
 if ($LASTEXITCODE -or -not $commit) { $commit = 'nogit' }
 # Untracked files (e.g. a Visual Studio build's Release\ folder) never reach this build: only tracked changes count.
 elseif (git -C $repo status --porcelain --untracked-files=no 2>$null) { $commit += '+dirty' }
-$display = if ($Release) { "${version}U ($commit)" } else { "${version}U+dev ($commit)" }
+$short = if ($Release) { "${version}U" } else { "${version}U+dev" }
+$display = "$short ($commit)"
 $fileVersion = $numbers + @($(if ($Release) { 0 } else { $BuildNumber }))
 
 $obj = Join-Path $Out 'obj'
@@ -74,6 +75,8 @@ Set-Content -LiteralPath (Join-Path $gen 'd2bs_build.h') -Encoding ascii -Value 
   '#ifndef D2BS_BUILD_H'
   '#define D2BS_BUILD_H'
   "#define D2BS_VERSION L`"$display`""
+  # The on-screen logo sits in the bottom-right corner, where tooltips also draw: it shows the version without the commit.
+  "#define D2BS_SHORT_VERSION L`"$short`""
   "#define D2BS_FILEVERSION $($fileVersion -join ',')"
   "#define D2BS_FILEVERSION_STR `"$($fileVersion -join '.')`""
   "#define D2BS_PRODUCTVERSION_STR `"$display`""

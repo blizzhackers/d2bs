@@ -25,6 +25,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Timers outlive `clearAllEvents()`.** Timers stop with `clearTimeout()`, `clearInterval()`, `clearAllTimers()` or the end of their script.
 - **Safer dialog lines.** A line from an earlier `getDialogLines()` runs its handler only while it is one of the open dialog's lines, and otherwise throws "That dialog is not currently clickable."
 - **Game actions don't wait for other scripts' sent-packet listeners.** A packet sent from inside a call that acts between game frames, such as `clickMap()`, `me.cancel()`, `clickItem()`, `item.shop()` or `transmute()`, reaches other scripts' `gamepacketsent` listeners without waiting for their answer, so they can't block it and the game keeps running; the calling script's own listeners still can.
+- **`getTickCount()` keeps counting.** It counts on past 4,294,967,295 ms (49.7 days of Windows uptime), so time differences in scripts stay right however long Windows has run, and `me.gamestarttime` uses the same clock. On Windows XP it still starts again from 0.
 
 ### Fixed
 
@@ -36,6 +37,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Area lookups keep the game running.** `getArea()` and its properties such as `exits`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()` and `getCollision()` called while the game changes areas or leaves a game let the game carry on drawing.
 - **Stable Act 5 wilderness.** Frigid Highlands, Arreat Plateau, Frozen Tundra and the other Act 5 outdoor areas build reliably in every game, whether the character walks in, takes a waypoint or a script looks up a room there with `getRoom()`.
 - **Long sessions keep running.** The game keeps loading monster and character graphics hour after hour, including while a bot crosses one crowded area after another.
+- **PCs that stay on for weeks.** Single-player games keep running however long Windows has been up.
 - **Folder listings release their handles.** `dopen().getFiles()` and `getFolders()` close their folder search when done, so scripts can list folders as often as they like without adding to the game's handle count.
 - **Safe unit lookups.** Finding a unit by its id answers "not found" for a unit the game has just freed, as for any unit that's gone.
 - **Dependable `getPlayerFlag()`.** It returns `true` or `false`, so `=== true` works, answers for players anywhere in the game rather than only those nearby, and is safe to call while a game closes.

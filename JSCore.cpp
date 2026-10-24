@@ -276,7 +276,7 @@ JSAPI_FUNC(my_beep) {
 JSAPI_FUNC(my_getTickCount) {
     JS_BeginRequest(cx);
     jsval rval;
-    rval = JS_NumberValue((jsdouble)GetTickCount());
+    rval = JS_NumberValue((jsdouble)TickCount64());
     JS_SET_RVAL(cx, vp, rval);
     JS_EndRequest(cx);
     return JS_TRUE;

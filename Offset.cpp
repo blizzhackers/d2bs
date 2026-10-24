@@ -41,6 +41,8 @@ void InstallPatches() {
         ::ReadProcessMemory(GetCurrentProcess(), (void*)Patches[x].dwAddr, Patches[x].bOldCode, Patches[x].dwLen, NULL);
         Patches[x].pFunc(Patches[x].dwAddr, Patches[x].dwFunc, Patches[x].dwLen);
     }
+    for (int x = 0; x < ArraySize(Permanent); x++)
+        Permanent[x].pFunc(Permanent[x].dwAddr, Permanent[x].dwFunc, Permanent[x].dwLen);
 }
 
 void RemovePatches() {

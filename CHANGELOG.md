@@ -6,6 +6,8 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-24
+
 ### Added
 
 - **`clearAllTimers()`** cancels every timer of the calling script, including an interval whose callback is running, and returns how many it cancelled.
@@ -43,4 +45,5 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Dependable `getPlayerFlag()`.** It returns `true` or `false`, so `=== true` works, answers for players anywhere in the game rather than only those nearby, and is safe to call while a game closes.
 - **Missile casters.** A missile's `getParent()` returns the unit that cast it, or undefined when the caster is out of sight; `missile.owner` and `missile.ownertype` still give its id and type.
 
-[Unreleased]: https://github.com/blizzhackers/d2bs/compare/bf77a8f...HEAD
+[Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/blizzhackers/d2bs/compare/bf77a8f...v1.7.0

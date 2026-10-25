@@ -120,6 +120,17 @@ void PatchBytes(DWORD dwAddr, DWORD dwValue, DWORD dwLen) {
     delete[] bCode;
 }
 
+// dwSwap points to a ByteSwap. A rewrite of several instructions lands only on the original bytes: code that already
+// differs (another patch, another game version) is left alone.
+void PatchSwap(DWORD dwAddr, DWORD dwSwap, DWORD dwLen) {
+    const ByteSwap* swap = (const ByteSwap*)dwSwap;
+    if (::memcmp((const void*)dwAddr, swap->bOld, dwLen) != 0) {
+        Log(L"Patch at 0x%08X skipped: the code there is not the expected original", dwAddr);
+        return;
+    }
+    WriteBytes((LPVOID)dwAddr, (void*)swap->bNew, dwLen);
+}
+
 PatchHook* RetrievePatchHooks(PINT pBuffer) {
     *pBuffer = ArraySize(Patches);
     return &Patches[0];

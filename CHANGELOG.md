@@ -6,6 +6,10 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sound game memory.** The game's memory pools keep an exact record of their memory while several threads allocate at once, so bots keep playing session after session.
+
 ## [1.7.0] - 2026-10-24
 
 ### Added

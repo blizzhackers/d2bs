@@ -64,15 +64,39 @@ PatchHook Patches[] = {
     {PatchBytes, GetDllOffset("Storm.dll", 0x1A588), (BYTE)0xEB, 1}, // NEW 1.14d //0041A588-BASE
 };
 
-// Fixes to the game's own bytes that stay when D2BS unloads: restoring them under a running game would leave the server
-// step's last run time on a clock the original step can't catch up with.
+// Fog's memory pools keep a sorted index of their regions ([pool+7A8h], count +7A0h, capacity +7A4h) under the pool's
+// lock (pool+4). Region creation (0x4095E0) grows a full index without it: an insert running alongside writes its entry
+// into the array being replaced, and the count then covers a slot nobody wrote. The lookup (0x4099D0) and the removal
+// (0x409490) read the index's address before they take the lock, so a grow can free the array they search. Each swap
+// below moves that read after EnterCriticalSection and keeps the last instruction at its address, so a thread waiting
+// for the lock in the original code resumes on an instruction boundary.
+static const BYTE FogPoolLookupOld[] = {0x8B, 0xBE, 0xA8, 0x07, 0x00, 0x00, 0x8D, 0x5E, 0x04, 0x53, 0x89, 0x5D, 0xFC,
+                                        0xFF, 0x15, 0x18, 0xC2, 0x6C, 0x00, 0x8B, 0xB6, 0xA0, 0x07, 0x00, 0x00};
+static const BYTE FogPoolLookupNew[] = {0x8D, 0x5E, 0x04, 0x53, 0x89, 0x5D, 0xFC, 0xFF, 0x15, 0x18, 0xC2, 0x6C, 0x00,
+                                        0x8B, 0xBE, 0xA8, 0x07, 0x00, 0x00, 0x8B, 0xB6, 0xA0, 0x07, 0x00, 0x00};
+static const ByteSwap FogPoolLookup = {FogPoolLookupOld, FogPoolLookupNew};
+static const BYTE FogPoolRemoveOld[] = {0x8B, 0x86, 0xA8, 0x07, 0x00, 0x00, 0x53, 0x57, 0x8D, 0x7E, 0x04, 0x57,
+                                        0x89, 0x45, 0xF8, 0x89, 0x7D, 0xF4, 0xFF, 0x15, 0x18, 0xC2, 0x6C, 0x00};
+static const BYTE FogPoolRemoveNew[] = {0x53, 0x57, 0x8D, 0x7E, 0x04, 0x57, 0x89, 0x7D, 0xF4, 0xFF, 0x15, 0x18,
+                                        0xC2, 0x6C, 0x00, 0x8B, 0x86, 0xA8, 0x07, 0x00, 0x00, 0x89, 0x45, 0xF8};
+static const ByteSwap FogPoolRemove = {FogPoolRemoveOld, FogPoolRemoveNew};
+
+// Fixes to the game's own bytes that need nothing from D2BS: they stay when D2BS unloads, because restoring them under a
+// running game would bring the bug back mid-game.
 PatchHook Permanent[] = {
     // The single-player server step (0x52FC20) masks timeGetTime to 31 bits, then runs a game frame once now - last
     // reaches 40 ms by a signed compare: past each multiple of 2^31 ms of Windows uptime (24.8 days), now stays below
     // last and the game never steps again. An all-ones mask keeps the full clock. jge -> jae lets a last taken on the
-    // masked clock, as when D2BS is injected into a game in progress, cost one frame and a resync instead.
+    // masked clock, as when D2BS is injected into a game in progress, cost one frame and a resync instead. Restoring
+    // the original bytes would leave last on a clock the original step can't catch up with.
     {PatchBytes, GetDllOffset("D2Game.dll", 0x12FC4B), (BYTE)0xFF, 1}, // NEW 1.14d //0052FC4B-BASE
     {PatchBytes, GetDllOffset("D2Game.dll", 0x12FC64), (BYTE)0x73, 1}, // NEW 1.14d //0052FC64-BASE
+
+    // Fog's pool index, see FogPoolLookup above. jl -> jmp skips region creation's unlocked grow; the insert it calls
+    // (0x409370) grows the index under the lock when it is full.
+    {PatchBytes, GetDllOffset("Fog.dll", 0x95F5), (BYTE)0xEB, 1},                                         // NEW 1.14d //004095F5-BASE
+    {PatchSwap, GetDllOffset("Fog.dll", 0x99D9), (DWORD)&FogPoolLookup, sizeof(FogPoolLookupOld)}, // NEW 1.14d //004099D9-BASE
+    {PatchSwap, GetDllOffset("Fog.dll", 0x9496), (DWORD)&FogPoolRemove, sizeof(FogPoolRemoveOld)}, // NEW 1.14d //00409496-BASE
 };
 
 PatchHook Conditional[] = {

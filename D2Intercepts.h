@@ -27,6 +27,7 @@ void GameActChange2_Intercept(void);
 void GameLeave_Intercept(void);
 void ChannelInput_Intercept(void);
 void ChatPacketRecv_Interception();
+void BnetPacketRecv_Interception();
 void AddUnit_Intercept(UnitAny* lpUnit);
 void RemoveUnit_Intercept(UnitAny* lpUnit);
 int WINAPI LogMessageBoxA_Intercept(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType);

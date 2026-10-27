@@ -493,6 +493,7 @@ enum {
 
     ASMPTR(BNCLIENT, DClass, 0x123673) // Updated 1.14d //00523673-BASE
     ASMPTR(BNCLIENT, DLod, 0x12395D)   // Updated 1.14d //0052395D-BASE
+    ASMPTR(BNCLIENT, DispatchPacket_I, 0x121B00) // 1.14d //00521B00-BASE
 
     VARPTR(BNCLIENT, ClassicKey, char*, 0x482744)                    // Updated 1.14d //00882744-BASE
     VARPTR(BNCLIENT, XPacKey, char*, 0x48274C)                       // Updated 1.14d //0088274C-BASE

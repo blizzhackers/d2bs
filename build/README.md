@@ -43,6 +43,17 @@ that holds anything other than an earlier toolset. The build refuses a toolset m
 older `Get-Toolset.ps1`: run `Get-Toolset.ps1` again. Whoever changes what `Get-Toolset.ps1` puts in the toolset
 bumps `recipe` in `toolset.json`; a package change is caught by its SHA-256 alone.
 
+## Testing revision temporary directories
+
+```powershell
+python build\tests\test_revision_temp_path.py --toolset C:\d2bs-toolset
+```
+
+This compiles the Win32 path helper with the same v100 toolset and runs 16 concurrent clients against shared and
+isolated revision filenames, plus buffer-limit, path-failure and cleanup checks. It needs no game or Battle.net
+connection. Generated files stay in `build\out\revision-tests`. A live simultaneous-login test is still needed
+to validate a reported Battle.net startup failure.
+
 ## Versions
 
 `VERSION` holds the latest release (`major.minor.patch`), and the release script bumps it. It starts at `1.6.4`, the

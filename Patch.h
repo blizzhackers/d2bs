@@ -26,6 +26,8 @@ PatchHook Patches[] = {
     {PatchCall, GetDllOffset("BNCLIENT.DLL", 0x121B20), (DWORD)ChatPacketRecv_Interception, 7}, // Updated 1.14d //00521B20-BASE
     // Match the incoming Battle.net filter in the June 2020 1.6.4U DLL for a controlled comparison.
     {PatchCall, GetDllOffset("BNCLIENT.DLL", 0x11C7AF), (DWORD)BnetPacketRecv_Interception, 5}, // 1.14d //0051C7AF-BASE
+    // Isolate the DLL extracted for CheckRevision, as the legacy DLL did with profile folders.
+    {PatchCall, GetDllOffset("BNCLIENT.DLL", 0x11E4C4), (DWORD)RevisionTempPath_Intercept, 6}, // 1.14d //0051E4C4-BASE
 
     {PatchCall, GetDllOffset("D2Multi.dll", 0x48813), (DWORD)Whisper_Intercept, 7},      // Updated 1.14d //00448813-BASE
     {PatchCall, GetDllOffset("D2Multi.dll", 0x42A61), (DWORD)ChannelInput_Intercept, 5}, // Updated 1.14d //00442A61-BASE

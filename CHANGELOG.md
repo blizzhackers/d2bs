@@ -44,6 +44,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Safe unit lookups.** Finding a unit by its id answers "not found" for a unit the game has just freed, as for any unit that's gone.
 - **Dependable `getPlayerFlag()`.** It returns `true` or `false`, so `=== true` works, answers for players anywhere in the game rather than only those nearby, and is safe to call while a game closes.
 - **Missile casters.** A missile's `getParent()` returns the unit that cast it, or undefined when the caster is out of sight; `missile.owner` and `missile.ownertype` still give its id and type.
+- **Independent Battle.net version checks.** Each game process uses its own temporary directory for the revision DLL, so profiles can verify their game version concurrently.
 
 [Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.7.0...HEAD
 [1.7.0]: https://github.com/blizzhackers/d2bs/compare/bf77a8f...v1.7.0

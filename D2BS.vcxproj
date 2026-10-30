@@ -258,6 +258,7 @@ XCOPY "$(ProjectDir)resources" "$(OutDir)release-pkg"
     <ClCompile Include="D2BS.cpp" />
     <ClCompile Include="D2Helpers.cpp" />
     <ClCompile Include="D2Intercepts.cpp" />
+    <ClCompile Include="RevisionTempPath.cpp" />
     <ClCompile Include="D2Handlers.cpp" />
     <ClCompile Include="D2NetHandlers.cpp" />
     <ClCompile Include="Console.cpp" />
@@ -341,6 +342,7 @@ XCOPY "$(ProjectDir)resources" "$(OutDir)release-pkg"
     <ClInclude Include="JSSocket.h" />
     <ClInclude Include="Patch.h" />
     <ClInclude Include="D2Intercepts.h" />
+    <ClInclude Include="RevisionTempPath.h" />
     <ClInclude Include="D2Handlers.h" />
     <ClInclude Include="D2NetHandlers.h" />
     <ClInclude Include="Console.h" />

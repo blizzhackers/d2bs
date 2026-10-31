@@ -27,6 +27,8 @@
 
 #define PRIVATE_UNIT 1
 #define PRIVATE_ITEM 3
+// Bit 0 clear: natives that read any object's private data and test it against PRIVATE_UNIT turn a Party away.
+#define PRIVATE_PARTY 4
 
 struct Private {
     DWORD dwPrivateType;
@@ -103,6 +105,9 @@ struct Variables {
 
     UINT_PTR uTimer;
     long SectionCount;
+    // Odd while a game is open to scripts, even between games, and a new value for every game, so a Party object never
+    // finds a player in a later game. Read and written only with cGameLoopSection held.
+    DWORD dwGameSession;
 
     std::queue<std::wstring> qPrintBuffer;
     std::map<unsigned __int32, CellFile*> mCachedCellFiles;

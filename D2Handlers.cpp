@@ -27,10 +27,22 @@ bool __fastcall UpdatePlayerGid(Script* script, void*, uint) {
     return true;
 }
 
+// Vars.dwGameSession, which Party objects are checked against. Callers hold the game lock. Both always move to a new
+// value, so D2Thread can tell that a game has been left before it got to open it.
+static void OpenGameSession(void) {
+    Vars.dwGameSession += (Vars.dwGameSession & 1) ? 2 : 1;
+}
+
+static void CloseGameSession(void) {
+    Vars.dwGameSession += (Vars.dwGameSession & 1) ? 1 : 2;
+}
+
 DWORD WINAPI D2Thread(LPVOID lpParam) {
     sLine* command;
     bool beginStarter = true;
     bool bInGame = false;
+    bool bSessionSettled = false; // this game's session is open, or the game was found already left
+    DWORD dwMenuSession = 0;      // Vars.dwGameSession as the menu last left it
 
     if (!InitHooks()) {
         wcscpy_s(Vars.szPath, MAX_PATH, L"common");
@@ -71,6 +83,17 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
     while (Vars.bActive) {
         switch (ClientState()) {
         case ClientStateInGame: {
+            if (!bSessionSettled) {
+                // Ahead of the join's sleep below, so scripts already running can use the game at once. A value moved on
+                // since the menu means GameLeave() has run for this game, which must then stay closed.
+                AutoCriticalRoom cRoom;
+                if (Vars.dwGameSession != dwMenuSession)
+                    bSessionSettled = true;
+                else if (ClientState() == ClientStateInGame) {
+                    OpenGameSession();
+                    bSessionSettled = true;
+                }
+            }
             if (bInGame) {
                 if ((Vars.dwMaxGameTime && Vars.dwGameTime && (GetTickCount() - Vars.dwGameTime) > Vars.dwMaxGameTime) ||
                     (!D2COMMON_IsTownByLevelNo(GetPlayerArea()) && (Vars.nChickenHP && Vars.nChickenHP >= GetUnitHP(D2CLIENT_GetPlayerUnit())) ||
@@ -107,6 +130,14 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
                 Vars.dwGameTime = NULL;
                 bInGame = false;
             }
+            {
+                // GameLeave() has closed the last game's session; this covers a game that ended without it.
+                AutoCriticalRoom cRoom;
+                if (Vars.dwGameSession & 1)
+                    CloseGameSession();
+                dwMenuSession = Vars.dwGameSession;
+            }
+            bSessionSettled = false;
             break;
         }
         case ClientStateBusy:
@@ -652,6 +683,11 @@ void GameLeave(void) {
                     it->second->Stop(true);
 
     LeaveCriticalSection(&ScriptEngine::lock); */
+    {
+        // The client frees its roster only after this hook returns, and scripts may outlive the stop below.
+        AutoCriticalRoom cRoom;
+        CloseGameSession();
+    }
     Vars.bQuitting = false;
     ScriptEngine::ForEachScript(StopIngameScript, NULL, 0);
     ActMap::ClearCache();

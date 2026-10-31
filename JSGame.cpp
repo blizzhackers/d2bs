@@ -9,6 +9,7 @@
 #include "Game.h"
 #include "JSArea.h"
 #include "JSGlobalClasses.h"
+#include "JSParty.h"
 #include "TimedAlloc.h"
 #include "MapHeader.h"
 #include "JSRoom.h"
@@ -1090,29 +1091,20 @@ JSAPI_FUNC(my_say) {
 JSAPI_FUNC(my_clickParty) {
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
-    if (argc < 2 || !JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[0]) || !JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
+    if (argc < 2 || JSVAL_IS_PRIMITIVE(JS_ARGV(cx, vp)[0]) || !JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
+        return JS_TRUE;
+
+    myParty* pParty = (myParty*)JS_GetInstancePrivate(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[0]), &party_class, NULL);
+    if (!pParty)
         return JS_TRUE;
 
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    UnitAny* myUnit = D2CLIENT_GetPlayerUnit();
-    RosterUnit* pUnit = (RosterUnit*)JS_GetPrivate(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[0]));
-    RosterUnit* mypUnit = *p_D2CLIENT_PlayerUnitList;
-
-    if (!pUnit || !mypUnit)
-        return JS_TRUE;
-
-    BOOL bFound = FALSE;
-
-    for (RosterUnit* pScan = mypUnit; pScan; pScan = pScan->pNext)
-        if (pScan->dwUnitId == pUnit->dwUnitId)
-            bFound = TRUE;
-
-    if (!bFound)
-        return JS_TRUE;
-
     jsint nMode = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
+
+    if (nMode < 0 || nMode > 5)
+        return JS_TRUE;
 
     BnetData* pData = (*p_D2LAUNCH_BnData);
 
@@ -1120,38 +1112,63 @@ JSAPI_FUNC(my_clickParty) {
     if (nMode == 0 && pData && !(pData->nCharFlags & PLAYER_TYPE_HARDCORE))
         return JS_TRUE;
 
-    // Attempt to party a player who is already in party ^_~
-    if (nMode == 2 && pUnit->wPartyId != 0xFFFF && mypUnit->wPartyId == pUnit->wPartyId && pUnit->wPartyId != 0xFFFF)
-        return JS_TRUE;
+    // The game changes roster entries on its own thread, and the party actions below rewrite the roster on this one:
+    // finding the player, the checks and the action all happen in one hold of the game lock.
+    for (int tries = 0; tries < 3 && WaitForGameReady(); tries++) {
+        AutoCriticalRoom cRoom;
+        if (!GameReady())
+            continue;
 
-    // don't leave a party if we are in none!
-    if (nMode == 3 && pUnit->wPartyId == 0xFFFF)
-        return JS_TRUE;
-    else if (nMode == 3 && pUnit->wPartyId != 0xFFFF) {
+        UnitAny* myUnit = D2CLIENT_GetPlayerUnit();
+        RosterUnit* pUnit = FindPartyUnit(pParty);
+        RosterUnit* mypUnit = NULL;
+
+        for (RosterUnit* pScan = pUnit ? *p_D2CLIENT_PlayerUnitList : NULL; pScan; pScan = pScan->pNext) {
+            if (pScan->dwUnitId == myUnit->dwUnitId) {
+                mypUnit = pScan;
+                break;
+            }
+        }
+
+        // The party actions halt the game when the player's own entry is missing.
+        if (!pUnit || !mypUnit)
+            return JS_TRUE;
+
+        // Attempt to party a player who is already in party ^_~
+        if (nMode == 2 && pUnit->wPartyId != 0xFFFF && mypUnit->wPartyId == pUnit->wPartyId)
+            return JS_TRUE;
+
+        // don't leave a party if we are in none!
+        if (nMode == 3) {
+            if (pUnit->wPartyId == 0xFFFF)
+                return JS_TRUE;
+            JS_SET_RVAL(cx, vp, JSVAL_TRUE);
+            D2CLIENT_LeaveParty();
+            return JS_TRUE;
+        }
+
+        // Trying to click self
+        if (pUnit->dwUnitId == myUnit->dwUnitId)
+            return JS_TRUE;
+
+        // The game ignores the mode here and acts on the target's party flags, halting on flag 1.
+        if (nMode == 2 && pUnit->dwPartyFlags == 1)
+            return JS_TRUE;
+
+        if (nMode == 0)
+            D2CLIENT_HostilePartyUnit(pUnit, 2);
+        else if (nMode == 1)
+            D2CLIENT_HostilePartyUnit(pUnit, 1);
+        else if (nMode == 4)
+            D2CLIENT_HostilePartyUnit(pUnit, 3);
+        else if (nMode == 5)
+            D2CLIENT_HostilePartyUnit(pUnit, 4);
+        else
+            D2CLIENT_ClickParty(pUnit, nMode);
+
         JS_SET_RVAL(cx, vp, JSVAL_TRUE);
-        D2CLIENT_LeaveParty();
         return JS_TRUE;
     }
-
-    if (nMode < 0 || nMode > 5)
-        return JS_TRUE;
-
-    // Trying to click self
-    if (pUnit->dwUnitId == myUnit->dwUnitId)
-        return JS_TRUE;
-
-    if (nMode == 0)
-        D2CLIENT_HostilePartyUnit(pUnit, 2);
-    else if (nMode == 1)
-        D2CLIENT_HostilePartyUnit(pUnit, 1);
-    else if (nMode == 4)
-        D2CLIENT_HostilePartyUnit(pUnit, 3);
-    else if (nMode == 5)
-        D2CLIENT_HostilePartyUnit(pUnit, 4);
-    else
-        D2CLIENT_ClickParty(pUnit, nMode);
-
-    JS_SET_RVAL(cx, vp, JSVAL_TRUE);
 
     return JS_TRUE;
 }

@@ -86,24 +86,27 @@ def main():
                     for stream in (p.stdin, p.stdout, p.stderr):
                         stream.close()
 
+        # The Popen objects hold the ended processes' handles, so Windows can't reuse their ids during the test;
+        # the sweep then sees them as exited processes, and a never-issued id as no process at all.
         ended = []
         for _ in range(3):
-            client = subprocess.Popen([str(exe), 'init'], env=env)
-            assert client.wait(timeout=15) == 0
-            ended.append(client.pid)
+            ended.append(subprocess.Popen([str(exe), 'init'], env=env))
+            assert ended[-1].wait(timeout=15) == 0
         prefix = str(Path(scratch) / 'd2bs-revision-')
-        stale = Path(f'{prefix}{ended[0]}')
-        holding = Path(f'{prefix}{ended[1]}')
+        stale = [Path(f'{prefix}{ended[0].pid}'), Path(f'{prefix}{0xFFFFFFFC}')]
+        holding = Path(f'{prefix}{ended[1].pid}')
         live = Path(f'{prefix}{os.getpid()}')
         odd = [Path(prefix + name) for name in ('', 'abc', '12x', '+1')]
-        for folder in [stale, holding, live] + odd:
+        for folder in stale + [holding, live] + odd:
             folder.mkdir()
         (holding / 'CheckRevision.dll').write_bytes(b'x')
-        not_folder = Path(f'{prefix}{ended[2]}')
+        not_folder = Path(f'{prefix}{ended[2].pid}')
         not_folder.write_bytes(b'x')
         subprocess.run([str(exe), 'init'], env=env, check=True, timeout=15)
         kept = [holding, live, not_folder] + odd
-        assert not stale.exists() and all(p.exists() for p in kept), [p.name for p in [stale] + kept if p.exists()]
+        wrong = [p.name for p in stale if p.exists()] + [p.name for p in kept if not p.exists()]
+        assert not wrong, wrong
+        del ended
         (holding / 'CheckRevision.dll').unlink()
         not_folder.unlink()
         for folder in [holding, live] + odd:

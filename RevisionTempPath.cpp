@@ -62,7 +62,7 @@ void InitializeRevisionTempPath() {
     RemoveStaleRevisionFolders(base);
     // Concurrent processes always have different PIDs, including duplicate profile launches.
     // Reusing a PID after exit is safe: the game overwrites its extracted revision DLL.
-    if (_snprintf_s(revisionTempPath, sizeof(revisionTempPath), _TRUNCATE, "%sd2bs-revision-%lu\\", base, GetCurrentProcessId()) < 0) {
+    if (_snprintf_s(revisionTempPath, sizeof(revisionTempPath), _TRUNCATE, "%s%s%lu\\", base, revisionFolderPrefix, GetCurrentProcessId()) < 0) {
         revisionTempPath[0] = '\0';
         revisionTempError = ERROR_INSUFFICIENT_BUFFER;
     }

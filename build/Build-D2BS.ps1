@@ -133,7 +133,7 @@ try {
     '/Zc:forScope', '/Gd', '/wd4100', '/wd4127', '/wd4800', '/wd4480', '/wd4740', '/wd4530', "/I$repo",
     "/I$(Join-Path $repo 'dependencies\include')", "/I$gen", '/FId2bs_build.h', "/Fd$obj\vc100.pdb") +
     ($defines | ForEach-Object { "/D$_" })
-  $sources = 'CommandLine.cpp', 'D2BS.cpp', 'D2Helpers.cpp', 'D2Intercepts.cpp', 'D2Handlers.cpp', 'D2NetHandlers.cpp',
+  $sources = 'CommandLine.cpp', 'D2BS.cpp', 'D2Helpers.cpp', 'D2Intercepts.cpp', 'RevisionTempPath.cpp', 'D2Handlers.cpp', 'D2NetHandlers.cpp',
     'Console.cpp', 'Events.cpp', 'Helpers.cpp', 'js32.cpp', 'JSProfile.cpp', 'JSSocket.cpp', 'Offset.cpp', 'Profile.cpp',
     'sqlite3.c', 'StackWalker.cpp', 'stringhash.cpp', 'Control.cpp', 'Core.cpp', 'dde.cpp', 'File.cpp', 'Game.cpp',
     'Hash.cpp', 'MPQStats.cpp', 'Room.cpp', 'ScreenHook.cpp', 'Unit.cpp', 'JSArea.cpp', 'JSControl.cpp', 'JSCore.cpp',

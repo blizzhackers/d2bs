@@ -54,6 +54,9 @@
     <ClCompile Include="D2BS.cpp">
       <Filter>Main</Filter>
     </ClCompile>
+    <ClCompile Include="RevisionTempPath.cpp">
+      <Filter>Main</Filter>
+    </ClCompile>
     <ClCompile Include="D2Helpers.cpp">
       <Filter>Diablo II</Filter>
     </ClCompile>
@@ -227,6 +230,9 @@
     </ClInclude>
     <ClInclude Include="D2Intercepts.h">
       <Filter>Diablo II\Patches</Filter>
+    </ClInclude>
+    <ClInclude Include="RevisionTempPath.h">
+      <Filter>Main</Filter>
     </ClInclude>
     <ClInclude Include="D2Handlers.h">
       <Filter>Diablo II\Handlers</Filter>

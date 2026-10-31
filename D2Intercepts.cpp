@@ -3,6 +3,42 @@
 #include "D2BS.h"
 #include "Helpers.h"
 #include <shlwapi.h>
+#include "RevisionTempPath.h"
+
+DWORD WINAPI RevisionTempPath_Intercept(DWORD bufferLength, LPSTR buffer) {
+    DWORD length = GetRevisionTempPath(bufferLength, buffer);
+    if (!length) {
+        DWORD error = GetLastError();
+        Log(L"Battle.net revision temp directory unavailable (Windows error %u)", error);
+        SetLastError(error);
+    }
+    return length;
+}
+
+// Preserve the legacy DLL's full ECX comparison, including its treatment of the upper bits.
+// The payload size is passed on the stack; fastcall removes that extra argument on return.
+static __declspec(noinline) DWORD __fastcall BnetPacketAllowed(DWORD command, BYTE*, DWORD) {
+    return command != 0x4C;
+}
+
+// Reproduces the June 2020 DLL's native filter at Game.exe + 0x11C7AF. The original caller
+// supplies ECX (command), EDX (payload) and one stack argument (size). Command 0x4C is
+// dispatched as 0; all other commands reach the original dispatcher with their registers intact.
+void __declspec(naked) BnetPacketRecv_Interception() {
+    __asm {
+        pushad
+        push eax
+        call BnetPacketAllowed
+        cmp eax, 0
+        popad
+        jne Dispatch
+        xor ecx, ecx
+        mov eax, [esp + 4]
+    Dispatch:
+        jmp BNCLIENT_DispatchPacket_I
+        ret
+    }
+}
 
 void __declspec(naked) RealmPacketRecv_Interception() {
     __asm {

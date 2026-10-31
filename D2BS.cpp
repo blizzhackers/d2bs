@@ -13,6 +13,7 @@
 #include "D2BS.h"
 #include "D2Ptrs.h"
 #include "CommandLine.h"
+#include "RevisionTempPath.h"
 
 #ifdef _MSVC_DEBUG
 #include "D2Loader.h"
@@ -130,6 +131,7 @@ BOOL Startup(void) {
     // MessageBox(NULL, "qwe", "qwe", MB_OK);
     Genhook::Initialize();
     DefineOffsets();
+    InitializeRevisionTempPath();
     InstallPatches();
     InstallConditional();
     CreateDdeServer();
@@ -151,6 +153,7 @@ void Shutdown(void) {
     SetWindowLong(D2GFX_GetHwnd(), GWL_WNDPROC, (LONG)Vars.oldWNDPROC);
 
     RemovePatches();
+    RemoveRevisionTempDirectory();
     Genhook::Destroy();
     ShutdownDdeServer();
 

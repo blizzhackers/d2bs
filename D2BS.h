@@ -105,9 +105,11 @@ struct Variables {
 
     UINT_PTR uTimer;
     long SectionCount;
-    // Odd while a game is open to scripts, even between games, and a new value for every game, so a Party object never
-    // finds a player in a later game. Read and written only with cGameLoopSection held.
+    // Odd from a game's first getParty() until the game is left, even otherwise, and a new value for every game, so a
+    // Party object never finds a player in a later game. dwMenuSession is its value as the menu last showed it: a game
+    // opens only while the two are equal. Both are read and written only with cGameLoopSection held (JSParty.cpp).
     DWORD dwGameSession;
+    DWORD dwMenuSession;
 
     std::queue<std::wstring> qPrintBuffer;
     std::map<unsigned __int32, CellFile*> mCachedCellFiles;

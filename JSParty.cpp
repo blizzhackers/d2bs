@@ -14,6 +14,29 @@ void party_finalize(JSFreeOp* fop, JSObject* obj) {
     JS_SetPrivate(obj, NULL);
 }
 
+// The game session Party objects carry (Vars.dwGameSession); all three run with the game lock held. A game's first
+// getParty() opens it, so scripts already running when the game started get its roster at once, but only while the
+// value still equals the menu's snapshot and a player exists: GameLeave() moves the value on, so the game it closed never
+// reopens, and a player present after a menu snapshot belongs to the next game, which starts after the last roster's free.
+static bool OpenGameSession(void) {
+    if (Vars.dwGameSession == Vars.dwMenuSession && D2CLIENT_GetPlayerUnit())
+        Vars.dwGameSession++;
+    return (Vars.dwGameSession & 1) != 0;
+}
+
+void CloseGameSession(void) {
+    Vars.dwGameSession += (Vars.dwGameSession & 1) ? 1 : 2;
+}
+
+void SnapshotMenuSession(void) {
+    if (ClientState() != ClientStateMenu)
+        return;
+    // A game that ended without GameLeave() is closed here.
+    if (Vars.dwGameSession & 1)
+        CloseGameSession();
+    Vars.dwMenuSession = Vars.dwGameSession;
+}
+
 RosterUnit* FindPartyUnit(const myParty* pParty) {
     // The session check comes first: the next game may reuse this player's gid for someone else.
     if (!pParty || pParty->dwSession != Vars.dwGameSession)
@@ -161,8 +184,8 @@ JSAPI_FUNC(my_getParty) {
 
     {
         AutoCriticalRoom cRoom;
-        // The game may have ended since WaitForGameReady(); between games the session is even.
-        if (Vars.dwGameSession & 1) {
+        // False when no session is open or can be opened, as after GameLeave().
+        if (OpenGameSession()) {
             if (lpUnit) {
                 UnitAny* inUnit = D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType);
                 if (inUnit)

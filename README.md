@@ -1713,10 +1713,10 @@ Click one of the buttons in the party screen for the given player.
 
 2 - Join party
 
-3 - Leave party (doesn't matter which party is passed in)
+3 - Leave party (any player still in the game can be passed in)
 
 #### Returns
-true if the button was clicked; false if it doesn't apply, or if the player has left or the [Party](#classParty) object is from an earlier game.
+true if the button was clicked; false if it doesn't apply, or once the player has left or the game has ended.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`weaponSwitch`](#group__globalFunctions_1gab9c5eb66ccf79108ee26a7f73943d0bc)`(int32_t dummy)` 
 

@@ -1130,7 +1130,7 @@ JSAPI_FUNC(my_clickParty) {
             }
         }
 
-        // The party actions halt the game when the player's own entry is missing.
+        // Leaving the party and the hostile actions halt the game when the player's own entry is missing.
         if (!pUnit || !mypUnit)
             return JS_TRUE;
 
@@ -1140,7 +1140,7 @@ JSAPI_FUNC(my_clickParty) {
 
         // don't leave a party if we are in none!
         if (nMode == 3) {
-            if (pUnit->wPartyId == 0xFFFF)
+            if (mypUnit->wPartyId == 0xFFFF)
                 return JS_TRUE;
             JS_SET_RVAL(cx, vp, JSVAL_TRUE);
             D2CLIENT_LeaveParty();

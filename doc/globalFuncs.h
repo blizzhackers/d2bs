@@ -1794,10 +1794,10 @@ bool say(...);
  *
  * 2 - Join party
  *
- * 3 - Leave party (doesn't matter which party is passed in)
+ * 3 - Leave party (any player still in the game can be passed in)
  *
- * \return true if the button was clicked; false if it doesn't apply, or if
- * the player has left or the Party object is from an earlier game.
+ * \return true if the button was clicked; false if it doesn't apply, or once
+ * the player has left or the game has ended.
  */
 bool clickParty(Party player, int nMode);
 

@@ -26,6 +26,12 @@ JSAPI_FUNC(my_getParty);
 // held, and drop the pointer before releasing it.
 RosterUnit* FindPartyUnit(const myParty* pParty);
 
+// Game-thread ends of the session Party objects carry, called with the game lock held. CloseGameSession() runs when a
+// game is left and always moves the session to a new value. SnapshotMenuSession() runs on every game-thread timer tick,
+// drawn frame or not, and records the session while the menu shows, so the next game's first getParty() can open one.
+void CloseGameSession(void);
+void SnapshotMenuSession(void);
+
 enum party_tinyid { PARTY_AREA, PARTY_X, PARTY_Y, PARTY_GID, PARTY_LIFE, PARTY_NAME, PARTY_FLAG, PARTY_ID, PARTY_CLASSID, PARTY_LEVEL };
 
 static JSPropertySpec party_props[] = {{"x", PARTY_X, JSPROP_PERMANENT_VAR, JSOP_WRAPPER(party_getProperty), JSOP_NULLWRAPPER},

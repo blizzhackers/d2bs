@@ -1134,11 +1134,10 @@ JSAPI_FUNC(my_clickParty) {
         if (!pUnit || !mypUnit)
             return JS_TRUE;
 
-        // Attempt to party a player who is already in party ^_~
         if (nMode == 2 && pUnit->wPartyId != 0xFFFF && mypUnit->wPartyId == pUnit->wPartyId)
             return JS_TRUE;
 
-        // don't leave a party if we are in none!
+        // Leaving depends on the player's own party, whichever player still in the game was passed.
         if (nMode == 3) {
             if (mypUnit->wPartyId == 0xFFFF)
                 return JS_TRUE;
@@ -1147,7 +1146,6 @@ JSAPI_FUNC(my_clickParty) {
             return JS_TRUE;
         }
 
-        // Trying to click self
         if (pUnit->dwUnitId == myUnit->dwUnitId)
             return JS_TRUE;
 

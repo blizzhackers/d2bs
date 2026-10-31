@@ -1,6 +1,6 @@
 """Compile/run the real Win32 path helper with v100, without loading D2BS or the game.
 
-python build/tests/test_revision_temp_path.py --toolset C:/ProjectRepos/toolchains/ci-toolset
+python build/tests/test_revision_temp_path.py --toolset C:/d2bs-toolset
 All generated files and child TEMP directories stay under build/out/revision-tests.
 """
 import argparse
@@ -36,9 +36,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix='clients-', dir=out) as scratch:
         env['TMP'] = env['TEMP'] = scratch
         subprocess.run([str(exe), 'self'], env=env, check=True, timeout=15)
-        # A usable root (CreateDirectoryA takes up to 248 characters) with no room for the per-process folder, so
-        # only the helper's own length check can fail it. Windows replaces a root longer than MAX_PATH with
-        # USERPROFILE, so such a root would not reach that check.
+        # An existing, usable root (CreateDirectoryA takes up to 248 characters) with no room for the per-process
+        # folder: a helper that fell back to the root itself would pass it back. Windows replaces a root longer
+        # than MAX_PATH with USERPROFILE, so such a root would not test the helper.
         near_limit = scratch + '\\' + 'x' * (244 - len(scratch))
         os.mkdir(near_limit)
         try:
@@ -85,6 +85,30 @@ def main():
                     p.wait(timeout=15)
                     for stream in (p.stdin, p.stdout, p.stderr):
                         stream.close()
+
+        ended = []
+        for _ in range(3):
+            client = subprocess.Popen([str(exe), 'init'], env=env)
+            assert client.wait(timeout=15) == 0
+            ended.append(client.pid)
+        prefix = str(Path(scratch) / 'd2bs-revision-')
+        stale = Path(f'{prefix}{ended[0]}')
+        holding = Path(f'{prefix}{ended[1]}')
+        live = Path(f'{prefix}{os.getpid()}')
+        odd = [Path(prefix + name) for name in ('', 'abc', '12x', '+1')]
+        for folder in [stale, holding, live] + odd:
+            folder.mkdir()
+        (holding / 'CheckRevision.dll').write_bytes(b'x')
+        not_folder = Path(f'{prefix}{ended[2]}')
+        not_folder.write_bytes(b'x')
+        subprocess.run([str(exe), 'init'], env=env, check=True, timeout=15)
+        kept = [holding, live, not_folder] + odd
+        assert not stale.exists() and all(p.exists() for p in kept), [p.name for p in [stale] + kept if p.exists()]
+        (holding / 'CheckRevision.dll').unlink()
+        not_folder.unlink()
+        for folder in [holding, live] + odd:
+            folder.rmdir()
+        print('PASS: startup removes empty folders of ended processes only')
         assert not list(Path(scratch).iterdir()), 'test clients left temporary files or directories'
 
 

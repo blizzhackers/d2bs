@@ -7,6 +7,8 @@
 int main(int argc, char** argv) {
     CHECK(argc == 2);
     InitializeRevisionTempPath();
+    if (strcmp(argv[1], "init") == 0)
+        return 0;
     char path[MAX_PATH];
     if (strcmp(argv[1], "invalid-base") == 0) {
         DWORD length = GetRevisionTempPath(sizeof(path), path);

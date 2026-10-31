@@ -50,9 +50,9 @@ python build\tests\test_revision_temp_path.py --toolset C:\d2bs-toolset
 ```
 
 This compiles the Win32 path helper with the same v100 toolset and runs 16 concurrent clients against shared and
-isolated revision filenames, plus buffer-limit, path-failure and cleanup checks. It needs no game or Battle.net
-connection. Generated files stay in `build\out\revision-tests`. A live simultaneous-login test is still needed
-to validate a reported Battle.net startup failure.
+isolated revision filenames, plus buffer-limit, path-failure, cleanup and startup-cleanup checks. Run it after
+changing `RevisionTempPath.cpp`. It needs no game or Battle.net connection, so it can't show the game's own version
+check; that takes several games starting Battle.net at once. Generated files stay in `build\out\revision-tests`.
 
 ## Versions
 

@@ -19,6 +19,7 @@
 #include "CommandLine.h"
 #include "Control.h"
 #include "CriticalSections.h"
+#include "JSParty.h"
 
 using namespace std;
 
@@ -637,6 +638,8 @@ void CALLBACK TimerProc(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
         Sleep(5);
 
     EnterCriticalSection(&Vars.cGameLoopSection);
+    // Here rather than in a draw hook: D2Win skips drawing some frames, and timer ticks keep coming.
+    SnapshotMenuSession();
 }
 
 void GameLeave(void) {
@@ -652,6 +655,11 @@ void GameLeave(void) {
                     it->second->Stop(true);
 
     LeaveCriticalSection(&ScriptEngine::lock); */
+    {
+        // The client frees its roster only after this hook returns, and scripts may outlive the stop below.
+        AutoCriticalRoom cRoom;
+        CloseGameSession();
+    }
     Vars.bQuitting = false;
     ScriptEngine::ForEachScript(StopIngameScript, NULL, 0);
     ActMap::ClearCache();

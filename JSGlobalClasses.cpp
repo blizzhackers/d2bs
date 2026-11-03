@@ -73,9 +73,9 @@ JSClass presetunit_class = {"PresetUnit", JSCLASS_HAS_PRIVATE,
                             JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub,
                                          presetunit_finalize, presetunit_ctor)};
 
-JSClass party_class = {
-    "Party", JSCLASS_HAS_PRIVATE,
-    JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL, party_ctor)};
+JSClass party_class = {"Party", JSCLASS_HAS_PRIVATE,
+                       JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub,
+                                    party_finalize, party_ctor)};
 
 JSClass filetools_class = {
     "FileTools", NULL,

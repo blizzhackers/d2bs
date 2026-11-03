@@ -508,7 +508,7 @@ The party line
 Get the party line that corresponds to the given unit.
 
 #### Parameters
-* `player` [Unit](#classUnit)
+* `player` A player [Unit](#classUnit); any other unit gives undefined.
 
 #### Returns
 The party line
@@ -1713,7 +1713,10 @@ Click one of the buttons in the party screen for the given player.
 
 2 - Join party
 
-3 - Leave party (doesn't matter which party is passed in)
+3 - Leave party (any player still in the game can be passed in)
+
+#### Returns
+true if the button was clicked; false if it doesn't apply, or once the player has left or the game has ended.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`weaponSwitch`](#group__globalFunctions_1gab9c5eb66ccf79108ee26a7f73943d0bc)`(int32_t dummy)` 
 
@@ -4294,6 +4297,8 @@ Represents the items in the list in the [Party](#classParty) screen.
 
 Also called a RosterUnit.
 
+A [Party](#classParty) object follows its player and reads the current values on every access. Once that player leaves the game, or the game ends, its properties read undefined, getNext() returns false and clickParty() returns false.
+
 ## Summary
 
  Members                        | Descriptions                                
@@ -4308,7 +4313,7 @@ Also called a RosterUnit.
 `public String `[`name`](#classParty_1a82db2ed7f8d2d3e5ed7dfb1210098d57) | The name of the RosterUnit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`classid`](#classParty_1ac5ec74e94715df07ca680b1247074627) | The class ID of the RosterUnit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`level`](#classParty_1ad32c6abaa6e2f25660b7e00a12f1c7a4) | The character level of the RosterUnit.
-`public void `[`getNext`](#classParty_1a1f0c9289dac815268bc3662a477aa397)`()` | Move to the next RosterUnit.
+`public `[`Party`](#classParty)` `[`getNext`](#classParty_1a1f0c9289dac815268bc3662a477aa397)`()` | Move to the next RosterUnit.
 
 ## Members
 
@@ -4362,9 +4367,12 @@ The character level of the RosterUnit.
 
 > Todo: Verify that this level is the character level.
 
-#### `public void `[`getNext`](#classParty_1a1f0c9289dac815268bc3662a477aa397)`()` 
+#### `public `[`Party`](#classParty)` `[`getNext`](#classParty_1a1f0c9289dac815268bc3662a477aa397)`()` 
 
 Move to the next RosterUnit.
+
+#### Returns
+This object, now on the next player; or false at the end of the list, or when this object's player has left or its game has ended.
 
 # class `PresetUnit` 
 

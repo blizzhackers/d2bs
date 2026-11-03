@@ -1,5 +1,9 @@
 /** Represents the items in the list in the Party screen. Also called a
  * RosterUnit.
+ *
+ * A Party object follows its player and reads the current values on every
+ * access. Once that player leaves the game, or the game ends, its properties
+ * read undefined, getNext() returns false and clickParty() returns false.
  */
 class Party
 {
@@ -53,6 +57,9 @@ public:
 	int level;
 
 	/** Move to the next RosterUnit.
+	 *
+	 * \return This object, now on the next player; or false at the end of the
+	 * list, or when this object's player has left or its game has ended.
 	 */
-	void getNext();
+	Party getNext();
 };

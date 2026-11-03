@@ -2,13 +2,35 @@
 #define PARTY_H
 
 #include "js32.h"
+#include <windows.h>
+
+struct RosterUnit;
+
+// A Party object holds the player's gid and the game session it was made in, never a roster pointer: the game frees a
+// roster entry the moment its player leaves, and frees them all when the game ends.
+struct myParty {
+    DWORD dwPrivateType; // PRIVATE_PARTY
+    DWORD dwUnitId;
+    DWORD dwSession;
+};
 
 CLASS_CTOR(party);
+void party_finalize(JSFreeOp* fop, JSObject* obj);
 JSAPI_PROP(party_getProperty);
 
 JSAPI_FUNC(party_getNext);
 
 JSAPI_FUNC(my_getParty);
+
+// The current roster entry of a Party object's player, or NULL once that player or game is gone. Call with the game lock
+// held, and drop the pointer before releasing it.
+RosterUnit* FindPartyUnit(const myParty* pParty);
+
+// Game-thread ends of the session Party objects carry, called with the game lock held. CloseGameSession() runs when a
+// game is left and always moves the session to a new value. SnapshotMenuSession() runs on every game-thread timer tick,
+// drawn frame or not, and records the session while the menu shows, so the next game's first getParty() can open one.
+void CloseGameSession(void);
+void SnapshotMenuSession(void);
 
 enum party_tinyid { PARTY_AREA, PARTY_X, PARTY_Y, PARTY_GID, PARTY_LIFE, PARTY_NAME, PARTY_FLAG, PARTY_ID, PARTY_CLASSID, PARTY_LEVEL };
 

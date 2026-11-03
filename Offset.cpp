@@ -6,6 +6,7 @@
 #include "D2Ptrs.h"
 #include "Patch.h"
 #include "D2BS.h"
+#include "Helpers.h"
 
 #ifndef ArraySize
 #define ArraySize(x) (sizeof((x)) / sizeof((x)[0]))
@@ -120,6 +121,56 @@ void PatchBytes(DWORD dwAddr, DWORD dwValue, DWORD dwLen) {
     delete[] bCode;
 }
 
+// D2BS can load into a running game, and a thread partway through the instructions a rewrite replaces would resume on
+// the wrong bytes: the other threads are suspended for the write, which waits, up to 50 tries, while any of them is
+// inside the range (one at its first byte resumes on the new code) or can't be held and inspected. Between suspending
+// and resuming nothing may allocate or log, since a suspended thread can hold the heap or CRT lock.
+static bool WriteWithThreadsHeld(DWORD dwAddr, const BYTE* bNew, DWORD dwLen) {
+    // A snapshot that misses the calling thread failed, so it can't vouch for the others.
+    std::vector<DWORD> ids = GetThreadIds();
+    DWORD self = GetCurrentThreadId();
+    bool listed = false;
+    for (size_t k = 0; k < ids.size(); k++)
+        listed = listed || ids[k] == self;
+    if (!listed)
+        return false;
+    std::vector<HANDLE> held;
+    held.reserve(ids.size());
+    for (int attempt = 0; attempt < 50; attempt++) {
+        bool safe = true;
+        for (size_t k = 0; k < ids.size() && safe; k++) {
+            if (ids[k] == self)
+                continue;
+            // Only a thread that has ended since the snapshot may go unheld.
+            HANDLE hThread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | SYNCHRONIZE, FALSE, ids[k]);
+            if (!hThread) {
+                safe = GetLastError() == ERROR_INVALID_PARAMETER;
+                continue;
+            }
+            if (SuspendThread(hThread) == (DWORD)-1) {
+                safe = WaitForSingleObject(hThread, 0) == WAIT_OBJECT_0;
+                CloseHandle(hThread);
+                continue;
+            }
+            held.push_back(hThread);
+            // SuspendThread returns before the thread stops; GetThreadContext waits for it.
+            CONTEXT ctx;
+            ctx.ContextFlags = CONTEXT_CONTROL;
+            safe = GetThreadContext(hThread, &ctx) && !(ctx.Eip > dwAddr && ctx.Eip < dwAddr + dwLen);
+        }
+        BOOL written = safe && WriteBytes((LPVOID)dwAddr, (void*)bNew, dwLen);
+        for (size_t k = 0; k < held.size(); k++) {
+            ResumeThread(held[k]);
+            CloseHandle(held[k]);
+        }
+        held.clear();
+        if (safe)
+            return written != FALSE;
+        Sleep(1);
+    }
+    return false;
+}
+
 // dwSwap points to a ByteSwap. A rewrite of several instructions lands only on the original bytes: code that already
 // differs (another patch, another game version) is left alone, and code that already holds the new bytes (D2BS loaded
 // again into the same game process) needs nothing.
@@ -131,7 +182,8 @@ void PatchSwap(DWORD dwAddr, DWORD dwSwap, DWORD dwLen) {
         Log(L"Patch at 0x%08X skipped: the code there is not the expected original", dwAddr);
         return;
     }
-    WriteBytes((LPVOID)dwAddr, (void*)swap->bNew, dwLen);
+    if (!WriteWithThreadsHeld(dwAddr, swap->bNew, dwLen))
+        Log(L"Patch at 0x%08X skipped: another thread stayed inside it or could not be inspected, or the page could not be written", dwAddr);
 }
 
 PatchHook* RetrievePatchHooks(PINT pBuffer) {

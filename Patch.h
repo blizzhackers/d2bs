@@ -74,9 +74,8 @@ PatchHook Patches[] = {
 // address before it takes the lock, so a resize can free the array it searches; the swap moves that read after
 // EnterCriticalSection. The removal (0x409490) reads early too, but its only caller (0x409B80) already holds the lock.
 // A thread blocked in the lookup's EnterCriticalSection when the swap lands returns to an unchanged instruction
-// (0x4099EC), keeping its pre-lock read for that search; one paused partway through the range could resume on the
-// wrong instruction. So the swap relies on D2BS loading before Fog runs, as when D2Bot injects D2BS.dll into the
-// suspended game (with D2M.dll present, D2Bot loads D2BS after the game starts).
+// (0x4099EC), keeping its pre-lock read for that search; PatchSwap writes only while no other thread is partway
+// through the range, since D2BS can load into a running game (D2Bot does so when D2M.dll is present).
 static const BYTE FogPoolLookupOld[] = {0x8B, 0xBE, 0xA8, 0x07, 0x00, 0x00, 0x8D, 0x5E, 0x04, 0x53, 0x89, 0x5D, 0xFC,
                                         0xFF, 0x15, 0x18, 0xC2, 0x6C, 0x00, 0x8B, 0xB6, 0xA0, 0x07, 0x00, 0x00};
 static const BYTE FogPoolLookupNew[] = {0x8D, 0x5E, 0x04, 0x53, 0x89, 0x5D, 0xFC, 0xFF, 0x15, 0x18, 0xC2, 0x6C, 0x00,

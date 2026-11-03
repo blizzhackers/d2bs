@@ -6,11 +6,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 
 ## [Unreleased]
 
-### Fixed
-
-- **Sound game memory.** The game's memory pools keep an exact record of their memory while several threads allocate at once, so bots keep playing session after session.
-
-## [1.7.0] - 2026-10-24
+## [1.7.0] - 2026-11-02
 
 ### Added
 
@@ -43,6 +39,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Area lookups keep the game running.** `getArea()` and its properties such as `exits`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()` and `getCollision()` called while the game changes areas or leaves a game let the game carry on drawing.
 - **Stable Act 5 wilderness.** Frigid Highlands, Arreat Plateau, Frozen Tundra and the other Act 5 outdoor areas build reliably in every game, whether the character walks in, takes a waypoint or a script looks up a room there with `getRoom()`.
 - **Long sessions keep running.** The game keeps loading monster and character graphics hour after hour, including while a bot crosses one crowded area after another.
+- **Stable memory pools.** The game's memory pools stay consistent while several threads use them at once, so bots keep running game after game.
 - **PCs that stay on for weeks.** Single-player games keep running however long Windows has been up.
 - **Folder listings release their handles.** `dopen().getFiles()` and `getFolders()` close their folder search when done, so scripts can list folders as often as they like without adding to the game's handle count.
 - **Safe unit lookups.** Finding a unit by its id answers "not found" for a unit the game has just freed, as for any unit that's gone.

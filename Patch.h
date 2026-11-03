@@ -70,20 +70,19 @@ PatchHook Patches[] = {
 
 // Fog's memory pools keep a sorted index of their regions ([pool+7A8h], count +7A0h, capacity +7A4h) under the pool's
 // lock (pool+4). Region creation (0x4095E0) grows a full index without it: an insert running alongside writes its entry
-// into the array being replaced, and the count then covers a slot nobody wrote. The lookup (0x4099D0) and the removal
-// (0x409490) read the index's address before they take the lock, so a grow can free the array they search. Each swap
-// below moves that read after EnterCriticalSection and keeps the last instruction at its address, so a thread waiting
-// for the lock in the original code resumes on an instruction boundary.
+// into the array being replaced, and the count then covers a slot nobody wrote. The lookup (0x4099D0) reads the index's
+// address before it takes the lock, so a resize can free the array it searches; the swap moves that read after
+// EnterCriticalSection. The removal (0x409490) reads early too, but its only caller (0x409B80) already holds the lock.
+// A thread blocked in the lookup's EnterCriticalSection when the swap lands returns to an unchanged instruction
+// (0x4099EC), keeping its pre-lock read for that search; one paused partway through the range could resume on the
+// wrong instruction. So the swap relies on D2BS loading before Fog runs, as when D2Bot injects D2BS.dll into the
+// suspended game (with D2M.dll present, D2Bot loads D2BS after the game starts).
 static const BYTE FogPoolLookupOld[] = {0x8B, 0xBE, 0xA8, 0x07, 0x00, 0x00, 0x8D, 0x5E, 0x04, 0x53, 0x89, 0x5D, 0xFC,
                                         0xFF, 0x15, 0x18, 0xC2, 0x6C, 0x00, 0x8B, 0xB6, 0xA0, 0x07, 0x00, 0x00};
 static const BYTE FogPoolLookupNew[] = {0x8D, 0x5E, 0x04, 0x53, 0x89, 0x5D, 0xFC, 0xFF, 0x15, 0x18, 0xC2, 0x6C, 0x00,
                                         0x8B, 0xBE, 0xA8, 0x07, 0x00, 0x00, 0x8B, 0xB6, 0xA0, 0x07, 0x00, 0x00};
+static_assert(sizeof(FogPoolLookupOld) == sizeof(FogPoolLookupNew), "a swap writes as many bytes as it checks");
 static const ByteSwap FogPoolLookup = {FogPoolLookupOld, FogPoolLookupNew};
-static const BYTE FogPoolRemoveOld[] = {0x8B, 0x86, 0xA8, 0x07, 0x00, 0x00, 0x53, 0x57, 0x8D, 0x7E, 0x04, 0x57,
-                                        0x89, 0x45, 0xF8, 0x89, 0x7D, 0xF4, 0xFF, 0x15, 0x18, 0xC2, 0x6C, 0x00};
-static const BYTE FogPoolRemoveNew[] = {0x53, 0x57, 0x8D, 0x7E, 0x04, 0x57, 0x89, 0x7D, 0xF4, 0xFF, 0x15, 0x18,
-                                        0xC2, 0x6C, 0x00, 0x8B, 0x86, 0xA8, 0x07, 0x00, 0x00, 0x89, 0x45, 0xF8};
-static const ByteSwap FogPoolRemove = {FogPoolRemoveOld, FogPoolRemoveNew};
 
 // Fixes to the game's own bytes that need nothing from D2BS: they stay when D2BS unloads, because restoring them under a
 // running game would bring the bug back mid-game.
@@ -98,9 +97,8 @@ PatchHook Permanent[] = {
 
     // Fog's pool index, see FogPoolLookup above. jl -> jmp skips region creation's unlocked grow; the insert it calls
     // (0x409370) grows the index under the lock when it is full.
-    {PatchBytes, GetDllOffset("Fog.dll", 0x95F5), (BYTE)0xEB, 1},                                         // NEW 1.14d //004095F5-BASE
+    {PatchBytes, GetDllOffset("Fog.dll", 0x95F5), (BYTE)0xEB, 1},                                  // NEW 1.14d //004095F5-BASE
     {PatchSwap, GetDllOffset("Fog.dll", 0x99D9), (DWORD)&FogPoolLookup, sizeof(FogPoolLookupOld)}, // NEW 1.14d //004099D9-BASE
-    {PatchSwap, GetDllOffset("Fog.dll", 0x9496), (DWORD)&FogPoolRemove, sizeof(FogPoolRemoveOld)}, // NEW 1.14d //00409496-BASE
 };
 
 PatchHook Conditional[] = {

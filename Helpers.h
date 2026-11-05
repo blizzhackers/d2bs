@@ -22,6 +22,7 @@ bool StartScript(const wchar_t* script, ScriptState state);
 void Reload(void);
 bool ProcessCommand(const wchar_t* command, bool unprocessedIsCommand);
 void ResumeProcess();
+std::vector<DWORD> GetThreadIds();
 void InitCommandLine();
 
 void GameJoined(void);

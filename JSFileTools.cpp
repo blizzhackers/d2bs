@@ -162,13 +162,14 @@ JSAPI_FUNC(filetools_readText) {
     readCount = fread(contents, sizeof(char), size, fptr);
     assert(readCount <= size); // Avoid SEGFAULT
     contents[readCount] = 0;
-    fclose(fptr);
 
-    // Check to see if we had an error
+    // Check to see if we had an error; ferror reads the stream, so it comes before fclose
     if (ferror(fptr)) {
+        fclose(fptr);
         delete[] contents;
         THROW_ERROR(cx, _strerror("Read failed"));
     }
+    fclose(fptr);
 
     int offset = 0;
     if (readCount > 2 && contents[0] == (char)0xEF && contents[1] == (char)0xBB && contents[2] == (char)0xBF) { // skip BOM

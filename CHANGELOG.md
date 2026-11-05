@@ -48,8 +48,9 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Safe party objects.** A `Party` object from `getParty()` follows its player: once that player leaves the game, or the game ends, its properties read `undefined`, `getNext()` returns `false` and `clickParty()` returns `false`, even when a later game gives another player the same id. `clickParty()` acts between game frames, `clickParty(player, 3)` leaves your party whichever player in the game you pass, and `getParty()` returns `undefined` for anything that doesn't name a player, such as a monster unit or `null`.
 - **Missile casters.** A missile's `getParent()` returns the unit that cast it, or undefined when the caster is out of sight; `missile.owner` and `missile.ownertype` still give its id and type.
 - **Independent Battle.net version checks.** Each game process uses its own temporary directory for the revision DLL, so profiles can verify their game version concurrently.
-- **Large file writes.** `FileTools.writeText()`, `FileTools.appendText()` and `file.write()` save text of any size, and `FileTools.writeText()` and `FileTools.appendText()` return `true` exactly when all of it was written.
+- **Large file writes.** `FileTools.writeText()`, `FileTools.appendText()` and `file.write()` save text of any size.
 - **Binary number writes.** `file.write()` on a file opened in binary mode saves each number's value, with or without file locking.
+- **Dependable file reads, seeks and closes.** `FileTools.readText()` throws when reading the file fails, a `File` whose `close()` throws is closed and can be reopened, `file.seek(n)` on a file opened with locking moves `n` bytes, and a binary `file.read(count)` returns 0 for each value past the end of the file and frees its memory when done.
 
 [Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.7.0...HEAD
 [1.7.0]: https://github.com/blizzhackers/d2bs/compare/bf77a8f...v1.7.0

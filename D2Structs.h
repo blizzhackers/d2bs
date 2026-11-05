@@ -824,6 +824,23 @@ struct SpriteCache {
     CRITICAL_SECTION Lock;                        // 0x30
 };
 
+// Storm's read thread's current request (1.14d: 0x77902C) and, for a request that streams a sound, the channel it plays
+// on, as far as the thread (0x41A550) uses them after a read.
+struct StormSoundChannel {
+    DWORD _1[6];   // 0x00
+    DWORD dwState; // 0x18 2 once the refill starts playback, 4 once the read thread stops it
+};
+
+struct StormReadRequest {
+    DWORD _1[10];                // 0x00
+    void* pBuffer;               // 0x28 the IDirectSoundBuffer of a request that streams a sound; ending the stream (0x41A990) clears it
+    DWORD _2;                    // 0x2C
+    StormSoundChannel* pChannel; // 0x30
+    DWORD dwReadSize;            // 0x34 bytes each read asks for
+    DWORD _3;                    // 0x38
+    DWORD dwRead;                // 0x3C bytes the last read gave: 0 at the end of the file, or when there was no place to read into
+};
+
 #pragma warning(pop)
 #pragma optimize("", on)
 

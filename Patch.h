@@ -5,6 +5,14 @@
 #include "D2Handlers.h"
 #include "D2BS.h"
 
+// Storm's read thread checks a request's sound buffer without its lock: see StormStreamUpdate. The call takes the place
+// of the check and both of its branches, leaving the stop branch at 0x41A73E unreachable. PatchSwapCall writes only
+// while no other thread is partway through the range, since the read thread runs in any loaded game; a pass already
+// past the check when the call lands finishes the old way.
+static const BYTE StormStreamCheckOld[] = {0x83, 0x7E, 0x28, 0x00, 0x74, 0x38, 0x83, 0x7E, 0x3C, 0x00, 0x74, 0x0D, 0xE8, 0x8A, 0xB0, 0xFF, 0xFF};
+static_assert(sizeof(StormStreamCheckOld) == 0x41A736 - 0x41A725, "StormStreamUpdate_Intercept returns to 0x41A736, the end of these bytes");
+static const CallSwap StormStreamCheck = {StormStreamCheckOld, (DWORD)StormStreamUpdate_Intercept};
+
 PatchHook Patches[] = {
     {PatchCall, GetDllOffset("D2Client.dll", 0x7C89D), (DWORD)GameInput_Intercept, 5},          // Updated 1.14d //0047C89D-BASE
     {PatchJmp, GetDllOffset("D2Client.dll", 0x53B30), (DWORD)GameDraw_Intercept, 5},            // Updated 1.14d //00453B30-BASE
@@ -66,6 +74,8 @@ PatchHook Patches[] = {
     // by one, each waiting for the thread's next paced pass: hundreds queued froze the exit for tens of seconds.
     // je -> jmp skips the pacing, as Storm's own rate 0 does; an empty queue still waits 250 ms.
     {PatchBytes, GetDllOffset("Storm.dll", 0x1A588), (BYTE)0xEB, 1}, // NEW 1.14d //0041A588-BASE
+    // The read thread's sound buffer check, see StormStreamCheck above.
+    {PatchSwapCall, GetDllOffset("Storm.dll", 0x1A725), (DWORD)&StormStreamCheck, sizeof(StormStreamCheckOld)}, // NEW 1.14d //0041A725-BASE
 };
 
 // Fog's memory pools keep a sorted index of their regions ([pool+7A8h], count +7A0h, capacity +7A4h) under the pool's

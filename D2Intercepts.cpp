@@ -404,6 +404,44 @@ SpriteCacheEntry* __fastcall SpriteCacheAllocRead_Intercept(SpriteCache* pCache,
     return D2CMP_SpriteCacheAlloc(pCache, dwSize, dwPayload, bUntouched);
 }
 
+static void StormStreamRefill(StormReadRequest* pRequest) {
+    __asm {
+		mov esi, pRequest
+		call STORM_StreamRefill_I
+    }
+}
+
+// Storm's read thread (0x41A550) lets go of its lock (0x779068) once it has picked a request, reads, then checks the
+// request's sound buffer and refills or stops it. Ending a sound stream (0x41A990, on the game's sound thread) clears the
+// buffer under that lock, so either use could act on a buffer the request no longer has; the refill reads it again under
+// the lock without a check (0x4157D1). The check and both uses run under the lock here: the lock is recursive, and the
+// refill already takes it and calls DirectSound under it.
+static void __fastcall StormStreamUpdate(StormReadRequest* pRequest) {
+    typedef HRESULT(__stdcall * SoundBufferStop_t)(void* pBuffer);
+    EnterCriticalSection(p_STORM_ReadLock);
+    if (pRequest->pBuffer) {
+        if (pRequest->dwRead)
+            StormStreamRefill(pRequest);
+        else if (pRequest->dwReadSize) {
+            // the read found the end of the file; IDirectSoundBuffer::Stop is the buffer's method at +48h
+            SoundBufferStop_t pStop = (SoundBufferStop_t)(*(void***)pRequest->pBuffer)[0x48 / 4];
+            pStop(pRequest->pBuffer);
+            if (pRequest->pChannel)
+                pRequest->pChannel->dwState = 4;
+        }
+    }
+    LeaveCriticalSection(p_STORM_ReadLock);
+}
+
+void __declspec(naked) StormStreamUpdate_Intercept() {
+    __asm {
+		mov ecx, esi // the read thread's current request; eax, ecx and edx are written before they are read from 0x41A736 on
+		call StormStreamUpdate
+		add dword ptr [esp], 0x0C // return to 0x41A736, an instruction start whether or not the patch is in place
+		ret
+    }
+}
+
 void GameDrawOOG_Intercept(void) {
     GameDrawOOG();
 }

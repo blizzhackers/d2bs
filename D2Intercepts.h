@@ -20,6 +20,7 @@ void __fastcall SpriteCacheChargeRead_Intercept(SpriteCache* pCache, SpriteCache
 SpriteCacheEntry* __fastcall SpriteCacheEvict_Intercept(SpriteCache* pCache, SpriteCacheEntry* pEntry, DWORD bUntouchedFirst);
 void __fastcall SpriteCacheChargeIssue_Intercept(SpriteCache* pCache, SpriteCacheEntry* pEntry, DWORD dwSize, DWORD bUntouchedFirst);
 SpriteCacheEntry* __fastcall SpriteCacheAllocRead_Intercept(SpriteCache* pCache, DWORD dwSize, DWORD dwPayload, DWORD bUntouched);
+void StormStreamUpdate_Intercept();
 void GameDrawOOG_Intercept(void);
 void CongratsScreen_Intercept(void);
 void GameActChange_Intercept(void);

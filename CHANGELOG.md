@@ -40,6 +40,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Stable Act 5 wilderness.** Frigid Highlands, Arreat Plateau, Frozen Tundra and the other Act 5 outdoor areas build reliably in every game, whether the character walks in, takes a waypoint or a script looks up a room there with `getRoom()`.
 - **Long sessions keep running.** The game keeps loading monster and character graphics hour after hour, including while a bot crosses one crowded area after another.
 - **Stable memory pools.** The game's memory pools stay consistent while several threads use them at once, so bots keep running game after game.
+- **Safe with sound on.** Bots that play with sound keep running while the game starts and stops its music and other streamed sounds.
 - **PCs that stay on for weeks.** Single-player games keep running however long Windows has been up.
 - **Folder listings release their handles.** `dopen().getFiles()` and `getFolders()` close their folder search when done, so scripts can list folders as often as they like without adding to the game's handle count.
 - **Safe unit lookups.** Finding a unit by its id answers "not found" for a unit the game has just freed, as for any unit that's gone.

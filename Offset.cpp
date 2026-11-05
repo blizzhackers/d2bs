@@ -171,19 +171,33 @@ static bool WriteWithThreadsHeld(DWORD dwAddr, const BYTE* bNew, DWORD dwLen) {
     return false;
 }
 
-// dwSwap points to a ByteSwap. A rewrite of several instructions lands only on the original bytes: code that already
-// differs (another patch, another game version) is left alone, and code that already holds the new bytes (D2BS loaded
-// again into the same game process) needs nothing.
-void PatchSwap(DWORD dwAddr, DWORD dwSwap, DWORD dwLen) {
-    const ByteSwap* swap = (const ByteSwap*)dwSwap;
-    if (::memcmp((const void*)dwAddr, swap->bNew, dwLen) == 0)
+// A rewrite of several instructions lands only on the original bytes: code that already differs (another patch, another
+// game version) is left alone, and code that already holds the new bytes needs nothing (a permanent swap stays when D2BS
+// unloads, so loading D2BS again into the same game process finds it in place).
+static void SwapChecked(DWORD dwAddr, const BYTE* bOld, const BYTE* bNew, DWORD dwLen) {
+    if (::memcmp((const void*)dwAddr, bNew, dwLen) == 0)
         return;
-    if (::memcmp((const void*)dwAddr, swap->bOld, dwLen) != 0) {
+    if (::memcmp((const void*)dwAddr, bOld, dwLen) != 0) {
         Log(L"Patch at 0x%08X skipped: the code there is not the expected original", dwAddr);
         return;
     }
-    if (!WriteWithThreadsHeld(dwAddr, swap->bNew, dwLen))
+    if (!WriteWithThreadsHeld(dwAddr, bNew, dwLen))
         Log(L"Patch at 0x%08X skipped: another thread stayed inside it or could not be inspected, or the page could not be written", dwAddr);
+}
+
+// dwSwap points to a ByteSwap.
+void PatchSwap(DWORD dwAddr, DWORD dwSwap, DWORD dwLen) {
+    const ByteSwap* swap = (const ByteSwap*)dwSwap;
+    SwapChecked(dwAddr, swap->bOld, swap->bNew, dwLen);
+}
+
+// dwSwap points to a CallSwap: a call to its function, padded with nops, takes the place of the original bytes.
+void PatchSwapCall(DWORD dwAddr, DWORD dwSwap, DWORD dwLen) {
+    const CallSwap* swap = (const CallSwap*)dwSwap;
+    std::vector<BYTE> bNew(dwLen, INST_NOP);
+    bNew[0] = INST_CALL;
+    *(DWORD*)&bNew[1] = swap->dwFunc - (dwAddr + 5);
+    SwapChecked(dwAddr, swap->bOld, &bNew[0], dwLen);
 }
 
 PatchHook* RetrievePatchHooks(PINT pBuffer) {

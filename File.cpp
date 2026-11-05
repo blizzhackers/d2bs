@@ -65,13 +65,16 @@ bool writeValue(FILE* fptr, JSContext* cx, jsval value, bool isBinary, bool lock
         break;
     case JSTYPE_STRING:
         str = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(value));
+        if (!str)
+            return false;
+        len = strlen(str);
         if (locking)
-            result = fwrite(str, sizeof(char), strlen(str), fptr);
+            result = fwrite(str, sizeof(char), len, fptr);
         else
-            result = _fwrite_nolock(str, sizeof(char), strlen(str), fptr);
+            result = _fwrite_nolock(str, sizeof(char), len, fptr);
 
         JS_free(cx, str);
-        return (int)strlen(str) == result;
+        return result == len;
         break;
     case JSTYPE_NUMBER:
         if (isBinary) {
@@ -89,7 +92,7 @@ bool writeValue(FILE* fptr, JSContext* cx, jsval value, bool isBinary, bool lock
                     if (locking)
                         result = fwrite(&ival, sizeof(int32), 1, fptr);
                     else
-                        result = _fwrite_nolock(&dval, sizeof(int32), 1, fptr);
+                        result = _fwrite_nolock(&ival, sizeof(int32), 1, fptr);
                     return result == 1;
                 } else
                     return false;

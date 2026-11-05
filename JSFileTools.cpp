@@ -163,11 +163,13 @@ JSAPI_FUNC(filetools_readText) {
     assert(readCount <= size); // Avoid SEGFAULT
     contents[readCount] = 0;
 
-    // Check to see if we had an error; ferror reads the stream, so it comes before fclose
+    // Check to see if we had an error; ferror needs the stream open, so it comes before fclose, and the
+    // message reads errno, so it is taken before any cleanup call can change it
     if (ferror(fptr)) {
+        const char* error = _strerror("Read failed");
         fclose(fptr);
         delete[] contents;
-        THROW_ERROR(cx, _strerror("Read failed"));
+        THROW_ERROR(cx, error);
     }
     fclose(fptr);
 

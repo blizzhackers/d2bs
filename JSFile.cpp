@@ -298,8 +298,9 @@ JSAPI_FUNC(file_read) {
                 size = _fread_nolock(result, sizeof(int), count, fdata->fptr);
 
             if (size != (uint32)count && ferror(fdata->fptr)) {
+                const char* error = _strerror("Read failed");
                 delete[] result;
-                THROW_ERROR(cx, _strerror("Read failed"));
+                THROW_ERROR(cx, error);
             }
             if (count == 1)
                 JS_SET_RVAL(cx, vp, INT_TO_JSVAL(result[0]));
@@ -341,8 +342,9 @@ JSAPI_FUNC(file_read) {
                 size = _fread_nolock(result, sizeof(char), count, fdata->fptr);
 
             if (size != (uint32)count && ferror(fdata->fptr)) {
+                const char* error = _strerror("Read failed");
                 delete[] result;
-                THROW_ERROR(cx, _strerror("Read failed"));
+                THROW_ERROR(cx, error);
             }
 
             if (begin && size > 2 && result[0] == (char)0xEF && result[1] == (char)0xBB && result[2] == (char)0xBF) { // skip BOM
@@ -468,8 +470,9 @@ JSAPI_FUNC(file_readAll) {
             count = _fread_nolock(contents, sizeof(char), size, fdata->fptr);
 
         if (count != size && ferror(fdata->fptr)) {
+            const char* error = _strerror("Read failed");
             delete[] contents;
-            THROW_ERROR(cx, _strerror("Read failed"));
+            THROW_ERROR(cx, error);
         }
         JS_BeginRequest(cx);
         if (begin && count > 2 && contents[0] == (char)0xEF && contents[1] == (char)0xBB && contents[2] == (char)0xBF) { // skip BOM

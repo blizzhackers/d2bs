@@ -838,7 +838,7 @@ struct StormReadRequest {
     StormSoundChannel* pChannel; // 0x30
     DWORD dwReadSize;            // 0x34 bytes each read asks for
     DWORD _3;                    // 0x38
-    DWORD dwRead;                // 0x3C bytes the last read gave, 0 at the end of the file
+    DWORD dwRead;                // 0x3C bytes the last read gave: 0 at the end of the file, or when there was no place to read into
 };
 
 #pragma warning(pop)

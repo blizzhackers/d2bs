@@ -406,16 +406,16 @@ SpriteCacheEntry* __fastcall SpriteCacheAllocRead_Intercept(SpriteCache* pCache,
 
 static void StormStreamRefill(StormReadRequest* pRequest) {
     __asm {
-		mov esi, pRequest
+		mov esi, pRequest // the refill takes its request in esi; the compiler saves esi for a function whose asm uses it
 		call STORM_StreamRefill_I
     }
 }
 
 // Storm's read thread (0x41A550) lets go of its lock (0x779068) once it has picked a request, reads, then checks the
-// request's sound buffer and refills or stops it. Ending a sound stream (0x41A990, on the game's sound thread) clears the
-// buffer under that lock, so either use could act on a buffer the request no longer has; the refill reads it again under
-// the lock without a check (0x4157D1). The check and both uses run under the lock here: the lock is recursive, and the
-// refill already takes it and calls DirectSound under it.
+// request's sound buffer and refills or stops it. Ending a sound stream (0x41A990, for example on the game's sound
+// thread) clears the buffer under that lock, so either use could act on a buffer the request no longer has; the refill
+// reads it again under the lock without a check (0x4157D1). The check and both uses run under the lock here: the lock
+// is recursive, and the refill already takes it and calls DirectSound under it.
 static void __fastcall StormStreamUpdate(StormReadRequest* pRequest) {
     typedef HRESULT(__stdcall * SoundBufferStop_t)(void* pBuffer);
     EnterCriticalSection(p_STORM_ReadLock);
@@ -423,7 +423,7 @@ static void __fastcall StormStreamUpdate(StormReadRequest* pRequest) {
         if (pRequest->dwRead)
             StormStreamRefill(pRequest);
         else if (pRequest->dwReadSize) {
-            // the read found the end of the file; IDirectSoundBuffer::Stop is the buffer's method at +48h
+            // nothing was read (the end of the file, or no place to read into); IDirectSoundBuffer::Stop is the buffer's method at +48h
             SoundBufferStop_t pStop = (SoundBufferStop_t)(*(void***)pRequest->pBuffer)[0x48 / 4];
             pStop(pRequest->pBuffer);
             if (pRequest->pChannel)

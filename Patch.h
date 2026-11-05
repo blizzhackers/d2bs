@@ -6,11 +6,11 @@
 #include "D2BS.h"
 
 // Storm's read thread checks a request's sound buffer without its lock: see StormStreamUpdate. The call takes the place
-// of the check and both of its branches, leaving the stop branch at 0x41A73E without its only way in. PatchSwapCall
-// writes only while no other thread is partway through the range, since the read thread runs in any loaded game; a pass
-// already past the check when the call lands finishes the old way.
+// of the check and both of its branches, leaving the stop branch at 0x41A73E unreachable. PatchSwapCall writes only
+// while no other thread is partway through the range, since the read thread runs in any loaded game; a pass already
+// past the check when the call lands finishes the old way.
 static const BYTE StormStreamCheckOld[] = {0x83, 0x7E, 0x28, 0x00, 0x74, 0x38, 0x83, 0x7E, 0x3C, 0x00, 0x74, 0x0D, 0xE8, 0x8A, 0xB0, 0xFF, 0xFF};
-static_assert(sizeof(StormStreamCheckOld) >= 5, "a call takes 5 bytes");
+static_assert(sizeof(StormStreamCheckOld) == 0x41A736 - 0x41A725, "StormStreamUpdate_Intercept returns to 0x41A736, the end of these bytes");
 static const CallSwap StormStreamCheck = {StormStreamCheckOld, (DWORD)StormStreamUpdate_Intercept};
 
 PatchHook Patches[] = {

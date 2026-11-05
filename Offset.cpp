@@ -193,6 +193,10 @@ void PatchSwap(DWORD dwAddr, DWORD dwSwap, DWORD dwLen) {
 
 // dwSwap points to a CallSwap: a call to its function, padded with nops, takes the place of the original bytes.
 void PatchSwapCall(DWORD dwAddr, DWORD dwSwap, DWORD dwLen) {
+    if (dwLen < 5) {
+        Log(L"Patch at 0x%08X skipped: a call needs 5 bytes", dwAddr);
+        return;
+    }
     const CallSwap* swap = (const CallSwap*)dwSwap;
     std::vector<BYTE> bNew(dwLen, INST_NOP);
     bNew[0] = INST_CALL;

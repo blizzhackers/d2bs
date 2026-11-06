@@ -34,7 +34,12 @@ if (-not (Test-Path -LiteralPath $Changelog -PathType Leaf)) { Stop-Notes "$Chan
 $text = Get-Content -LiteralPath $Changelog -Raw -Encoding utf8
 if ($null -eq $text) { $text = '' }
 $notes = Get-ChangelogSection -Text $text -Name $Version
-if ($null -eq $notes) { Stop-Notes "CHANGELOG.md has no [$Version] section: build\Release-D2BS.ps1 dates it at the release" }
+if ($null -eq $notes) {
+  $cause = if (Test-ChangelogHeadingHidden $text $Version) { ' (its heading is inside an HTML comment or a code fence)' } else { '' }
+  Stop-Notes "CHANGELOG.md has no [$Version] section${cause}: build\Release-D2BS.ps1 dates it at the release"
+}
+# A block that opens in the section and never closes takes the rest of the file into the notes.
+if (Test-ChangelogUnclosed $notes) { Stop-Notes "an HTML comment or a code fence in CHANGELOG.md's [$Version] section never closes, so its notes would run to the end of the file" }
 if (-not (Test-ChangelogEntries $notes)) { Stop-Notes "CHANGELOG.md's [$Version] section has no entries" }
 foreach ($line in Get-ChangelogWrappedLines $notes) {
   $warning = "a wrapped line shows as its own line in the release notes; join it to its entry: $($line.Trim())"
@@ -43,7 +48,7 @@ foreach ($line in Get-ChangelogWrappedLines $notes) {
 # GitHub doesn't document which tag its generated notes start from when given none, so the release job passes this.
 if ($actions -and $env:GITHUB_OUTPUT) {
   $base = Get-ChangelogCompareBase -Text $text -Name $Version
-  $start = if ($base -match '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$') { $base } else { '' }
+  $start = if (Test-ChangelogTagName $base) { $base } else { '' }
   Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "start-tag=$start" -Encoding utf8
 }
 

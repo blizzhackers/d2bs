@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
     # Release tags only (v1.6.5) and release candidates' (v1.6.5-rc.1); the build fails a tag that doesn't match VERSION.
+    # In these filter patterns "+" means one or more of the character or [range] before it, and "." is a plain dot.
     tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+']
   pull_request:
   workflow_dispatch:

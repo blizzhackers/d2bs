@@ -4,38 +4,67 @@
 Set-StrictMode -Version 3
 
 # A version label: major.minor.patch, or a release candidate's major.minor.patch-rc.N.
-$script:versionLabel = '[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?'
+$script:finalLabel = '[0-9]+\.[0-9]+\.[0-9]+'
+$script:candidateLabel = "$script:finalLabel-rc\.[0-9]+"
+$script:versionLabel = "$script:finalLabel(-rc\.[0-9]+)?"
+# A "<!--" inside a paragraph hides up to its "-->" when that comes before the paragraph ends: at a blank line, or at
+# a line that starts a heading or a list item. One that never closes there is shown as text. "<!-->" and "<!--->" are
+# whole comments.
+$script:inlineComment = '<!--(?:-?>|(?:(?!\n[ \t]*(?:\n|\z|#{1,6}(?:[ \t]|\n|\z)|(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|\n|\z)))[\s\S])*?-->)'
 # The order Keep a Changelog gives its groups; a merged section keeps it, with any other group after them.
 $script:groupOrder = 'Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security'
 
 function Split-ChangelogLines([AllowEmptyString()][string]$Text) { , @($Text -split '\r?\n') }
 
-# Which lines carry no Markdown structure on GitHub: an HTML comment block, which it hides (from a line opening with
-# "<!--" to the line holding "-->"), and a fenced code block, which it shows as code (its fences included; it closes
-# on a fence of the same character, at least as long, with nothing after it). One left open runs to the end. Every
-# reader of CHANGELOG.md's structure here skips these lines, so a commented-out template is never taken for a heading,
-# a link or an entry. A "<!--" later in a line opens no block: it hides at most its own paragraph's text, where no
-# heading can sit.
+# Which lines carry no Markdown structure on GitHub: an HTML comment block, which it hides, and a fenced code block,
+# which it shows as code (its fences included; it closes on a fence of the same character, at least as long, with
+# nothing after it). A comment block starts at a line opening with "<!--", or at a list item whose text does, and ends
+# at the line holding "-->". Either block inside a list item also ends with the item: a fence just closes there, but
+# a comment left open hides all the rest on GitHub, as one left open at the end of the file does. Every reader of
+# CHANGELOG.md's structure here skips these lines, so a commented-out template is never taken for a heading, a link or
+# an entry. A "<!--" later in a line opens no block: it hides at most its own paragraph's text, where no heading can
+# sit.
 function Find-ChangelogHiddenLines([string[]]$Lines) {
   $hidden = [bool[]]::new($Lines.Count)
-  $comment = $false
+  # An open block's list item, as the column its text starts at (0 outside a list); a comment's is -1 once the item
+  # ended with it open.
+  $comment = $null
   $fence = $null
+  $fenceAt = 0
+  # The text columns of the list items the current line is in, innermost last.
+  $items = [Collections.Generic.List[int]]::new()
   for ($i = 0; $i -lt $Lines.Count; $i++) {
     $line = $Lines[$i]
+    $indent = $line.Length - $line.TrimStart(' ').Length
+    $blank = -not $line.Trim()
+    # The line that ends a fence's list item is read afresh below.
+    if ($fence -and -not $blank -and $indent -lt $fenceAt) { $fence = $null }
     if ($fence) {
       $hidden[$i] = $true
-      if ($line -match ('^ {0,3}' + [regex]::Escape($fence) + [regex]::Escape([string]$fence[0]) + '*[ \t]*$')) { $fence = $null }
-    } elseif ($comment) {
+      if ($indent - $fenceAt -le 3 -and $line -match ('^ *' + [regex]::Escape($fence) + [regex]::Escape([string]$fence[0]) + '*[ \t]*$')) { $fence = $null }
+    } elseif ($null -ne $comment) {
       $hidden[$i] = $true
-      if ($line.Contains('-->')) { $comment = $false }
-    } elseif ($line -match '^ {0,3}(`{3,})[^`]*$' -or $line -match '^ {0,3}(~{3,})') {
-      # A backtick in the info string makes the line inline code, not a fence.
-      $hidden[$i] = $true
-      $fence = $Matches[1]
-    } elseif ($line -match '^ {0,3}<!--') {
-      # The "--" that opens the comment may start its "-->" too, so "<!-->" closes on its own line.
-      $hidden[$i] = $true
-      $comment = $line.IndexOf('-->', $line.IndexOf('<!--') + 2) -lt 0
+      if (-not $blank -and $indent -lt $comment) { $comment = -1 }
+      elseif ($comment -ge 0 -and $line.Contains('-->')) { $comment = $null }
+    } else {
+      # A line indented less than a list item's text ends the item (a lazy paragraph line aside: entries are one line).
+      if (-not $blank) { while ($items.Count -and $indent -lt $items[$items.Count - 1]) { $items.RemoveAt($items.Count - 1) } }
+      $within = if ($items.Count) { $items[$items.Count - 1] } else { 0 }
+      if ($indent - $within -le 3 -and ($line -match '^ *(`{3,})[^`]*$' -or $line -match '^ *(~{3,})')) {
+        # A backtick in the info string makes the line inline code, not a fence.
+        $hidden[$i] = $true
+        $fence = $Matches[1]
+        $fenceAt = $within
+      } elseif ($line -match '^ *<!--' -and $indent - $within -le 3) {
+        # The "--" that opens the comment may start its "-->" too, so "<!-->" closes on its own line.
+        $hidden[$i] = $true
+        if ($line.IndexOf('-->', $indent + 2) -lt 0) { $comment = $within }
+      } elseif ($line -match '^( *(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)(<!--)?') {
+        $text = $Matches[1].Length
+        $items.Add($text)
+        # Closed on its own line, it is left to the inline-comment strip, which keeps any text after it.
+        if ($Matches[2] -and $line.IndexOf('-->', $text + 2) -lt 0) { $hidden[$i] = $true; $comment = $text }
+      }
     }
   }
   , $hidden
@@ -48,12 +77,19 @@ function Test-ChangelogUnclosed([AllowEmptyString()][string]$Text) {
   (Find-ChangelogHiddenLines $lines.ToArray())[-1]
 }
 
-# The line index of "## [<Name>]" (with or without " - <date>"), or -1. Labels match in any case, as Markdown's do.
-function Find-ChangelogHeading([string[]]$Lines, [string]$Name) {
+# The line index of "## [<Name>]" (with or without " - <date>"), or -1; with -Hidden, of one inside an HTML comment or
+# fenced code instead. Labels match in any case, as Markdown's do.
+function Find-ChangelogHeading([string[]]$Lines, [string]$Name, [switch]$Hidden) {
   $pattern = '^## \[' + [regex]::Escape($Name) + '\]( |$)'
-  $hidden = Find-ChangelogHiddenLines $Lines
-  for ($i = 0; $i -lt $Lines.Count; $i++) { if (-not $hidden[$i] -and $Lines[$i] -match $pattern) { return $i } }
+  $mask = Find-ChangelogHiddenLines $Lines
+  for ($i = 0; $i -lt $Lines.Count; $i++) { if ($mask[$i] -eq [bool]$Hidden -and $Lines[$i] -match $pattern) { return $i } }
   -1
+}
+
+# Whether a section's "## [<Name>]" heading is there only inside an HTML comment or fenced code.
+function Test-ChangelogHeadingHidden([AllowEmptyString()][string]$Text, [string]$Name) {
+  $lines = Split-ChangelogLines $Text
+  (Find-ChangelogHeading $lines $Name) -lt 0 -and (Find-ChangelogHeading $lines $Name -Hidden) -ge 0
 }
 
 # Where the section whose heading is at $Start ends: the next "## " heading, the next [Unreleased] or [<version>] link
@@ -92,7 +128,7 @@ function Find-ChangelogCandidates([string[]]$Lines) {
   $unreleased = Find-ChangelogHeading $Lines 'Unreleased'
   if ($unreleased -lt 0) { return , $found.ToArray() }
   $at = Find-ChangelogSectionEnd $Lines $unreleased
-  while ($at -lt $Lines.Count -and $Lines[$at] -match '^## \[([0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+)\]( |$)') {
+  while ($at -lt $Lines.Count -and $Lines[$at] -match "^## \[($script:candidateLabel)\]( |$)") {
     $name = $Matches[1]
     $end = Find-ChangelogSectionEnd $Lines $at
     $found.Add([pscustomobject]@{ Name = $name; Start = $at; End = $end })
@@ -115,6 +151,10 @@ function Get-ChangelogLink([AllowEmptyString()][string]$Text, [string]$Name) {
   for ($i = 0; $i -lt $lines.Count; $i++) { if (-not $hidden[$i] -and $lines[$i] -match $pattern) { return $Matches[1] } }
   $null
 }
+
+# Whether a name is shaped like a release tag (v1.7.0, v1.7.0-rc.2): lowercase v and rc, as git refs match exactly.
+# Whether such a tag exists is for the caller to ask git or GitHub.
+function Test-ChangelogTagName([AllowEmptyString()][string]$Name) { $Name -cmatch "^v$script:versionLabel\z" }
 
 # The <base> of a version's "[<Name>]: <repo>/compare/<base>...<tag>" link, or $null.
 function Get-ChangelogCompareBase([AllowEmptyString()][string]$Text, [string]$Name) {
@@ -165,11 +205,12 @@ function Merge-ChangelogBodies([string[]]$Bodies) {
   $parts -join "`n`n"
 }
 
-# A section without its HTML comment blocks and fenced code (see Find-ChangelogHiddenLines).
+# A section without the text GitHub hides or shows as code: its HTML comment blocks and fenced code (see
+# Find-ChangelogHiddenLines) turn into blank lines, as a paragraph ends at them, and then its inline comments go.
 function Remove-ChangelogHidden([AllowEmptyString()][string]$Section) {
   $lines = Split-ChangelogLines $Section
   $hidden = Find-ChangelogHiddenLines $lines
-  @(for ($i = 0; $i -lt $lines.Count; $i++) { if (-not $hidden[$i]) { $lines[$i] } }) -join "`n"
+  (@(for ($i = 0; $i -lt $lines.Count; $i++) { if ($hidden[$i]) { '' } else { $lines[$i] } }) -join "`n") -replace $script:inlineComment, ''
 }
 
 # A section's entries per "### " group, e.g. Added = 2: its top-level list items (no deeper than the first one),
@@ -221,7 +262,7 @@ function Update-ChangelogForRelease {
   if ($unreleased -lt 0) { throw 'CHANGELOG.md has no "## [Unreleased]" heading' }
   if ((Find-ChangelogHeading $lines $Version) -ge 0) { throw "CHANGELOG.md already has a [$Version] section" }
   $candidates = @()
-  if ($Version -notmatch '-rc\.[0-9]+$') { $candidates = Find-ChangelogCandidates $lines }
+  if ($Version -notmatch "^$script:candidateLabel\z") { $candidates = Find-ChangelogCandidates $lines }
 
   $linkBase = $null
   if (-not $candidates.Count) {
@@ -250,7 +291,7 @@ function Update-ChangelogForRelease {
     $names = @($candidates | ForEach-Object { $_.Name })
     $hidden = Find-ChangelogHiddenLines $merged.ToArray()
     for ($i = $merged.Count - 1; $i -ge 0; $i--) {
-      if (-not $hidden[$i] -and $merged[$i] -match '^\[([0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+)\]: ' -and $Matches[1] -in $names) {
+      if (-not $hidden[$i] -and $merged[$i] -match "^\[($script:candidateLabel)\]: " -and $Matches[1] -in $names) {
         if ($Matches[1] -eq $oldest -and $merged[$i] -match '/compare/(\S+?)\.\.\.\S+$') { $linkBase = $Matches[1] }
         $merged.RemoveAt($i)
       }
@@ -274,4 +315,5 @@ function Update-ChangelogForRelease {
 }
 
 Export-ModuleMember -Function Get-ChangelogSection, Get-ChangelogEntryCounts, Test-ChangelogEntries, Get-ChangelogWrappedLines,
-  Get-ChangelogCandidates, Get-ChangelogLink, Get-ChangelogCompareBase, Test-ChangelogUnclosed, Update-ChangelogForRelease
+  Get-ChangelogCandidates, Get-ChangelogLink, Get-ChangelogCompareBase, Test-ChangelogTagName, Test-ChangelogUnclosed,
+  Test-ChangelogHeadingHidden, Update-ChangelogForRelease

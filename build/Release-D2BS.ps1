@@ -135,12 +135,13 @@ if (-not (Test-Path -LiteralPath $changelogFile -PathType Leaf)) { Stop-Release 
 # The review and its undo work through git, which can't put back a file it doesn't track.
 if (-not (Read-Git @('ls-files', '--', 'CHANGELOG.md'))) { Fail 'CHANGELOG.md is not committed: commit it to master first' }
 $changelog = Read-Changelog
-$unreleased = Get-ChangelogSection -Text $changelog -Name 'Unreleased'
-if ($null -eq $unreleased) { Stop-Release 'CHANGELOG.md has no "## [Unreleased]" heading' }
-if ($null -eq (Get-ChangelogLink -Text $changelog -Name 'Unreleased')) { Warn 'CHANGELOG.md has no [Unreleased] link at its end, so the release adds no compare link' }
+# First, since a block that never closes hides the headings, links and entries the checks after it look for.
 if (Test-ChangelogUnclosed $changelog) {
   Warn 'CHANGELOG.md has an HTML comment or a code fence that never closes: GitHub hides the rest of the file or shows it as code, and this script reads no headings, links or entries there'
 }
+$unreleased = Get-ChangelogSection -Text $changelog -Name 'Unreleased'
+if ($null -eq $unreleased) { Stop-Release 'CHANGELOG.md has no "## [Unreleased]" heading' }
+if ($null -eq (Get-ChangelogLink -Text $changelog -Name 'Unreleased')) { Warn 'CHANGELOG.md has no [Unreleased] link at its end, so the release adds no compare link' }
 
 # GitHub extras (the CI check and watching the release build) need gh and a GitHub origin; without them they are skipped.
 $slug = $null
@@ -201,7 +202,7 @@ $linkStarts = [ordered]@{ 'Unreleased' = Get-ChangelogCompareBase -Text $changel
 if ($candidates.Count) { $linkStarts[$candidates[$candidates.Count - 1]] = Get-ChangelogCompareBase -Text $changelog -Name $candidates[$candidates.Count - 1] }
 foreach ($name in $linkStarts.Keys) {
   $base = $linkStarts[$name]
-  if ($base -match '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$' -and -not (Test-LocalTag $base)) {
+  if ((Test-ChangelogTagName $base) -and -not (Test-LocalTag $base)) {
     # [Unreleased]'s link starts at VERSION's own tag, which "again" can recreate; an older one can't come back.
     $consequence = if ($name -eq 'Unreleased') { "if its build failed, release $($base.Substring(1)) again first; otherwise the next release's" } else { "a final's" }
     Warn "CHANGELOG.md's [$name] link starts at $base, which is no local tag: $consequence list of pull requests starts wherever GitHub picks"
@@ -271,14 +272,21 @@ $isCandidate = Test-Candidate (ConvertTo-Version $chosen)
 $merging = @(if (-not $isCandidate) { $candidates })
 # The tag build posts the version's CHANGELOG.md section as the release notes and fails without one.
 $date = Get-Date -Format 'yyyy-MM-dd'
+# A block left open inside the version's section takes the rest of the file into its notes.
+$unclosedNotes = "an HTML comment or a code fence in the [$chosen] notes never closes, so they would run to the end of CHANGELOG.md"
 $newChangelog = $null
 if ($bump) {
   try { $newChangelog = Update-ChangelogForRelease -Text $changelog -Version $chosen -Date $date -Tag $tag }
   catch { Fail $_.Exception.Message }
   $notes = if ($newChangelog) { Get-ChangelogSection -Text $newChangelog -Name $chosen } else { $unreleased }
+  if (Test-ChangelogUnclosed $notes) { Fail $unclosedNotes }
 } else {
   $notes = Get-ChangelogSection -Text $changelog -Name $chosen
-  if (-not (Test-ChangelogEntries $notes)) { Fail "CHANGELOG.md has no entries under [$chosen]: the release would have no notes" }
+  if ($null -eq $notes) {
+    $cause = if (Test-ChangelogHeadingHidden $changelog $chosen) { ' (it is inside an HTML comment or a code fence)' } else { '' }
+    Fail "CHANGELOG.md has no [$chosen] heading${cause}: the release would have no notes"
+  } elseif (Test-ChangelogUnclosed $notes) { Fail $unclosedNotes }
+  elseif (-not (Test-ChangelogEntries $notes)) { Fail "CHANGELOG.md has no entries under [$chosen]: the release would have no notes" }
   # A fix made for a re-release belongs to the version it fixes, which is the section the release posts.
   if (Test-ChangelogEntries $unreleased) { Warn "[Unreleased] has entries, and re-releasing $tag posts only [$chosen]: move a fix's entry there first" }
 }
@@ -355,9 +363,13 @@ if ($bump) {
           $versionNow = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
           if ($versionNow -cne $chosen) { Warn "VERSION no longer says ${chosen}: put it back, or answer n"; continue }
           $changelogNow = if (Test-Path -LiteralPath $changelogFile) { Read-Changelog } else { '' }
-          if (-not (Test-ChangelogEntries (Get-ChangelogSection -Text $changelogNow -Name $chosen))) {
-            Warn "CHANGELOG.md has no entries under [$chosen] now: the release would have no notes"; continue
+          $notesNow = Get-ChangelogSection -Text $changelogNow -Name $chosen
+          if ($null -eq $notesNow) {
+            $cause = if (Test-ChangelogHeadingHidden $changelogNow $chosen) { ' (it is inside an HTML comment or a code fence)' } else { '' }
+            Warn "CHANGELOG.md has no [$chosen] heading now${cause}: put it back, or answer n"; continue
           }
+          if (Test-ChangelogUnclosed $notesNow) { Warn "$unclosedNotes (close it, or answer n)"; continue }
+          if (-not (Test-ChangelogEntries $notesNow)) { Warn "CHANGELOG.md has no entries under [$chosen] now: the release would have no notes"; continue }
           $approved = $true; break
         }
         if ($answer -eq 'd') { & git -C $repo --no-pager diff -- VERSION CHANGELOG.md; continue }

@@ -155,7 +155,15 @@ function Invoke-Scenarios {
 
   # 1c. Tagging VERSION's own number again needs that version's CHANGELOG.md section, which the build posts.
   $r = Invoke-Release @('1', '1.6.4', 'y', 'y')
-  Check 'a tag without its section is refused' ($r.Code -eq 1 -and $r.Text -match 'no entries under \[1\.6\.4\]') $r.Text
+  Check 'a tag without its section is refused' ($r.Code -eq 1 -and $r.Text -match 'CHANGELOG\.md has no \[1\.6\.4\] heading: the release would have no notes') $r.Text
+  $changelogPath = Join-Path $work 'CHANGELOG.md'
+  $text = Get-Content -LiteralPath $changelogPath -Raw
+  $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+  [IO.File]::WriteAllText($changelogPath, $text.Replace("## [Unreleased]$nl", "## [Unreleased]$nl$nl<!--$nl## [1.6.4] - 2026-01-01$nl$nl- **Old.** One line.$nl-->$nl"))
+  $r = Invoke-Release @('1', '1.6.4', 'y', 'y') @('-DryRun')
+  Check '  and one inside a comment is named as the cause' ($r.Text -match 'no \[1\.6\.4\] heading \(it is inside an HTML comment or a code fence\)' -and
+    $r.Text -notmatch 'no entries under \[1\.6\.4\]') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Check 'and makes no tag' (-not (G $work @('tag', '--list', 'v*'))) ''
 
   # 2. First release: a normal patch bump from the seeded 1.6.4.
@@ -201,7 +209,22 @@ function Invoke-Scenarios {
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Add-Content -LiteralPath $file -Value '<!-- a comment that never closes'
   $r = Invoke-Release @('4', '', 'y') @('-DryRun')
-  Check 'a comment that never closes warns' ($r.Code -eq 0 -and $r.Text -match '\[!!\] CHANGELOG\.md has an HTML comment or a code fence that never closes') $r.Text
+  Check 'a comment that never closes warns' ($r.Code -eq 0 -and $r.Text -match '\[!!\] CHANGELOG\.md has an HTML comment or a code fence that never closes' -and
+    $r.Text -notmatch 'notes never closes') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
+  # Inside [Unreleased], after an entry, it would take the rest of the file into the notes: that stops a release.
+  $text = Get-Content -LiteralPath $file -Raw
+  [IO.File]::WriteAllText($file, $text.Replace("- **Second fix.** One line.$nl", "- **Second fix.** One line.$nl<!-- a comment that never closes$nl"))
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
+  Check '  inside the notes, it is the stop that the notes would run to the end' ($r.Code -eq 0 -and
+    $r.Text -match '\[!!\] an HTML comment or a code fence in the \[[0-9.]+\] notes never closes, so they would run to the end of CHANGELOG\.md') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
+  # Above [Unreleased] the same comment hides the heading: the warning comes before the stop it causes.
+  $text = Get-Content -LiteralPath $file -Raw
+  [IO.File]::WriteAllText($file, $text.Replace('## [Unreleased]', "<!-- a comment that never closes$nl$nl## [Unreleased]"))
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
+  Check '  above [Unreleased], it warns before the missing-heading stop' ($r.Code -eq 1 -and
+    $r.Text -match '(?s)\[!!\] CHANGELOG\.md has an HTML comment or a code fence that never closes.*\[xx\] CHANGELOG\.md has no "## \[Unreleased\]" heading') $r.Text
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Import-Module (Join-Path $work 'build' 'Changelog.psm1') -Force
   $dated = Update-ChangelogForRelease -Text "## [Unreleased]`n`n- x`n" -Version '9.0.0' -Date 'D' -Tag 'v9.0.0'
@@ -373,6 +396,21 @@ function Invoke-Scenarios {
   [IO.File]::WriteAllText($empty, '')
   $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $empty)
   Check 'an empty file has no section' ($n.Code -eq 1 -and $n.Text -match 'no \[4\.0\.0\] section') $n.Text
+  $hiddenAbove = Join-Path $Sandbox 'hidden-above.md'
+  [IO.File]::WriteAllText($hiddenAbove, "<!-- never closed`n`n## [4.0.0] - 2026-03-01`n`n- **Entry.** One line.`n")
+  $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $hiddenAbove)
+  Check 'a section hidden by a comment above it fails, naming the cause' ($n.Code -eq 1 -and
+    $n.Text -match 'no \[4\.0\.0\] section \(its heading is inside an HTML comment or a code fence\)') $n.Text
+  [IO.File]::WriteAllText($hiddenAbove, "## [4.0.0] - 2026-03-01`n`n- **Entry.** One line.`n<!-- never closed`n`n## [3.0.0] - 2026-02-01`n`n- **Old.** One line.`n")
+  $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $hiddenAbove)
+  Check 'a comment left open after an entry fails: the notes would run to the end' ($n.Code -eq 1 -and
+    $n.Text -match "\[4\.0\.0\] section never closes, so its notes would run to the end of the file") $n.Text
+  [IO.File]::WriteAllText($hiddenAbove, "<!-- never closed`n`n## [5.0.0] - 2026-04-01`n`n- **Entry.** One line.`n`n## [4.0.0] - 2026-03-01`n`n- x`n")
+  $n = Invoke-Notes @('-Version', '9.9.9', '-Changelog', $hiddenAbove)
+  Check 'an unrelated comment left open names no cause for a missing section' ($n.Code -eq 1 -and $n.Text -match 'no \[9\.9\.9\] section:') $n.Text
+  [IO.File]::WriteAllText($hiddenAbove, "## [4.0.0] - 2026-03-01`n`n### Fixed`n`n- <!-- describe the fix here -->`n")
+  $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $hiddenAbove)
+  Check 'a placeholder entry inside an inline comment is no entry' ($n.Code -eq 1 -and $n.Text -match '\[4\.0\.0\] section has no entries') $n.Text
 
   # 13. A commit made while a prompt waits stops the release before anything is published: at "Proceed?" before
   #     anything is written, and at the review, which puts the files back.
@@ -496,8 +534,9 @@ function Invoke-Scenarios {
     -not (G $work @('tag', '--list', 'v1.6.7-rc.3')) -and -not (G $work @('status', '--porcelain'))) ''
   Check '  with nothing new, the final was the default' ($r.Text -match 'Choice \[2\]: ') $r.Text
 
-  # 14e. Leaving the final's review keeps the edits made there: a section left without entries is asked about again,
-  #      and n copies the edited CHANGELOG.md out of the repo before it puts the files back.
+  # 14e. Leaving the final's review keeps the edits made there. Notes it couldn't post are asked about again: the
+  #      heading gone (or inside a comment), only a commented-out placeholder left, or a comment left open after an
+  #      entry. n copies the edited CHANGELOG.md out of the repo before it puts the files back.
   Add-Entry '- **Change after the last candidate.** One line.' 'Changed'
   $review = '(y) commit + tag + push  (d) show the diff  (n) abort: '
   $run = Start-Release
@@ -510,7 +549,17 @@ function Invoke-Scenarios {
     Send-Answer $run 'y'
     Wait-Prompt $run $review
     $file = Join-Path $work 'CHANGELOG.md'
-    [IO.File]::WriteAllText($file, ((Get-Content -LiteralPath $file -Raw) -replace '(?m)^## \[1\.6\.7\] - .*\r?\n', ''))
+    $written = Get-Content -LiteralPath $file -Raw
+    [IO.File]::WriteAllText($file, ($written -replace '(?m)^## \[1\.6\.7\] - .*\r?\n', ''))
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText($file, ($written -replace '(?m)^(## \[1\.6\.7\] - )', "<!-- never closed`r`n`r`n`$1"))
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText($file, ($written -replace '(?s)(## \[1\.6\.7\] - [^\r\n]*\r\n).*?(?=## \[|\[Unreleased\]: )', "`$1`r`n- <!-- describe the fix here -->`r`n`r`n"))
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText($file, ($written -replace '(?s)(## \[1\.6\.7\] - .*?\r\n- [^\r\n]*\r\n)', "`$1<!-- never closed`r`n"))
     Send-Answer $run 'y'
     Wait-Prompt $run $review
     Send-Answer $run 'n'
@@ -518,10 +567,14 @@ function Invoke-Scenarios {
   } finally {
     if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
   }
-  Check 'a review edit that leaves no entries is asked about again' ($r.Code -eq 1 -and $r.Text -match 'CHANGELOG\.md has no entries under \[1\.6\.7\] now') $r.Text
+  Check 'a review edit that removes the heading is asked about again' ($r.Code -eq 1 -and $r.Text -match 'CHANGELOG\.md has no \[1\.6\.7\] heading now: put it back') $r.Text
+  Check '  naming a comment around it' ($r.Text -match 'no \[1\.6\.7\] heading now \(it is inside an HTML comment or a code fence\)') $r.Text
+  Check '  a placeholder inside a comment is no entry' ($r.Text -match 'CHANGELOG\.md has no entries under \[1\.6\.7\] now: the release would have no notes') $r.Text
+  Check '  a comment left open after an entry would take the rest of the file' ($r.Text -match
+    'in the \[1\.6\.7\] notes never closes, so they would run to the end of CHANGELOG\.md \(close it, or answer n\)') $r.Text
   $kept = if ($r.Text -match '(?m)Your edits to CHANGELOG\.md are kept in (.+?)\r?$') { $Matches[1] } else { $null }
   $keptText = if ($kept -and (Test-Path -LiteralPath $kept)) { Get-Content -LiteralPath $kept -Raw } else { '' }
-  Check '  and n keeps the edited CHANGELOG.md outside the repo' ($keptText -match 'Candidate feature' -and $keptText -notmatch '## \[1\.6\.7\] - ') $r.Text
+  Check '  and n keeps the edited CHANGELOG.md outside the repo' ($keptText -match 'Candidate feature' -and $keptText -match '<!-- never closed') $r.Text
   Check '  and puts the files back' ($r.Text -match 'VERSION put back to 1\.6\.7-rc\.2' -and -not (G $work @('status', '--porcelain'))) (G $work @('status', '--porcelain'))
   if ($keptText) { Remove-Item -LiteralPath $kept }
 
@@ -595,6 +648,8 @@ function Invoke-Scenarios {
   $out = Update-ChangelogForRelease -Text $in -Version '2.0.0-rc.3' -Date 'D' -Tag 'v2.0.0-rc.3'
   Check 'a release candidate leaves the other candidates alone' ($out.Contains("## [Unreleased]`n`n## [2.0.0-rc.3] - D`n`n### fixed`n`n- u`n`n## [2.0.0-rc.2] - D2") -and
     $out.Contains("[Unreleased]: https://h/compare/v2.0.0-rc.3...HEAD`n[2.0.0-rc.3]: https://h/compare/v2.0.0-rc.2...v2.0.0-rc.3`n[2.0.0-rc.2]: ")) $out
+  Check 'tag names: release and candidate tags in the spelling the script cuts, nothing else' ((Test-ChangelogTagName 'v1.6.4') -and
+    (Test-ChangelogTagName 'v1.7.0-rc.2') -and -not (@('V1.6.4', 'v1.7.0-RC.2', 'bf77a8f', '', 'v1.6', 'v1.6.4U', "v1.6.4`n") | Where-Object { Test-ChangelogTagName $_ })) ''
   # Hidden text (an HTML comment block, a fenced block closed only by a fence at least as long) holds no heading, link
   # or entry for any reader; a "<!--" later in a line opens nothing.
   $fence3 = '```'
@@ -613,6 +668,37 @@ function Invoke-Scenarios {
     (Get-ChangelogEntryCounts (Get-ChangelogSection -Text $out -Name '2.0.0'))['Added'] -eq 1) $out
   $section = Get-ChangelogSection -Text (Update-ChangelogForRelease -Text "## [Unreleased]`n`n## [2.0.0-rc.1] - D`n`n### Added`n`n- a <!-- todo`n`n### Fixed`n`n- c`n" -Version '2.0.0' -Date 'E' -Tag 'v2.0.0') -Name '2.0.0'
   Check 'an unclosed <!-- inside an entry opens no hidden block' ($section -eq "### Added`n`n- a <!-- todo`n`n### Fixed`n`n- c") $section
+  # Inside an entry, a comment hides text up to its "-->" within the paragraph; one still open at the paragraph's end
+  # shows as text. (Each case below matches GitHub's rendering of it.)
+  $counts = Get-ChangelogEntryCounts "### Fixed`n`n- <!-- describe the fix here -->`n- <!-->`n`n### Added`n`n- <!-- a --> real <!-- b -->`n- a <!-- open`n- c -->"
+  Check 'inline comments: a placeholder or "<!-->" is no entry; text beside one, or after one left open, is' ($counts.Count -eq 1 -and $counts['Added'] -eq 3) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  Check '  one over two lines of an entry is no wrapped line' (-not (Get-ChangelogWrappedLines "- **Fix.** Text <!-- a note`n  that wraps --> more.")) ''
+  $wrapped = @(Get-ChangelogWrappedLines "- b <!-- x`n`n  y -->")
+  Check '  but one over a blank line is no comment' ($wrapped.Count -eq 1 -and $wrapped[0] -eq '  y -->') ($wrapped -join '|')
+  $wrapped = @(Get-ChangelogWrappedLines "- a <!-- x`n<!-- note -->`n  b -->")
+  Check '  and neither is one over a comment block' ($wrapped.Count -eq 1 -and $wrapped[0] -eq '  b -->') ($wrapped -join '|')
+  # A list item whose text starts with "<!--" opens a comment block, which ends with the item: left open there, it
+  # hides the rest of the file. One indented into an item does the same; one at the margin is outside the list.
+  $section = "- <!-- describe the fix here,`n`n  over a blank line -->`n- <!-- x`n  y -->"
+  $counts = Get-ChangelogEntryCounts $section
+  Check 'an item opening a comment: closed inside the item, it hides the item' ($counts.Count -eq 0 -and -not (Test-ChangelogUnclosed $section) -and
+    -not (Get-ChangelogWrappedLines $section)) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  Check '  left open when the item ends, it never closes' ((Test-ChangelogUnclosed "- real`n- <!-- open`n- next -->") -and
+    (Test-ChangelogUnclosed "- <!-- x`n$fence3`nin a fence`n$fence3`n  b -->") -and (Test-ChangelogUnclosed "- a`n  - <!-- x`n  - b -->`n- c") -and
+    (Test-ChangelogUnclosed "### Fixed`n`n- real`n- <!-- open`n`n## [1.0.0]`n`n- old")) ''
+  $counts = Get-ChangelogEntryCounts "- a`n`n  <!-- x`n`n  y -->`n- b`n<!-- z`n- hidden -->`n- c"
+  Check '  one indented into an item closes inside it; one at the margin is outside the list' ($counts['(no group)'] -eq 3 -and
+    -not (Test-ChangelogUnclosed "- a`n`n  <!-- x`n`n  y -->`n- b") -and (Test-ChangelogUnclosed "- a`n  <!-- note`n- b -->`n- c")) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  # A fence inside an item closes with the item, so a closing fence at the margin opens a new one; a nested item's
+  # fence is indented past its text, not four columns.
+  $counts = Get-ChangelogEntryCounts "- a`n  - b`n`n    $fence3`n    <!-- x`n    $fence3`n- c"
+  Check 'a fence in a nested item hides its lines, comments included' ($counts['(no group)'] -eq 2 -and
+    -not (Test-ChangelogUnclosed "- a`n  - b`n`n    $fence3`n    <!-- x`n    $fence3`n- c")) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  $counts = Get-ChangelogEntryCounts "- a`n  $fence3`n  x`n- b"
+  Check '  one left open closes with its item' ($counts['(no group)'] -eq 2 -and -not (Test-ChangelogUnclosed "- a`n  $fence3`n  x`n- b")) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  Check '  and its fence at the margin opens a new one, which never closes' (Test-ChangelogUnclosed "- a`n  $fence3`n  code`n$fence3`n- b`n`n### Fixed`n`n- c") ''
+  Check 'a heading inside a comment is a hidden heading; a visible one, or none, is not' ((Test-ChangelogHeadingHidden "<!--`n## [1.0.0]`n-->" '1.0.0') -and
+    -not (Test-ChangelogHeadingHidden "<!--`n## [1.0.0]`n-->`n## [1.0.0]" '1.0.0') -and -not (Test-ChangelogHeadingHidden "## [2.0.0]" '1.0.0')) ''
   $counts = Get-ChangelogEntryCounts "$fence3`n<!--`n$fence3`n### Fixed`n- a"
   Check 'a <!-- inside a fence hides nothing after the fence' ($counts.Count -eq 1 -and $counts['Fixed'] -eq 1) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
   Check 'a commented-out link is not the link' ((Get-ChangelogCompareBase "<!--`n[Unreleased]: https://h/compare/old...HEAD`n-->`n[Unreleased]: https://h/compare/v1.0.0...HEAD" 'Unreleased') -eq 'v1.0.0') ''

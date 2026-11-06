@@ -329,6 +329,7 @@ JSAPI_FUNC(my_getPath) {
     }
 
     JSObject* arr = JS_NewArrayObject(cx, count, vec);
+    delete[] vec;
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
 
     //	JS_LeaveLocalRootScope(cx);

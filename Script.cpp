@@ -197,6 +197,7 @@ void Script::Run(void) {
     JS_RemoveValueRoot(GetContext(), &dummy);
     for (uint j = 0; j < argc; j++)
         JS_RemoveValueRoot(GetContext(), &argvalue[j]);
+    delete[] argvalue;
 
     /*for(uint i = 0; i < argc; i++)  //crashes spidermonkey cleans itself up?
     {
@@ -351,7 +352,9 @@ bool Script::IsListenerRegistered(const char* evtName) {
 
 void Script::RegisterEvent(const char* evtName, jsval evtFunc) {
     EnterCriticalSection(&lock);
-    if (JSVAL_IS_FUNCTION(context, evtFunc) && strlen(evtName) > 0) {
+    // Once per function and event, as in a browser: a second copy would run again on every event and keep its root
+    // after the one removeEventListener() takes out.
+    if (JSVAL_IS_FUNCTION(context, evtFunc) && strlen(evtName) > 0 && !IsRegisteredEvent(evtName, evtFunc)) {
         AutoRoot* root = new AutoRoot(context, evtFunc);
         functions[evtName].push_back(root);
     }

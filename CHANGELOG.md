@@ -27,6 +27,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Timers outlive `clearAllEvents()`.** Timers stop with `clearTimeout()`, `clearInterval()`, `clearAllTimers()` or the end of their script.
 - **Safer dialog lines.** A line from an earlier `getDialogLines()` runs its handler only while it is one of the open dialog's lines, and otherwise throws "That dialog is not currently clickable."
 - **Game actions don't wait for other scripts' sent-packet listeners.** A packet sent from inside a call that acts between game frames, such as `clickMap()`, `me.cancel()`, `clickItem()`, `item.shop()`, `transmute()` or `clickParty()`, reaches other scripts' `gamepacketsent` listeners without waiting for their answer, so they can't block it and the game keeps running; the calling script's own listeners still can.
+- **Each listener once per event.** `addEventListener()` with a function already listening to that event leaves it as it is, as in a browser, so the function runs once per event and one `removeEventListener()` call removes it.
 - **`getTickCount()` keeps counting.** It counts on past 4,294,967,295 ms (49.7 days of Windows uptime), so time differences in scripts stay right however long Windows has run, and `me.gamestarttime` uses the same clock. On Windows XP it still starts again from 0.
 
 ### Fixed
@@ -51,6 +52,7 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Large file writes.** `FileTools.writeText()`, `FileTools.appendText()` and `file.write()` save text of any size.
 - **Binary number writes.** `file.write()` on a file opened in binary mode saves each number's value, with or without file locking.
 - **Dependable file reads, seeks and closes.** `FileTools.readText()` throws when reading the file fails, a `File` whose `close()` throws is closed and can be reopened, `file.seek(n)` on a file opened with locking moves `n` bytes, and a binary `file.read(count)` returns 0 for each value past the end of the file and frees its memory when done.
+- **Steady memory for busy bots.** Every event a listener receives and every `getPath()` call frees the memory it used, so bots that trade many chat, `copydata` and script messages keep a steady footprint over long runs.
 
 [Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.7.0...HEAD
 [1.7.0]: https://github.com/blizzhackers/d2bs/compare/bf77a8f...v1.7.0

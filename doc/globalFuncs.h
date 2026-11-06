@@ -926,7 +926,8 @@ String sendDDE(int32_t mode, String pszDDEServer, String pszTopic,
  */
 bool keystate(int vKey);
 
-/** Add an event handler to the list of listeners for the given event.
+/** Add an event handler to the list of listeners for the given event. A function already listening to that event is
+ * not added again, so it runs once per event and one removeEventListener() call removes it.
  *
  * \ingroup globalFunctions
  *

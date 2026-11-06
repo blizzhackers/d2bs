@@ -49,17 +49,19 @@ function Start-Release {
   $psi.RedirectStandardError = $true
   $psi.UseShellExecute = $false
   $p = [Diagnostics.Process]::Start($psi)
-  [pscustomobject]@{ Proc = $p; Out = [Text.StringBuilder]::new(); Buf = [char[]]::new(4096); Err = $p.StandardError.ReadToEndAsync() }
+  [pscustomobject]@{ Proc = $p; Out = [Text.StringBuilder]::new(); Buf = [char[]]::new(4096); Err = $p.StandardError.ReadToEndAsync(); Seen = 0 }
 }
-# Reads the script's output until it ends with the prompt (a prompt has no newline after it).
+# Reads the script's output until it ends with the prompt (a prompt has no newline after it), asked after the last
+# prompt waited for: the same prompt asked again needs new output.
 function Wait-Prompt($Run, [string]$Prompt, [int]$TimeoutSec = 60) {
   $deadline = (Get-Date).AddSeconds($TimeoutSec)
-  while (-not $Run.Out.ToString().EndsWith($Prompt)) {
+  while (-not ($Run.Out.Length -gt $Run.Seen -and $Run.Out.ToString().EndsWith($Prompt))) {
     $read = $Run.Proc.StandardOutput.ReadAsync($Run.Buf, 0, $Run.Buf.Length)
     if (-not $read.Wait([int][Math]::Max(0, ($deadline - (Get-Date)).TotalMilliseconds))) { throw "no '$Prompt' within $TimeoutSec s: $($Run.Out)" }
     if ($read.Result -eq 0) { throw "the script ended before '$Prompt': $($Run.Out)" }
     [void]$Run.Out.Append($Run.Buf, 0, $read.Result)
   }
+  $Run.Seen = $Run.Out.Length
 }
 function Send-Answer($Run, [string]$Answer) { $Run.Proc.StandardInput.WriteLine($Answer); $Run.Proc.StandardInput.Flush() }
 function Complete-Release($Run) {
@@ -72,12 +74,25 @@ function Invoke-Notes([string[]]$NotesArgs) {
   $out = & pwsh -NoProfile -File (Join-Path $work 'build' 'Get-ReleaseNotes.ps1') @NotesArgs 2>&1
   [pscustomobject]@{ Code = $LASTEXITCODE; Text = (@($out) -join "`n") }
 }
+# Get-ReleaseNotes as the build workflow runs it: the start-tag step output it sets, or $null when it fails or sets
+# none.
+function Get-StartTag([string]$Version) {
+  $outputFile = Join-Path $Sandbox 'github-output.txt'
+  [IO.File]::WriteAllText($outputFile, '')
+  $saved = @($env:GITHUB_ACTIONS, $env:GITHUB_OUTPUT)
+  $env:GITHUB_ACTIONS = 'true'
+  $env:GITHUB_OUTPUT = $outputFile
+  try { $n = Invoke-Notes @('-Version', $Version) } finally { $env:GITHUB_ACTIONS = $saved[0]; $env:GITHUB_OUTPUT = $saved[1] }
+  $lines = @(Get-Content -LiteralPath $outputFile | Where-Object { $_ -like 'start-tag=*' })
+  if ($n.Code -or $lines.Count -ne 1) { return $null }
+  $lines[0].Substring('start-tag='.Length)
+}
 function Read-Changelog { (Get-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Raw) -replace "`r`n", "`n" }
-# Commits and pushes one Fixed entry under an empty [Unreleased], so the next release has notes.
-function Add-Entry([string]$Entry) {
+# Commits and pushes one entry right under [Unreleased], in its own group heading, so the next release has notes.
+function Add-Entry([string]$Entry, [string]$Group = 'Fixed') {
   $text = Get-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Raw
   $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
-  $text = $text.Replace("## [Unreleased]$nl", "## [Unreleased]$nl$nl### Fixed$nl$nl$Entry$nl")
+  $text = $text.Replace("## [Unreleased]$nl", "## [Unreleased]$nl$nl### $Group$nl$nl$Entry$nl")
   [IO.File]::WriteAllText((Join-Path $work 'CHANGELOG.md'), $text)
   G $work @('commit', '--quiet', '-m', "sandbox: $Entry", '--', 'CHANGELOG.md') | Out-Null
   G $work @('push', '--quiet', 'origin', 'master') | Out-Null
@@ -117,11 +132,13 @@ function Initialize-Sandbox {
 }
 
 function Invoke-Scenarios {
-  # 1. Dry run from a clean master: offers the patch first, changes nothing.
+  # 1. Dry run from a clean master: offers the release candidates first, then the finals; changes nothing.
   $head0 = G $work @('rev-parse', 'HEAD')
-  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
   Check 'dry run exits 0' ($r.Code -eq 0) $r.Text
-  Check 'dry run offers the patch 1.6.5 first' ($r.Text -match '1\) patch -> v1\.6\.5') ''
+  Check 'dry run offers the patch release candidate first' ($r.Text -match '1\) patch release candidate -> v1\.6\.5-rc\.1' -and
+    $r.Text -match '2\) minor release candidate -> v1\.7\.0-rc\.1' -and $r.Text -match '3\) major release candidate -> v2\.0\.0-rc\.1') $r.Text
+  Check 'then the finals' ($r.Text -match '4\) patch -> v1\.6\.5' -and $r.Text -match '5\) minor -> v1\.7\.0' -and $r.Text -match '6\) major -> v2\.0\.0') $r.Text
   Check 'dry run offers no "again" option' ($r.Text -notmatch 'again \(release commit') ''
   Check 'dry run creates no tag' (-not (G $work @('tag', '--list', 'v1.6.5'))) ''
   Check 'dry run leaves HEAD and VERSION' ((G $work @('rev-parse', 'HEAD')) -eq $head0 -and (Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.4') ''
@@ -138,12 +155,20 @@ function Invoke-Scenarios {
 
   # 1c. Tagging VERSION's own number again needs that version's CHANGELOG.md section, which the build posts.
   $r = Invoke-Release @('1', '1.6.4', 'y', 'y')
-  Check 'a tag without its section is refused' ($r.Code -eq 1 -and $r.Text -match 'no entries under \[1\.6\.4\]') $r.Text
+  Check 'a tag without its section is refused' ($r.Code -eq 1 -and $r.Text -match 'CHANGELOG\.md has no \[1\.6\.4\] heading: the release would have no notes') $r.Text
+  $changelogPath = Join-Path $work 'CHANGELOG.md'
+  $text = Get-Content -LiteralPath $changelogPath -Raw
+  $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+  [IO.File]::WriteAllText($changelogPath, $text.Replace("## [Unreleased]$nl", "## [Unreleased]$nl$nl<!--$nl## [1.6.4] - 2026-01-01$nl$nl- **Old.** One line.$nl-->$nl"))
+  $r = Invoke-Release @('1', '1.6.4', 'y', 'y') @('-DryRun')
+  Check '  and one inside a comment is named as the cause' ($r.Text -match 'no \[1\.6\.4\] heading \(it is inside an HTML comment or a code fence\)' -and
+    $r.Text -notmatch 'no entries under \[1\.6\.4\]') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Check 'and makes no tag' (-not (G $work @('tag', '--list', 'v*'))) ''
 
   # 2. First release: a normal patch bump from the seeded 1.6.4.
   $today = Get-Date -Format 'yyyy-MM-dd'
-  $r = Invoke-Release @('1', '', 'y', 'y')
+  $r = Invoke-Release @('4', '', 'y', 'y')
   Check 'first release exits 0' ($r.Code -eq 0) $r.Text
   Check 'first release commits VERSION 1.6.5' ((G $work @('log', '-1', '--format=%s')) -eq 'chore(release): v1.6.5' -and (Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.5') ''
   Check 'v1.6.5 is annotated' ((G $work @('cat-file', '-t', 'v1.6.5')) -eq 'tag') ''
@@ -160,25 +185,46 @@ function Invoke-Scenarios {
 
   # 2b. No entries under [Unreleased] stops a new version; a dry run only warns. Group headings alone are no entries.
   $noEntries = '\[xx\] CHANGELOG\.md has no entries under \[Unreleased\]: the release would have no notes'
-  $r = Invoke-Release @('1', '', 'y')
+  $r = Invoke-Release @('4', '', 'y')
   Check 'an empty Unreleased stops the release' ($r.Code -eq 1 -and $r.Text -match $noEntries) $r.Text
   Check 'and the Context warned about it' ($r.Text -match 'a new version needs them there first') ''
   Check 'and leaves no tag and a clean tree' (-not (G $work @('tag', '--list', 'v1.6.6')) -and -not (G $work @('status', '--porcelain'))) ''
-  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $r = Invoke-Release @('1', '', 'y')
+  Check 'an empty Unreleased stops a release candidate too' ($r.Code -eq 1 -and $r.Text -match $noEntries -and -not (G $work @('tag', '--list', 'v1.6.6-rc.1'))) $r.Text
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
   Check 'a dry run only warns about it' ($r.Code -eq 0 -and $r.Text -match ($noEntries -replace '^\\\[xx\\\]', '\[!!\]')) $r.Text
   $file = Join-Path $work 'CHANGELOG.md'
   $text = Get-Content -LiteralPath $file -Raw
   $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
   [IO.File]::WriteAllText($file, $text.Replace("## [Unreleased]$nl", "## [Unreleased]$nl$nl### Added$nl$nl### Fixed$nl"))
-  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
   Check 'headings without entries are no entries' ($r.Code -eq 0 -and $r.Text -match ($noEntries -replace '^\\\[xx\\\]', '\[!!\]')) $r.Text
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Add-Entry '- **Second fix.** One line.'
   # Without the [Unreleased] link the release still dates the section, and says it adds no compare link.
   $text = Get-Content -LiteralPath $file -Raw
   [IO.File]::WriteAllText($file, ($text -replace '(?m)^\[Unreleased\]: .*\r?\n', ''))
-  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
   Check 'a missing [Unreleased] link warns' ($r.Code -eq 0 -and $r.Text -match '\[!!\] CHANGELOG\.md has no \[Unreleased\] link at its end') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
+  Add-Content -LiteralPath $file -Value '<!-- a comment that never closes'
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
+  Check 'a comment that never closes warns' ($r.Code -eq 0 -and $r.Text -match '\[!!\] CHANGELOG\.md has an HTML comment or a code fence that never closes' -and
+    $r.Text -notmatch 'notes never closes') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
+  # Inside [Unreleased], after an entry, it would take the rest of the file into the notes: that stops a release.
+  $text = Get-Content -LiteralPath $file -Raw
+  [IO.File]::WriteAllText($file, $text.Replace("- **Second fix.** One line.$nl", "- **Second fix.** One line.$nl<!-- a comment that never closes$nl"))
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
+  Check '  inside the notes, it is the stop that the notes would run to the end' ($r.Code -eq 0 -and
+    $r.Text -match '\[!!\] an HTML comment or a code fence in the \[[0-9.]+\] notes never closes, so they would run to the end of CHANGELOG\.md') $r.Text
+  G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
+  # Above [Unreleased] the same comment hides the heading: the warning comes before the stop it causes.
+  $text = Get-Content -LiteralPath $file -Raw
+  [IO.File]::WriteAllText($file, $text.Replace('## [Unreleased]', "<!-- a comment that never closes$nl$nl## [Unreleased]"))
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
+  Check '  above [Unreleased], it warns before the missing-heading stop' ($r.Code -eq 1 -and
+    $r.Text -match '(?s)\[!!\] CHANGELOG\.md has an HTML comment or a code fence that never closes.*\[xx\] CHANGELOG\.md has no "## \[Unreleased\]" heading') $r.Text
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Import-Module (Join-Path $work 'build' 'Changelog.psm1') -Force
   $dated = Update-ChangelogForRelease -Text "## [Unreleased]`n`n- x`n" -Version '9.0.0' -Date 'D' -Tag 'v9.0.0'
@@ -189,9 +235,10 @@ function Invoke-Scenarios {
   Check 'entries count top-level items only, and a comment left open hides the rest' ($counts.Count -eq 1 -and $counts['Fixed'] -eq 2) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
 
   # 3. Patch release with the review gate's diff: VERSION and CHANGELOG.md commit, tag and push.
-  $r = Invoke-Release @('1', '', 'y', 'd', 'y')
+  $r = Invoke-Release @('4', '', 'y', 'd', 'y')
   Check 'patch release exits 0' ($r.Code -eq 0) $r.Text
-  Check 'patch release offered 1.6.6 first' ($r.Text -match '1\) patch -> v1\.6\.6') ''
+  Check 'patch release offered 1.6.6' ($r.Text -match '4\) patch -> v1\.6\.6') ''
+  Check 'the plan says the tag builds a draft' ($r.Text -match 'the tag builds a DRAFT release') ''
   Check 'VERSION is 1.6.6' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw) -eq "1.6.6`n") ''
   Check 'release commit subject' ((G $work @('log', '-1', '--format=%s')) -eq 'chore(release): v1.6.6') ''
   Check 'release commit holds VERSION and CHANGELOG.md' ((@((G $work @('show', '--name-only', '--format=', 'HEAD')) -split "`n") -join ',') -eq 'CHANGELOG.md,VERSION') ''
@@ -214,6 +261,7 @@ function Invoke-Scenarios {
   Check 'VERSION put back' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.6') ''
   Check 'no tag v1.7.0' (-not (G $work @('tag', '--list', 'v1.7.0'))) ''
   Check 'tree clean after abort' (-not (G $work @('status', '--porcelain'))) ''
+  Check '  and no copy of unedited files' ($r.Text -notmatch 'are kept in') $r.Text
 
   # 5. Preconditions: a tracked change stops a real run; a dry run only warns. So only a dry run gets past the edited
   #    VERSION's own tracked change to the VERSION check, which stops even a dry run.
@@ -226,9 +274,14 @@ function Invoke-Scenarios {
   [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "1.6.06`n")
   $r = Invoke-Release @() @('-DryRun')
   Check 'a VERSION with a leading zero is refused' ($r.Code -eq 1 -and $r.Text -match 'without leading zeros') $r.Text
+  foreach ($bad in '1.6.6-rc.0', '1.6.6-rc.01', '1.6.6-RC.1', '1.6.6-beta.1') {
+    [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "$bad`n")
+    $r = Invoke-Release @() @('-DryRun')
+    Check "a VERSION of $bad is refused" ($r.Code -eq 1 -and $r.Text -match "without leading zeros, not '$([regex]::Escape($bad))'") $r.Text
+  }
   [IO.File]::WriteAllText((Join-Path $work 'VERSION'), '')
   $r = Invoke-Release @() @('-DryRun')
-  Check 'an empty VERSION is refused by name' ($r.Code -eq 1 -and $r.Text -match "VERSION must hold major\.minor\.patch without leading zeros, not ''") $r.Text
+  Check 'an empty VERSION is refused by name' ($r.Code -eq 1 -and $r.Text -match "VERSION must hold major\.minor\.patch or major\.minor\.patch-rc\.N without leading zeros, not ''") $r.Text
   G $work @('checkout', '--quiet', '--', 'VERSION') | Out-Null
   [IO.File]::WriteAllText((Join-Path $work 'CHANGELOG.md'), '')
   $r = Invoke-Release @() @('-DryRun')
@@ -281,10 +334,12 @@ function Invoke-Scenarios {
   $hook = Join-Path $origin 'hooks' 'pre-receive'
   [IO.File]::WriteAllText($hook, "#!/bin/sh`necho sandbox rejects pushes`nexit 1`n")
   $head = G $work @('rev-parse', 'HEAD')
-  $r = Invoke-Release @('1', '', 'y', 'y')
+  $r = Invoke-Release @('4', '', 'y', 'y')
   Check 'rejected push exits 1' ($r.Code -eq 1 -and $r.Text -match 'push failed') $r.Text
   $undo = @($r.Text -split "`n" | Where-Object { $_ -match '^  git ' } | ForEach-Object { $_.Trim() })
   Check 'undo commands are separate lines' ($undo.Count -eq 3 -and $undo[0] -eq 'git reset --keep HEAD~1' -and $undo[1] -eq 'git tag -d v1.6.7') ($undo -join ' | ')
+  $shown = if ($r.Text -match 'The release commit keeps the CHANGELOG\.md you reviewed: git show ([0-9a-f]+):CHANGELOG\.md') { $Matches[1] } else { '' }
+  Check '  and names the release commit that keeps the reviewed CHANGELOG.md' ($shown -and $shown -eq (G $work @('rev-parse', '--short', 'HEAD'))) $r.Text
   Check 'origin got nothing' (-not (G $origin @('tag', '--list', 'v1.6.7')) -and (G $origin @('rev-parse', 'master')) -eq $head) ''
   # An edit to another tracked file, as if made during the prompts, must survive the printed undo.
   Add-Content -LiteralPath (Join-Path $work 'D2BS.h') -Value '// edit made during the prompts'
@@ -341,6 +396,21 @@ function Invoke-Scenarios {
   [IO.File]::WriteAllText($empty, '')
   $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $empty)
   Check 'an empty file has no section' ($n.Code -eq 1 -and $n.Text -match 'no \[4\.0\.0\] section') $n.Text
+  $hiddenAbove = Join-Path $Sandbox 'hidden-above.md'
+  [IO.File]::WriteAllText($hiddenAbove, "<!-- never closed`n`n## [4.0.0] - 2026-03-01`n`n- **Entry.** One line.`n")
+  $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $hiddenAbove)
+  Check 'a section hidden by a comment above it fails, naming the cause' ($n.Code -eq 1 -and
+    $n.Text -match 'no \[4\.0\.0\] section \(its heading is inside an HTML comment or a code fence\)') $n.Text
+  [IO.File]::WriteAllText($hiddenAbove, "## [4.0.0] - 2026-03-01`n`n- **Entry.** One line.`n<!-- never closed`n`n## [3.0.0] - 2026-02-01`n`n- **Old.** One line.`n")
+  $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $hiddenAbove)
+  Check 'a comment left open after an entry fails: the notes would run to the end' ($n.Code -eq 1 -and
+    $n.Text -match "\[4\.0\.0\] section never closes, so its notes would run to the end of the file") $n.Text
+  [IO.File]::WriteAllText($hiddenAbove, "<!-- never closed`n`n## [5.0.0] - 2026-04-01`n`n- **Entry.** One line.`n`n## [4.0.0] - 2026-03-01`n`n- x`n")
+  $n = Invoke-Notes @('-Version', '9.9.9', '-Changelog', $hiddenAbove)
+  Check 'an unrelated comment left open names no cause for a missing section' ($n.Code -eq 1 -and $n.Text -match 'no \[9\.9\.9\] section:') $n.Text
+  [IO.File]::WriteAllText($hiddenAbove, "## [4.0.0] - 2026-03-01`n`n### Fixed`n`n- <!-- describe the fix here -->`n")
+  $n = Invoke-Notes @('-Version', '4.0.0', '-Changelog', $hiddenAbove)
+  Check 'a placeholder entry inside an inline comment is no entry' ($n.Code -eq 1 -and $n.Text -match '\[4\.0\.0\] section has no entries') $n.Text
 
   # 13. A commit made while a prompt waits stops the release before anything is published: at "Proceed?" before
   #     anything is written, and at the review, which puts the files back.
@@ -350,7 +420,7 @@ function Invoke-Scenarios {
     $run = Start-Release
     try {
       Wait-Prompt $run 'Choice [1]: '
-      Send-Answer $run '1'
+      Send-Answer $run '4'
       Wait-Prompt $run 'Version [1.6.7]: '
       Send-Answer $run ''
       if ($where -eq 'the review') { Wait-Prompt $run 'Proceed? [Y/n] '; Send-Answer $run 'y' }
@@ -374,7 +444,7 @@ function Invoke-Scenarios {
   $run = Start-Release
   try {
     Wait-Prompt $run 'Choice [1]: '
-    Send-Answer $run '1'
+    Send-Answer $run '4'
     Wait-Prompt $run 'Version [1.6.7]: '
     Send-Answer $run ''
     Wait-Prompt $run 'Proceed? [Y/n] '
@@ -395,7 +465,7 @@ function Invoke-Scenarios {
   $run = Start-Release
   try {
     Wait-Prompt $run 'Choice [1]: '
-    Send-Answer $run '1'
+    Send-Answer $run '4'
     Wait-Prompt $run 'Version [1.6.7]: '
     Send-Answer $run ''
     Wait-Prompt $run 'Proceed? [Y/n] '
@@ -408,6 +478,246 @@ function Invoke-Scenarios {
   Check 'an edit made at Proceed? stops the release' ($r.Code -eq 1 -and $r.Text -match 'changed during the prompts') $r.Text
   Check '  and keeps the edit' ((Read-Changelog).Contains('Edit made at Proceed.') -and (Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.6') ''
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
+
+  # 14. The first release candidate dates [Unreleased] as its own section and chains its link from the last final.
+  $link = 'https://github.com/blizzhackers/d2bs/compare'
+  $r = Invoke-Release @('1', '', 'y', 'y')
+  Check 'the first release candidate exits 0' ($r.Code -eq 0) $r.Text
+  Check 'VERSION is 1.6.7-rc.1' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw) -eq "1.6.7-rc.1`n") ''
+  Check 'the commit and the annotated tag name the candidate' ((G $work @('log', '-1', '--format=%s')) -eq 'chore(release): v1.6.7-rc.1' -and
+    (G $work @('cat-file', '-t', 'v1.6.7-rc.1')) -eq 'tag' -and [bool](G $origin @('tag', '--list', 'v1.6.7-rc.1'))) ''
+  Check 'the plan says the tag publishes a pre-release' ($r.Text -match 'the tag builds and publishes a pre-release') $r.Text
+  Check 'the next steps hand the DLL to testers' ($r.Text -match 'call it 1\.6\.7U-rc\.1\.' -and $r.Text -match 'cut the next release candidate instead' -and
+    $r.Text -notmatch 'draft=false') $r.Text
+  $log = Read-Changelog
+  Check 'CHANGELOG.md dates [Unreleased] as the candidate' ($log.Contains("## [Unreleased]`n`n## [1.6.7-rc.1] - $today`n`n### Fixed`n`n- **Third fix.** One line.`n`n## [1.6.6]")) $log
+  Check 'and chains its link from v1.6.6' ($log.Contains("[Unreleased]: $link/v1.6.7-rc.1...HEAD`n[1.6.7-rc.1]: $link/v1.6.6...v1.6.7-rc.1`n[1.6.6]: ")) $log
+  Check 'its notes are its section' ((Invoke-Notes @('-Version', 'v1.6.7-rc.1')).Text -eq "### Fixed`n`n- **Third fix.** One line.") ''
+  Check 'its pull request list starts at v1.6.6' ((Get-StartTag 'v1.6.7-rc.1') -eq 'v1.6.6') ''
+  Check 'a link that starts from a commit gives no start tag' ((Get-StartTag 'v1.6.5') -eq '') ''
+
+  # 14b. After a failed build, before any tester has it, the same candidate again tags the fixed master.
+  G $work @('push', '--quiet', 'origin', ':refs/tags/v1.6.7-rc.1') | Out-Null
+  G $work @('tag', '-d', 'v1.6.7-rc.1') | Out-Null
+  Set-Content -LiteralPath (Join-Path $work 'fix2.txt') -Value 'the candidate fix'
+  G $work @('add', 'fix2.txt') | Out-Null
+  G $work @('commit', '--quiet', '-m', 'sandbox: the candidate fix') | Out-Null
+  $fixHead = G $work @('rev-parse', 'HEAD')
+  $r = Invoke-Release @('y', '1', '', 'y')
+  Check 'the candidate again exits 0' ($r.Code -eq 0) $r.Text
+  Check 'it offered 1.6.7-rc.1 again first, then the next candidate and the final' ($r.Text -match '1\) 1\.6\.7-rc\.1 again \(release commit' -and
+    $r.Text -match '2\) next release candidate -> v1\.6\.7-rc\.2' -and $r.Text -match '3\) final -> v1\.6\.7') $r.Text
+  Check 'v1.6.7-rc.1 tags the fixed master, with no new commit' ((G $work @('rev-parse', 'HEAD')) -eq $fixHead -and
+    (G $origin @('rev-parse', 'v1.6.7-rc.1^{commit}')) -eq $fixHead) ''
+  Check 'it warned that the [Unreleased] link starts at the deleted tag' ($r.Text -match "\[!!\] CHANGELOG\.md's \[Unreleased\] link starts at v1\.6\.7-rc\.1, which is no local tag: if its build failed, release 1\.6\.7-rc\.1 again first") $r.Text
+
+  # 14c. The next candidate holds only what is new since the one before.
+  Add-Entry '- **Candidate feature.** One line.' 'Added'
+  Add-Entry '- **Candidate-only fix.** One line.'
+  $r = Invoke-Release @('1', '', 'y', 'y')
+  Check 'the second release candidate exits 0' ($r.Code -eq 0) $r.Text
+  Check 'it counted the first candidate and [Unreleased]' ($r.Text -match 'CHANGELOG\.md \[1\.6\.7-rc\.1\]: Fixed 1' -and $r.Text -match 'CHANGELOG\.md \[Unreleased\]: Fixed 1, Added 1') $r.Text
+  Check 'it showed the commits since v1.6.7-rc.1' ($r.Text -match '2 commit\(s\) since v1\.6\.7-rc\.1:') $r.Text
+  Check 'VERSION is 1.6.7-rc.2' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw) -eq "1.6.7-rc.2`n") ''
+  Check 'its notes hold only the new entries' ((Invoke-Notes @('-Version', '1.6.7-rc.2')).Text -eq
+    "### Fixed`n`n- **Candidate-only fix.** One line.`n`n### Added`n`n- **Candidate feature.** One line.") ''
+  Check 'its pull request list starts at v1.6.7-rc.1' ((Get-StartTag 'v1.6.7-rc.2') -eq 'v1.6.7-rc.1') ''
+
+  # 14d. Inside a cycle: taken, malformed and older versions are asked again, and another candidate needs new entries.
+  $r = Invoke-Release @('1', '1.6.7-rc.2', '1.6.7-rc.02', '1.6.7-beta.1', '1.6.7-rc.0', '1.6.6-rc.9', 'n', '')
+  Check 'a candidate with nothing new stops' ($r.Code -eq 1 -and $r.Text -match $noEntries) $r.Text
+  Check '  and the Context said a final can still merge them' ($r.Text -match 'a final can still merge the release candidates') $r.Text
+  Check '  taken candidates refused, a leading zero included' (([regex]::Matches($r.Text, 'tag v1\.6\.7-rc\.2 already exists')).Count -eq 2) $r.Text
+  Check '  other labels and rc.0 refused' (([regex]::Matches($r.Text, 'a version is major\.minor\.patch, or')).Count -eq 2) $r.Text
+  Check '  an older candidate needs a confirmation' ($r.Text -match 'v1\.6\.6-rc\.9 is not newer than v1\.6\.7-rc\.2') $r.Text
+  Check '  the next candidate was rc.3, and nothing was tagged' ($r.Text -match '1\) next release candidate -> v1\.6\.7-rc\.3' -and
+    -not (G $work @('tag', '--list', 'v1.6.7-rc.3')) -and -not (G $work @('status', '--porcelain'))) ''
+  Check '  with nothing new, the final was the default' ($r.Text -match 'Choice \[2\]: ') $r.Text
+
+  # 14e. Leaving the final's review keeps the edits made there. Notes it couldn't post are asked about again: the
+  #      heading gone (or inside a comment), only a commented-out placeholder left, or a comment left open after an
+  #      entry. n copies the edited CHANGELOG.md out of the repo before it puts the files back.
+  Add-Entry '- **Change after the last candidate.** One line.' 'Changed'
+  $review = '(y) commit + tag + push  (d) show the diff  (n) abort: '
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '2'
+    Wait-Prompt $run 'Version [1.6.7]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    $file = Join-Path $work 'CHANGELOG.md'
+    $written = Get-Content -LiteralPath $file -Raw
+    [IO.File]::WriteAllText($file, ($written -replace '(?m)^## \[1\.6\.7\] - .*\r?\n', ''))
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText($file, ($written -replace '(?m)^(## \[1\.6\.7\] - )', "<!-- never closed`r`n`r`n`$1"))
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText($file, ($written -replace '(?s)(## \[1\.6\.7\] - [^\r\n]*\r\n).*?(?=## \[|\[Unreleased\]: )', "`$1`r`n- <!-- describe the fix here -->`r`n`r`n"))
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText($file, ($written -replace '(?s)(## \[1\.6\.7\] - .*?\r\n- [^\r\n]*\r\n)', "`$1<!-- never closed`r`n"))
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    Send-Answer $run 'n'
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'a review edit that removes the heading is asked about again' ($r.Code -eq 1 -and $r.Text -match 'CHANGELOG\.md has no \[1\.6\.7\] heading now: put it back') $r.Text
+  Check '  naming a comment around it' ($r.Text -match 'no \[1\.6\.7\] heading now \(it is inside an HTML comment or a code fence\)') $r.Text
+  Check '  a placeholder inside a comment is no entry' ($r.Text -match 'CHANGELOG\.md has no entries under \[1\.6\.7\] now: the release would have no notes') $r.Text
+  Check '  a comment left open after an entry would take the rest of the file' ($r.Text -match
+    'in the \[1\.6\.7\] notes never closes, so they would run to the end of CHANGELOG\.md \(close it, or answer n\)') $r.Text
+  $kept = if ($r.Text -match '(?m)Your edits to CHANGELOG\.md are kept in (.+?)\r?$') { $Matches[1] } else { $null }
+  $keptText = if ($kept -and (Test-Path -LiteralPath $kept)) { Get-Content -LiteralPath $kept -Raw } else { '' }
+  Check '  and n keeps the edited CHANGELOG.md outside the repo' ($keptText -match 'Candidate feature' -and $keptText -match '<!-- never closed') $r.Text
+  Check '  and puts the files back' ($r.Text -match 'VERSION put back to 1\.6\.7-rc\.2' -and -not (G $work @('status', '--porcelain'))) (G $work @('status', '--porcelain'))
+  if ($keptText) { Remove-Item -LiteralPath $kept }
+
+  # 14f. The final merges the candidates and [Unreleased]; the review takes an edit to the merged notes, and asks again
+  #      while VERSION no longer names the release.
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '2'
+    Wait-Prompt $run 'Version [1.6.7]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "9.9.9`n")
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "1.6.7`n")
+    $file = Join-Path $work 'CHANGELOG.md'
+    [IO.File]::WriteAllText($file, ((Get-Content -LiteralPath $file -Raw) -replace '- \*\*Candidate-only fix\.\*\* One line\.\r?\n', ''))
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'the final exits 0' ($r.Code -eq 0) $r.Text
+  Check 'it offered the next candidate first, then the final' ($r.Text -match '1\) next release candidate -> v1\.6\.7-rc\.3' -and $r.Text -match '2\) final -> v1\.6\.7') $r.Text
+  Check 'it warned about the commit no candidate had' ($r.Text -match 'v1\.6\.7 would ship 1 commit\(s\) that no release candidate had \(since v1\.6\.7-rc\.2\)') $r.Text
+  Check 'the plan merges both candidates and [Unreleased]' ($r.Text -match "merge CHANGELOG\.md's \[1\.6\.7-rc\.2\], \[1\.6\.7-rc\.1\] and \[Unreleased\] sections into \[1\.6\.7\]" -and
+    $r.Text -match 'Release notes \(CHANGELOG\.md \[Unreleased\] and \[1\.6\.7-rc\.2\], \[1\.6\.7-rc\.1\], merged\)') $r.Text
+  Check 'the review asked again while VERSION said 9.9.9' ($r.Text -match 'VERSION no longer says 1\.6\.7') $r.Text
+  Check 'VERSION is 1.6.7, and origin has v1.6.7 on the release commit' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw) -eq "1.6.7`n" -and
+    (G $work @('log', '-1', '--format=%s')) -eq 'chore(release): v1.6.7' -and (G $origin @('rev-parse', 'v1.6.7^{commit}')) -eq (G $work @('rev-parse', 'HEAD'))) ''
+  $log = Read-Changelog
+  $merged = "## [Unreleased]`n`n## [1.6.7] - $today`n`n### Added`n`n- **Candidate feature.** One line.`n`n### Changed`n`n" +
+    "- **Change after the last candidate.** One line.`n`n### Fixed`n`n- **Third fix.** One line.`n`n## [1.6.6]"
+  Check 'the final merged the candidates in group order, without the edited-out entry' ($log.Contains($merged)) $log
+  Check 'no candidate section or link is left' ($log -notmatch '1\.6\.7-rc\.') $log
+  Check 'its link starts where the first candidate did' ($log.Contains("[Unreleased]: $link/v1.6.7...HEAD`n[1.6.7]: $link/v1.6.6...v1.6.7`n[1.6.6]: ")) $log
+  Check 'CHANGELOG.md still has CRLF only' (-not ((Get-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Raw) -match '(?<!\r)\n')) ''
+  Check 'its notes are the merged section' ((Invoke-Notes @('-Version', '1.6.7')).Text -eq ($merged -replace '(?s)^.*?- \d{4}-\d\d-\d\d\n\n', '' -replace '\n\n## \[1\.6\.6\]$', '')) ''
+  Check 'its pull request list starts at v1.6.6' ((Get-StartTag 'v1.6.7') -eq 'v1.6.6') ''
+  Check 'the next steps are a final''s' ($r.Text -match 'draft=false --latest' -and $r.Text -notmatch 'call it') $r.Text
+
+  # 14g. The final again after a failed build: its own release commit is not one that no candidate had.
+  G $work @('push', '--quiet', 'origin', ':refs/tags/v1.6.7') | Out-Null
+  G $work @('tag', '-d', 'v1.6.7') | Out-Null
+  $r = Invoke-Release @('1', '', 'y')
+  Check 'the final again exits 0' ($r.Code -eq 0 -and $r.Text -match '1\) 1\.6\.7 again \(release commit') $r.Text
+  Check '  and counts only the commit after the candidate' ($r.Text -match 'v1\.6\.7 would ship 1 commit\(s\) that no release candidate had') $r.Text
+  Check '  and offers the next cycle after it' ($r.Text -match '2\) patch release candidate -> v1\.6\.8-rc\.1' -and $r.Text -match '5\) patch -> v1\.6\.8') $r.Text
+
+  # 14h. The merge on its own: text before any group, a group in another case, an unknown group and an empty one, a
+  #      final version below the candidates, no Unreleased link, hidden text and a paragraph after a list.
+  Import-Module (Join-Path $work 'build' 'Changelog.psm1') -Force
+  $in = ("# Changelog`n`n## [Unreleased]`n`n### fixed`n`n- u`n`n## [2.0.0-rc.2] - D2`n`n### Fixed`n`n- c`n`n### Notes`n`n- n`n`n" +
+    "## [2.0.0-rc.1] - D1`n`n- loose`n`n### Security`n`n- s`n`n### Fixed`n`n- a`n  - nested`n`n### Added`n`n## [1.0.0] - D0`n`n- old`n`n" +
+    "[Unreleased]: https://h/compare/v2.0.0-rc.2...HEAD`n[2.0.0-rc.2]: https://h/compare/v2.0.0-rc.1...v2.0.0-rc.2`n" +
+    "[2.0.0-rc.1]: https://h/compare/v1.0.0...v2.0.0-rc.1`n[1.0.0]: https://h/compare/abc...v1.0.0`n")
+  $out = Update-ChangelogForRelease -Text $in -Version '2.0.0' -Date 'D' -Tag 'v2.0.0'
+  $want = ("# Changelog`n`n## [Unreleased]`n`n## [2.0.0] - D`n`n- loose`n`n### Fixed`n`n- a`n  - nested`n- c`n- u`n`n### Security`n`n- s`n`n" +
+    "### Notes`n`n- n`n`n## [1.0.0] - D0`n`n- old`n`n[Unreleased]: https://h/compare/v2.0.0...HEAD`n[2.0.0]: https://h/compare/v1.0.0...v2.0.0`n" +
+    "[1.0.0]: https://h/compare/abc...v1.0.0`n")
+  Check 'the merge orders groups and keeps older versions' ($out -eq $want) $out
+  $out = Update-ChangelogForRelease -Text "## [Unreleased]`n`n## [3.0.0-rc.1] - D`n`n- x" -Version '3.0.0' -Date 'E' -Tag 'v3.0.0'
+  Check 'a lone candidate without links merges, ending as it did' ($out -eq "## [Unreleased]`n`n## [3.0.0] - E`n`n- x") $out
+  $threw = $null
+  try { Update-ChangelogForRelease -Text "## [Unreleased]`n`n## [3.0.0-rc.1] - D`n`n### Added`n" -Version '3.0.0' -Date 'E' -Tag 'v3.0.0' | Out-Null }
+  catch { $threw = $_.Exception.Message }
+  Check 'a final with no entries anywhere is refused' ($threw -match 'no entries under \[Unreleased\] or its release candidates') $threw
+  $out = Update-ChangelogForRelease -Text $in -Version '2.0.0-rc.3' -Date 'D' -Tag 'v2.0.0-rc.3'
+  Check 'a release candidate leaves the other candidates alone' ($out.Contains("## [Unreleased]`n`n## [2.0.0-rc.3] - D`n`n### fixed`n`n- u`n`n## [2.0.0-rc.2] - D2") -and
+    $out.Contains("[Unreleased]: https://h/compare/v2.0.0-rc.3...HEAD`n[2.0.0-rc.3]: https://h/compare/v2.0.0-rc.2...v2.0.0-rc.3`n[2.0.0-rc.2]: ")) $out
+  Check 'tag names: release and candidate tags in the spelling the script cuts, nothing else' ((Test-ChangelogTagName 'v1.6.4') -and
+    (Test-ChangelogTagName 'v1.7.0-rc.2') -and -not (@('V1.6.4', 'v1.7.0-RC.2', 'bf77a8f', '', 'v1.6', 'v1.6.4U', "v1.6.4`n") | Where-Object { Test-ChangelogTagName $_ })) ''
+  # Hidden text (an HTML comment block, a fenced block closed only by a fence at least as long) holds no heading, link
+  # or entry for any reader; a "<!--" later in a line opens nothing.
+  $fence3 = '```'
+  $fence4 = '````'
+  $in = ("## [Unreleased]`n`n<!--`n### Added`n`n- **Lead.** A template.`n-->`n`n## [2.0.0-rc.1] - D`n`n### Added`n`n" +
+    "- **Real feature.** One line.`n`n$fence4`n$fence3`n### Fixed`n$fence4`n")
+  $section = Get-ChangelogSection -Text (Update-ChangelogForRelease -Text $in -Version '2.0.0' -Date 'E' -Tag 'v2.0.0') -Name '2.0.0'
+  Check 'a commented template and a fenced heading stay whole, and the entries visible' ($section -eq
+    "<!--`n### Added`n`n- **Lead.** A template.`n-->`n`n### Added`n`n- **Real feature.** One line.`n`n$fence4`n$fence3`n### Fixed`n$fence4" -and
+    (Get-ChangelogEntryCounts $section)['Added'] -eq 1) $section
+  $in = ("## [Unreleased]`n`n### Fixed`n`n- u`n`n<!--`n## [x.y.z] - yyyy-mm-dd`n### Added`n-->`n`n## [2.0.0-rc.1] - D`n`n### Added`n`n" +
+    "- **Real feature.** One line.`n`n[Unreleased]: https://h/compare/v2.0.0-rc.1...HEAD`n[2.0.0-rc.1]: https://h/compare/v1.0.0...v2.0.0-rc.1`n")
+  Check 'a commented-out section heading hides no release candidate' ((Get-ChangelogCandidates $in).Count -eq 1) ''
+  $out = Update-ChangelogForRelease -Text $in -Version '2.0.0' -Date 'E' -Tag 'v2.0.0'
+  Check '  and the final merges it, its link from v1.0.0' ($out -notmatch '2\.0\.0-rc\.1' -and $out.Contains('[2.0.0]: https://h/compare/v1.0.0...v2.0.0') -and
+    (Get-ChangelogEntryCounts (Get-ChangelogSection -Text $out -Name '2.0.0'))['Added'] -eq 1) $out
+  $section = Get-ChangelogSection -Text (Update-ChangelogForRelease -Text "## [Unreleased]`n`n## [2.0.0-rc.1] - D`n`n### Added`n`n- a <!-- todo`n`n### Fixed`n`n- c`n" -Version '2.0.0' -Date 'E' -Tag 'v2.0.0') -Name '2.0.0'
+  Check 'an unclosed <!-- inside an entry opens no hidden block' ($section -eq "### Added`n`n- a <!-- todo`n`n### Fixed`n`n- c") $section
+  # Inside an entry, a comment hides text up to its "-->" within the paragraph; one still open at the paragraph's end
+  # shows as text. (Each case below matches GitHub's rendering of it.)
+  $counts = Get-ChangelogEntryCounts "### Fixed`n`n- <!-- describe the fix here -->`n- <!-->`n`n### Added`n`n- <!-- a --> real <!-- b -->`n- a <!-- open`n- c -->"
+  Check 'inline comments: a placeholder or "<!-->" is no entry; text beside one, or after one left open, is' ($counts.Count -eq 1 -and $counts['Added'] -eq 3) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  Check '  one over two lines of an entry is no wrapped line' (-not (Get-ChangelogWrappedLines "- **Fix.** Text <!-- a note`n  that wraps --> more.")) ''
+  $wrapped = @(Get-ChangelogWrappedLines "- b <!-- x`n`n  y -->")
+  Check '  but one over a blank line is no comment' ($wrapped.Count -eq 1 -and $wrapped[0] -eq '  y -->') ($wrapped -join '|')
+  $wrapped = @(Get-ChangelogWrappedLines "- a <!-- x`n<!-- note -->`n  b -->")
+  Check '  and neither is one over a comment block' ($wrapped.Count -eq 1 -and $wrapped[0] -eq '  b -->') ($wrapped -join '|')
+  # A list item whose text starts with "<!--" opens a comment block, which ends with the item: left open there, it
+  # hides the rest of the file. One indented into an item does the same; one at the margin is outside the list.
+  $section = "- <!-- describe the fix here,`n`n  over a blank line -->`n- <!-- x`n  y -->"
+  $counts = Get-ChangelogEntryCounts $section
+  Check 'an item opening a comment: closed inside the item, it hides the item' ($counts.Count -eq 0 -and -not (Test-ChangelogUnclosed $section) -and
+    -not (Get-ChangelogWrappedLines $section)) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  Check '  left open when the item ends, it never closes' ((Test-ChangelogUnclosed "- real`n- <!-- open`n- next -->") -and
+    (Test-ChangelogUnclosed "- <!-- x`n$fence3`nin a fence`n$fence3`n  b -->") -and (Test-ChangelogUnclosed "- a`n  - <!-- x`n  - b -->`n- c") -and
+    (Test-ChangelogUnclosed "### Fixed`n`n- real`n- <!-- open`n`n## [1.0.0]`n`n- old")) ''
+  $counts = Get-ChangelogEntryCounts "- a`n`n  <!-- x`n`n  y -->`n- b`n<!-- z`n- hidden -->`n- c"
+  Check '  one indented into an item closes inside it; one at the margin is outside the list' ($counts['(no group)'] -eq 3 -and
+    -not (Test-ChangelogUnclosed "- a`n`n  <!-- x`n`n  y -->`n- b") -and (Test-ChangelogUnclosed "- a`n  <!-- note`n- b -->`n- c")) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  # A fence inside an item closes with the item, so a closing fence at the margin opens a new one; a nested item's
+  # fence is indented past its text, not four columns.
+  $counts = Get-ChangelogEntryCounts "- a`n  - b`n`n    $fence3`n    <!-- x`n    $fence3`n- c"
+  Check 'a fence in a nested item hides its lines, comments included' ($counts['(no group)'] -eq 2 -and
+    -not (Test-ChangelogUnclosed "- a`n  - b`n`n    $fence3`n    <!-- x`n    $fence3`n- c")) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  $counts = Get-ChangelogEntryCounts "- a`n  $fence3`n  x`n- b"
+  Check '  one left open closes with its item' ($counts['(no group)'] -eq 2 -and -not (Test-ChangelogUnclosed "- a`n  $fence3`n  x`n- b")) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  Check '  and its fence at the margin opens a new one, which never closes' (Test-ChangelogUnclosed "- a`n  $fence3`n  code`n$fence3`n- b`n`n### Fixed`n`n- c") ''
+  Check 'a heading inside a comment is a hidden heading; a visible one, or none, is not' ((Test-ChangelogHeadingHidden "<!--`n## [1.0.0]`n-->" '1.0.0') -and
+    -not (Test-ChangelogHeadingHidden "<!--`n## [1.0.0]`n-->`n## [1.0.0]" '1.0.0') -and -not (Test-ChangelogHeadingHidden "## [2.0.0]" '1.0.0')) ''
+  $counts = Get-ChangelogEntryCounts "$fence3`n<!--`n$fence3`n### Fixed`n- a"
+  Check 'a <!-- inside a fence hides nothing after the fence' ($counts.Count -eq 1 -and $counts['Fixed'] -eq 1) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
+  Check 'a commented-out link is not the link' ((Get-ChangelogCompareBase "<!--`n[Unreleased]: https://h/compare/old...HEAD`n-->`n[Unreleased]: https://h/compare/v1.0.0...HEAD" 'Unreleased') -eq 'v1.0.0') ''
+  $section = Get-ChangelogSection -Text (Update-ChangelogForRelease -Text "## [Unreleased]`n`nPara two.`n`n## [2.0.0-rc.1] - D`n`n- loose one`n" -Version '2.0.0' -Date 'E' -Tag 'v2.0.0') -Name '2.0.0'
+  Check 'a paragraph after a list stays its own paragraph' ($section -eq "- loose one`n`nPara two.") $section
+  $section = Get-ChangelogSection -Text (Update-ChangelogForRelease -Text "## [Unreleased]`n`n2. two`n`n## [2.0.0-rc.1] - D`n`nPara one.`n" -Version '2.0.0' -Date 'E' -Tag 'v2.0.0') -Name '2.0.0'
+  Check 'a list that cannot interrupt a paragraph starts after a blank line' ($section -eq "Para one.`n`n2. two") $section
+  # The same with CRLF: a "~~~" fence and a one-line comment hide a heading and links, "<!-->" closes on its own line,
+  # and a line of backticks with a backtick after them is inline code, not a fence.
+  $in = ("## [Unreleased]`n`n- e`n`n<!-->`n<!-- [Unreleased]: https://h/compare/bad...HEAD -->`n${fence3}x${fence3}`n`n" +
+    "## [1.0.0-rc.1] - D`n`n### Fixed`n`n- r`n`n~~~`n## [9.9.9]`n### Added`n[1.0.0-rc.1]: https://h/compare/bad...v1.0.0-rc.1`n~~~`n`n" +
+    "[Unreleased]: https://h/compare/v1.0.0-rc.1...HEAD`n[1.0.0-rc.1]: https://h/compare/v0.9.0...v1.0.0-rc.1`n") -replace "`n", "`r`n"
+  Check 'CRLF hidden text: one candidate, the visible link, nothing left open' ((Get-ChangelogCandidates $in).Count -eq 1 -and
+    (Get-ChangelogCompareBase $in 'Unreleased') -eq 'v1.0.0-rc.1' -and -not (Test-ChangelogUnclosed $in)) ''
+  $out = Update-ChangelogForRelease -Text $in -Version '1.0.0' -Date 'E' -Tag 'v1.0.0'
+  $counts = Get-ChangelogEntryCounts (Get-ChangelogSection -Text $out -Name '1.0.0')
+  Check '  and the final merges it with its fence whole, linked from v0.9.0' ($out.Contains("~~~`r`n## [9.9.9]`r`n### Added`r`n[1.0.0-rc.1]: https://h/compare/bad...v1.0.0-rc.1`r`n~~~") -and
+    $out.Contains('[1.0.0]: https://h/compare/v0.9.0...v1.0.0') -and $counts['Fixed'] -eq 1 -and $counts['(no group)'] -eq 1 -and
+    $out -cnotmatch '(?m)^## \[1\.0\.0-rc\.1\]') $out
 }
 
 if (Test-Path -LiteralPath $Sandbox) { throw "$Sandbox already exists: pass another -Sandbox" }

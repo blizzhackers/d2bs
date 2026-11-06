@@ -2,11 +2,11 @@
 
 All notable changes to D2BS are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Versions up to 1.6.4 were never tagged; their history is in the git log.
+Versions before 1.6.4 were never tagged; their history is in the git log.
+
+Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listing what changed since the one before; the final release brings them together in one section.
 
 ## [Unreleased]
-
-## [1.7.0] - 2026-11-02
 
 ### Added
 
@@ -54,5 +54,4 @@ Versions up to 1.6.4 were never tagged; their history is in the git log.
 - **Dependable file reads, seeks and closes.** `FileTools.readText()` throws when reading the file fails, a `File` whose `close()` throws is closed and can be reopened, `file.seek(n)` on a file opened with locking moves `n` bytes, and a binary `file.read(count)` returns 0 for each value past the end of the file and frees its memory when done.
 - **Steady memory for busy bots.** Every event a listener receives and every `getPath()` call frees the memory it used, so bots that trade many chat, `copydata` and script messages keep a steady footprint over long runs.
 
-[Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.7.0...HEAD
-[1.7.0]: https://github.com/blizzhackers/d2bs/compare/bf77a8f...v1.7.0
+[Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.6.4...HEAD

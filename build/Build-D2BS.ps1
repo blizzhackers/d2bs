@@ -5,11 +5,13 @@
   level 3, _CRT_SECURE_NO_WARNINGS). Everything the build writes goes to -Out (default build\out): objects, generated
   headers, the unpacked js_static.lib, D2BS.dll, D2BS.pdb and build.log.
 
-  The version comes from the VERSION file (the latest release, which build\Release-D2BS.ps1 bumps) and the commit:
-  "1.6.5U+dev (7c036ba)", a build after 1.6.5, and file version 1.6.5.<BuildNumber>; or with -Release -Tag v1.6.5,
-  "1.6.5U (7c036ba)" and 1.6.5.0. A build with uncommitted changes to tracked files says so ("7c036ba+dirty"). The
-  last file-version number is 0 only for releases: CI passes its run number, and a local build without -BuildNumber
-  gets 65535. The DLL's product version string carries the full version text.
+  The version comes from the VERSION file (the latest release or release candidate, which build\Release-D2BS.ps1
+  bumps) and the commit: "1.6.5U+dev (7c036ba)", a build after 1.6.5, and file version 1.6.5.<BuildNumber>; or with
+  -Release -Tag v1.6.5, "1.6.5U (7c036ba)" and 1.6.5.0. A release candidate's VERSION (1.7.0-rc.2) gives
+  "1.7.0U-rc.2 (7c036ba)" with -Release -Tag v1.7.0-rc.2, "1.7.0U-rc.2+dev (7c036ba)" without, and file version
+  1.7.0.<BuildNumber> either way. A build with uncommitted changes to tracked files says so ("7c036ba+dirty"). The
+  last file-version number is 0 only for final releases: CI passes its run number, and a local build without
+  -BuildNumber gets 65535. The DLL's product version string carries the full version text.
 
     pwsh -File build\Build-D2BS.ps1 -Toolset C:\d2bs-toolset
 
@@ -47,21 +49,23 @@ if (($made -join "`n") -ne ($wanted -join "`n")) {
   throw "$Toolset was made by another toolset recipe or from other packages ($first): run build\Get-Toolset.ps1 again"
 }
 
-# Version: VERSION holds major.minor.patch; the U suffix is D2BS's (Unicode build) since 1.6.4U.
+# Version: VERSION holds major.minor.patch, and -rc.N for a release candidate; the U suffix is D2BS's (Unicode build)
+# since 1.6.4U, and a release candidate's label follows it (1.7.0U-rc.2).
 $version = (Get-Content -LiteralPath (Join-Path $repo 'VERSION') -Raw).Trim()
-if ($version -notmatch '^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})$') {
-  throw "VERSION must be major.minor.patch without leading zeros, not '$version'"
+if ($version -notmatch '^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(-rc\.[1-9]\d{0,4})?$') {
+  throw "VERSION must be major.minor.patch or major.minor.patch-rc.N without leading zeros, not '$version'"
 }
 $numbers = @([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
+$candidate = if ($Matches.Contains(4)) { $Matches[4] } else { '' }
 if (@($numbers | Where-Object { $_ -gt 65535 }).Count) { throw "VERSION $version does not fit a file version: each number is at most 65535" }
 if ($Release -and $Tag -ne "v$version") { throw "release tag '$Tag' does not match VERSION $version (expected v$version)" }
 $commit = (git -C $repo rev-parse --short=7 HEAD 2>$null)
 if ($LASTEXITCODE -or -not $commit) { $commit = 'nogit' }
 # Untracked files (e.g. a Visual Studio build's Release\ folder) never reach this build: only tracked changes count.
 elseif (git -C $repo status --porcelain --untracked-files=no 2>$null) { $commit += '+dirty' }
-$short = if ($Release) { "${version}U" } else { "${version}U+dev" }
+$short = "$($numbers -join '.')U$candidate" + $(if ($Release) { '' } else { '+dev' })
 $display = "$short ($commit)"
-$fileVersion = $numbers + @($(if ($Release) { 0 } else { $BuildNumber }))
+$fileVersion = $numbers + @($(if ($Release -and -not $candidate) { 0 } else { $BuildNumber }))
 
 $obj = Join-Path $Out 'obj'
 $gen = Join-Path $Out 'gen'

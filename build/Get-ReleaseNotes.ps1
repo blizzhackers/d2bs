@@ -2,9 +2,12 @@
 <#
   Prints a version's release notes: its section of CHANGELOG.md, without the heading. The build workflow runs it for a
   release tag before building, so a tag without notes fails early, and the release job posts the notes it wrote.
+  In Actions it also sets the step output start-tag: the release tag the version's CHANGELOG.md compare link starts
+  from, where GitHub's generated list of pull requests starts (empty when the link starts from a commit or is missing).
 
     pwsh -File build\Get-ReleaseNotes.ps1 -Version 1.6.5                       print them
     pwsh -File build\Get-ReleaseNotes.ps1 -Version v1.6.5 -OutFile notes.md    write them (UTF-8)
+    pwsh -File build\Get-ReleaseNotes.ps1 -Version 1.7.0-rc.2                  a release candidate's
 #>
 [CmdletBinding()]
 param(
@@ -28,12 +31,19 @@ $Changelog = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPS
 if (-not (Test-Path -LiteralPath $Changelog -PathType Leaf)) { Stop-Notes "$Changelog does not exist" }
 # Get-Content -Raw outputs nothing for an empty file, which even a [string] cast leaves $null (unlike [string]$null).
 $text = Get-Content -LiteralPath $Changelog -Raw -Encoding utf8
-$notes = Get-ChangelogSection -Text $(if ($null -eq $text) { '' } else { $text }) -Name $Version
+if ($null -eq $text) { $text = '' }
+$notes = Get-ChangelogSection -Text $text -Name $Version
 if ($null -eq $notes) { Stop-Notes "CHANGELOG.md has no [$Version] section: build\Release-D2BS.ps1 dates it at the release" }
 if (-not (Test-ChangelogEntries $notes)) { Stop-Notes "CHANGELOG.md's [$Version] section has no entries" }
 foreach ($line in Get-ChangelogWrappedLines $notes) {
   $warning = "a wrapped line shows as its own line in the release notes; join it to its entry: $($line.Trim())"
   if ($actions) { Write-Host "::warning::$warning" } else { Write-Warning $warning }
+}
+# GitHub doesn't document which tag its generated notes start from when given none, so the release job passes this.
+if ($actions -and $env:GITHUB_OUTPUT) {
+  $base = Get-ChangelogCompareBase -Text $text -Name $Version
+  $start = if ($base -match '^v\d+\.\d+\.\d+(-rc\.\d+)?$') { $base } else { '' }
+  Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "start-tag=$start" -Encoding utf8
 }
 
 if ($OutFile) {

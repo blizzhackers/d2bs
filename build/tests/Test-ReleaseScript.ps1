@@ -49,17 +49,19 @@ function Start-Release {
   $psi.RedirectStandardError = $true
   $psi.UseShellExecute = $false
   $p = [Diagnostics.Process]::Start($psi)
-  [pscustomobject]@{ Proc = $p; Out = [Text.StringBuilder]::new(); Buf = [char[]]::new(4096); Err = $p.StandardError.ReadToEndAsync() }
+  [pscustomobject]@{ Proc = $p; Out = [Text.StringBuilder]::new(); Buf = [char[]]::new(4096); Err = $p.StandardError.ReadToEndAsync(); Seen = 0 }
 }
-# Reads the script's output until it ends with the prompt (a prompt has no newline after it).
+# Reads the script's output until it ends with the prompt (a prompt has no newline after it), asked after the last
+# prompt waited for: the same prompt asked again needs new output.
 function Wait-Prompt($Run, [string]$Prompt, [int]$TimeoutSec = 60) {
   $deadline = (Get-Date).AddSeconds($TimeoutSec)
-  while (-not $Run.Out.ToString().EndsWith($Prompt)) {
+  while (-not ($Run.Out.Length -gt $Run.Seen -and $Run.Out.ToString().EndsWith($Prompt))) {
     $read = $Run.Proc.StandardOutput.ReadAsync($Run.Buf, 0, $Run.Buf.Length)
     if (-not $read.Wait([int][Math]::Max(0, ($deadline - (Get-Date)).TotalMilliseconds))) { throw "no '$Prompt' within $TimeoutSec s: $($Run.Out)" }
     if ($read.Result -eq 0) { throw "the script ended before '$Prompt': $($Run.Out)" }
     [void]$Run.Out.Append($Run.Buf, 0, $read.Result)
   }
+  $Run.Seen = $Run.Out.Length
 }
 function Send-Answer($Run, [string]$Answer) { $Run.Proc.StandardInput.WriteLine($Answer); $Run.Proc.StandardInput.Flush() }
 function Complete-Release($Run) {
@@ -72,12 +74,25 @@ function Invoke-Notes([string[]]$NotesArgs) {
   $out = & pwsh -NoProfile -File (Join-Path $work 'build' 'Get-ReleaseNotes.ps1') @NotesArgs 2>&1
   [pscustomobject]@{ Code = $LASTEXITCODE; Text = (@($out) -join "`n") }
 }
+# Get-ReleaseNotes as the build workflow runs it: the start-tag step output it sets, or $null when it fails or sets
+# none.
+function Get-StartTag([string]$Version) {
+  $outputFile = Join-Path $Sandbox 'github-output.txt'
+  [IO.File]::WriteAllText($outputFile, '')
+  $saved = @($env:GITHUB_ACTIONS, $env:GITHUB_OUTPUT)
+  $env:GITHUB_ACTIONS = 'true'
+  $env:GITHUB_OUTPUT = $outputFile
+  try { $n = Invoke-Notes @('-Version', $Version) } finally { $env:GITHUB_ACTIONS = $saved[0]; $env:GITHUB_OUTPUT = $saved[1] }
+  $lines = @(Get-Content -LiteralPath $outputFile | Where-Object { $_ -like 'start-tag=*' })
+  if ($n.Code -or $lines.Count -ne 1) { return $null }
+  $lines[0].Substring('start-tag='.Length)
+}
 function Read-Changelog { (Get-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Raw) -replace "`r`n", "`n" }
-# Commits and pushes one Fixed entry under an empty [Unreleased], so the next release has notes.
-function Add-Entry([string]$Entry) {
+# Commits and pushes one entry right under [Unreleased], in its own group heading, so the next release has notes.
+function Add-Entry([string]$Entry, [string]$Group = 'Fixed') {
   $text = Get-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Raw
   $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
-  $text = $text.Replace("## [Unreleased]$nl", "## [Unreleased]$nl$nl### Fixed$nl$nl$Entry$nl")
+  $text = $text.Replace("## [Unreleased]$nl", "## [Unreleased]$nl$nl### $Group$nl$nl$Entry$nl")
   [IO.File]::WriteAllText((Join-Path $work 'CHANGELOG.md'), $text)
   G $work @('commit', '--quiet', '-m', "sandbox: $Entry", '--', 'CHANGELOG.md') | Out-Null
   G $work @('push', '--quiet', 'origin', 'master') | Out-Null
@@ -117,11 +132,13 @@ function Initialize-Sandbox {
 }
 
 function Invoke-Scenarios {
-  # 1. Dry run from a clean master: offers the patch first, changes nothing.
+  # 1. Dry run from a clean master: offers the release candidates first, then the finals; changes nothing.
   $head0 = G $work @('rev-parse', 'HEAD')
-  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
   Check 'dry run exits 0' ($r.Code -eq 0) $r.Text
-  Check 'dry run offers the patch 1.6.5 first' ($r.Text -match '1\) patch -> v1\.6\.5') ''
+  Check 'dry run offers the patch release candidate first' ($r.Text -match '1\) patch release candidate -> v1\.6\.5-rc\.1' -and
+    $r.Text -match '2\) minor release candidate -> v1\.7\.0-rc\.1' -and $r.Text -match '3\) major release candidate -> v2\.0\.0-rc\.1') $r.Text
+  Check 'then the finals' ($r.Text -match '4\) patch -> v1\.6\.5' -and $r.Text -match '5\) minor -> v1\.7\.0' -and $r.Text -match '6\) major -> v2\.0\.0') $r.Text
   Check 'dry run offers no "again" option' ($r.Text -notmatch 'again \(release commit') ''
   Check 'dry run creates no tag' (-not (G $work @('tag', '--list', 'v1.6.5'))) ''
   Check 'dry run leaves HEAD and VERSION' ((G $work @('rev-parse', 'HEAD')) -eq $head0 -and (Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.4') ''
@@ -143,7 +160,7 @@ function Invoke-Scenarios {
 
   # 2. First release: a normal patch bump from the seeded 1.6.4.
   $today = Get-Date -Format 'yyyy-MM-dd'
-  $r = Invoke-Release @('1', '', 'y', 'y')
+  $r = Invoke-Release @('4', '', 'y', 'y')
   Check 'first release exits 0' ($r.Code -eq 0) $r.Text
   Check 'first release commits VERSION 1.6.5' ((G $work @('log', '-1', '--format=%s')) -eq 'chore(release): v1.6.5' -and (Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.5') ''
   Check 'v1.6.5 is annotated' ((G $work @('cat-file', '-t', 'v1.6.5')) -eq 'tag') ''
@@ -160,24 +177,26 @@ function Invoke-Scenarios {
 
   # 2b. No entries under [Unreleased] stops a new version; a dry run only warns. Group headings alone are no entries.
   $noEntries = '\[xx\] CHANGELOG\.md has no entries under \[Unreleased\]: the release would have no notes'
-  $r = Invoke-Release @('1', '', 'y')
+  $r = Invoke-Release @('4', '', 'y')
   Check 'an empty Unreleased stops the release' ($r.Code -eq 1 -and $r.Text -match $noEntries) $r.Text
   Check 'and the Context warned about it' ($r.Text -match 'a new version needs them there first') ''
   Check 'and leaves no tag and a clean tree' (-not (G $work @('tag', '--list', 'v1.6.6')) -and -not (G $work @('status', '--porcelain'))) ''
-  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $r = Invoke-Release @('1', '', 'y')
+  Check 'an empty Unreleased stops a release candidate too' ($r.Code -eq 1 -and $r.Text -match $noEntries -and -not (G $work @('tag', '--list', 'v1.6.6-rc.1'))) $r.Text
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
   Check 'a dry run only warns about it' ($r.Code -eq 0 -and $r.Text -match ($noEntries -replace '^\\\[xx\\\]', '\[!!\]')) $r.Text
   $file = Join-Path $work 'CHANGELOG.md'
   $text = Get-Content -LiteralPath $file -Raw
   $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
   [IO.File]::WriteAllText($file, $text.Replace("## [Unreleased]$nl", "## [Unreleased]$nl$nl### Added$nl$nl### Fixed$nl"))
-  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
   Check 'headings without entries are no entries' ($r.Code -eq 0 -and $r.Text -match ($noEntries -replace '^\\\[xx\\\]', '\[!!\]')) $r.Text
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Add-Entry '- **Second fix.** One line.'
   # Without the [Unreleased] link the release still dates the section, and says it adds no compare link.
   $text = Get-Content -LiteralPath $file -Raw
   [IO.File]::WriteAllText($file, ($text -replace '(?m)^\[Unreleased\]: .*\r?\n', ''))
-  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $r = Invoke-Release @('4', '', 'y') @('-DryRun')
   Check 'a missing [Unreleased] link warns' ($r.Code -eq 0 -and $r.Text -match '\[!!\] CHANGELOG\.md has no \[Unreleased\] link at its end') $r.Text
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
   Import-Module (Join-Path $work 'build' 'Changelog.psm1') -Force
@@ -189,9 +208,10 @@ function Invoke-Scenarios {
   Check 'entries count top-level items only, and a comment left open hides the rest' ($counts.Count -eq 1 -and $counts['Fixed'] -eq 2) (($counts.Keys | ForEach-Object { "$_=$($counts[$_])" }) -join ',')
 
   # 3. Patch release with the review gate's diff: VERSION and CHANGELOG.md commit, tag and push.
-  $r = Invoke-Release @('1', '', 'y', 'd', 'y')
+  $r = Invoke-Release @('4', '', 'y', 'd', 'y')
   Check 'patch release exits 0' ($r.Code -eq 0) $r.Text
-  Check 'patch release offered 1.6.6 first' ($r.Text -match '1\) patch -> v1\.6\.6') ''
+  Check 'patch release offered 1.6.6' ($r.Text -match '4\) patch -> v1\.6\.6') ''
+  Check 'the plan says the tag builds a draft' ($r.Text -match 'the tag builds a DRAFT release') ''
   Check 'VERSION is 1.6.6' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw) -eq "1.6.6`n") ''
   Check 'release commit subject' ((G $work @('log', '-1', '--format=%s')) -eq 'chore(release): v1.6.6') ''
   Check 'release commit holds VERSION and CHANGELOG.md' ((@((G $work @('show', '--name-only', '--format=', 'HEAD')) -split "`n") -join ',') -eq 'CHANGELOG.md,VERSION') ''
@@ -226,9 +246,14 @@ function Invoke-Scenarios {
   [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "1.6.06`n")
   $r = Invoke-Release @() @('-DryRun')
   Check 'a VERSION with a leading zero is refused' ($r.Code -eq 1 -and $r.Text -match 'without leading zeros') $r.Text
+  foreach ($bad in '1.6.6-rc.0', '1.6.6-rc.01', '1.6.6-beta.1') {
+    [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "$bad`n")
+    $r = Invoke-Release @() @('-DryRun')
+    Check "a VERSION of $bad is refused" ($r.Code -eq 1 -and $r.Text -match "without leading zeros, not '$([regex]::Escape($bad))'") $r.Text
+  }
   [IO.File]::WriteAllText((Join-Path $work 'VERSION'), '')
   $r = Invoke-Release @() @('-DryRun')
-  Check 'an empty VERSION is refused by name' ($r.Code -eq 1 -and $r.Text -match "VERSION must hold major\.minor\.patch without leading zeros, not ''") $r.Text
+  Check 'an empty VERSION is refused by name' ($r.Code -eq 1 -and $r.Text -match "VERSION must hold major\.minor\.patch or major\.minor\.patch-rc\.N without leading zeros, not ''") $r.Text
   G $work @('checkout', '--quiet', '--', 'VERSION') | Out-Null
   [IO.File]::WriteAllText((Join-Path $work 'CHANGELOG.md'), '')
   $r = Invoke-Release @() @('-DryRun')
@@ -281,7 +306,7 @@ function Invoke-Scenarios {
   $hook = Join-Path $origin 'hooks' 'pre-receive'
   [IO.File]::WriteAllText($hook, "#!/bin/sh`necho sandbox rejects pushes`nexit 1`n")
   $head = G $work @('rev-parse', 'HEAD')
-  $r = Invoke-Release @('1', '', 'y', 'y')
+  $r = Invoke-Release @('4', '', 'y', 'y')
   Check 'rejected push exits 1' ($r.Code -eq 1 -and $r.Text -match 'push failed') $r.Text
   $undo = @($r.Text -split "`n" | Where-Object { $_ -match '^  git ' } | ForEach-Object { $_.Trim() })
   Check 'undo commands are separate lines' ($undo.Count -eq 3 -and $undo[0] -eq 'git reset --keep HEAD~1' -and $undo[1] -eq 'git tag -d v1.6.7') ($undo -join ' | ')
@@ -350,7 +375,7 @@ function Invoke-Scenarios {
     $run = Start-Release
     try {
       Wait-Prompt $run 'Choice [1]: '
-      Send-Answer $run '1'
+      Send-Answer $run '4'
       Wait-Prompt $run 'Version [1.6.7]: '
       Send-Answer $run ''
       if ($where -eq 'the review') { Wait-Prompt $run 'Proceed? [Y/n] '; Send-Answer $run 'y' }
@@ -374,7 +399,7 @@ function Invoke-Scenarios {
   $run = Start-Release
   try {
     Wait-Prompt $run 'Choice [1]: '
-    Send-Answer $run '1'
+    Send-Answer $run '4'
     Wait-Prompt $run 'Version [1.6.7]: '
     Send-Answer $run ''
     Wait-Prompt $run 'Proceed? [Y/n] '
@@ -395,7 +420,7 @@ function Invoke-Scenarios {
   $run = Start-Release
   try {
     Wait-Prompt $run 'Choice [1]: '
-    Send-Answer $run '1'
+    Send-Answer $run '4'
     Wait-Prompt $run 'Version [1.6.7]: '
     Send-Answer $run ''
     Wait-Prompt $run 'Proceed? [Y/n] '
@@ -408,6 +433,132 @@ function Invoke-Scenarios {
   Check 'an edit made at Proceed? stops the release' ($r.Code -eq 1 -and $r.Text -match 'changed during the prompts') $r.Text
   Check '  and keeps the edit' ((Read-Changelog).Contains('Edit made at Proceed.') -and (Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.6') ''
   G $work @('checkout', '--quiet', '--', 'CHANGELOG.md') | Out-Null
+
+  # 14. The first release candidate dates [Unreleased] as its own section and chains its link from the last final.
+  $link = 'https://github.com/blizzhackers/d2bs/compare'
+  $r = Invoke-Release @('1', '', 'y', 'y')
+  Check 'the first release candidate exits 0' ($r.Code -eq 0) $r.Text
+  Check 'VERSION is 1.6.7-rc.1' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw) -eq "1.6.7-rc.1`n") ''
+  Check 'the commit and the annotated tag name the candidate' ((G $work @('log', '-1', '--format=%s')) -eq 'chore(release): v1.6.7-rc.1' -and
+    (G $work @('cat-file', '-t', 'v1.6.7-rc.1')) -eq 'tag' -and [bool](G $origin @('tag', '--list', 'v1.6.7-rc.1'))) ''
+  Check 'the plan says the tag publishes a pre-release' ($r.Text -match 'the tag builds and publishes a pre-release') $r.Text
+  Check 'the next steps hand the DLL to testers' ($r.Text -match 'call it 1\.6\.7U-rc\.1\.' -and $r.Text -match 'cut the next release candidate instead' -and
+    $r.Text -notmatch 'draft=false') $r.Text
+  $log = Read-Changelog
+  Check 'CHANGELOG.md dates [Unreleased] as the candidate' ($log.Contains("## [Unreleased]`n`n## [1.6.7-rc.1] - $today`n`n### Fixed`n`n- **Third fix.** One line.`n`n## [1.6.6]")) $log
+  Check 'and chains its link from v1.6.6' ($log.Contains("[Unreleased]: $link/v1.6.7-rc.1...HEAD`n[1.6.7-rc.1]: $link/v1.6.6...v1.6.7-rc.1`n[1.6.6]: ")) $log
+  Check 'its notes are its section' ((Invoke-Notes @('-Version', 'v1.6.7-rc.1')).Text -eq "### Fixed`n`n- **Third fix.** One line.") ''
+  Check 'its pull request list starts at v1.6.6' ((Get-StartTag 'v1.6.7-rc.1') -eq 'v1.6.6') ''
+  Check 'a link that starts from a commit gives no start tag' ((Get-StartTag 'v1.6.5') -eq '') ''
+
+  # 14b. After a failed build, before any tester has it, the same candidate again tags the fixed master.
+  G $work @('push', '--quiet', 'origin', ':refs/tags/v1.6.7-rc.1') | Out-Null
+  G $work @('tag', '-d', 'v1.6.7-rc.1') | Out-Null
+  Set-Content -LiteralPath (Join-Path $work 'fix2.txt') -Value 'the candidate fix'
+  G $work @('add', 'fix2.txt') | Out-Null
+  G $work @('commit', '--quiet', '-m', 'sandbox: the candidate fix') | Out-Null
+  $fixHead = G $work @('rev-parse', 'HEAD')
+  $r = Invoke-Release @('y', '1', '', 'y')
+  Check 'the candidate again exits 0' ($r.Code -eq 0) $r.Text
+  Check 'it offered 1.6.7-rc.1 again first, then the next candidate and the final' ($r.Text -match '1\) 1\.6\.7-rc\.1 again \(release commit' -and
+    $r.Text -match '2\) next release candidate -> v1\.6\.7-rc\.2' -and $r.Text -match '3\) final -> v1\.6\.7') $r.Text
+  Check 'v1.6.7-rc.1 tags the fixed master, with no new commit' ((G $work @('rev-parse', 'HEAD')) -eq $fixHead -and
+    (G $origin @('rev-parse', 'v1.6.7-rc.1^{commit}')) -eq $fixHead) ''
+
+  # 14c. The next candidate holds only what is new since the one before.
+  Add-Entry '- **Candidate feature.** One line.' 'Added'
+  Add-Entry '- **Candidate-only fix.** One line.'
+  $r = Invoke-Release @('1', '', 'y', 'y')
+  Check 'the second release candidate exits 0' ($r.Code -eq 0) $r.Text
+  Check 'it counted the first candidate and [Unreleased]' ($r.Text -match 'CHANGELOG\.md \[1\.6\.7-rc\.1\]: Fixed 1' -and $r.Text -match 'CHANGELOG\.md \[Unreleased\]: Fixed 1, Added 1') $r.Text
+  Check 'it showed the commits since v1.6.7-rc.1' ($r.Text -match '2 commit\(s\) since v1\.6\.7-rc\.1:') $r.Text
+  Check 'VERSION is 1.6.7-rc.2' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw) -eq "1.6.7-rc.2`n") ''
+  Check 'its notes hold only the new entries' ((Invoke-Notes @('-Version', '1.6.7-rc.2')).Text -eq
+    "### Fixed`n`n- **Candidate-only fix.** One line.`n`n### Added`n`n- **Candidate feature.** One line.") ''
+  Check 'its pull request list starts at v1.6.7-rc.1' ((Get-StartTag 'v1.6.7-rc.2') -eq 'v1.6.7-rc.1') ''
+
+  # 14d. Inside a cycle: taken, malformed and older versions are asked again, and another candidate needs new entries.
+  $r = Invoke-Release @('1', '1.6.7-rc.2', '1.6.7-rc.02', '1.6.7-beta.1', '1.6.7-rc.0', '1.6.6-rc.9', 'n', '')
+  Check 'a candidate with nothing new stops' ($r.Code -eq 1 -and $r.Text -match $noEntries) $r.Text
+  Check '  and the Context said a final can still merge them' ($r.Text -match 'a final can still merge the release candidates') $r.Text
+  Check '  taken candidates refused, a leading zero included' (([regex]::Matches($r.Text, 'tag v1\.6\.7-rc\.2 already exists')).Count -eq 2) $r.Text
+  Check '  other labels and rc.0 refused' (([regex]::Matches($r.Text, 'a version is major\.minor\.patch, or')).Count -eq 2) $r.Text
+  Check '  an older candidate needs a confirmation' ($r.Text -match 'v1\.6\.6-rc\.9 is not newer than v1\.6\.7-rc\.2') $r.Text
+  Check '  and the default was the next candidate' ($r.Text -match '1\) next release candidate -> v1\.6\.7-rc\.3' -and
+    -not (G $work @('tag', '--list', 'v1.6.7-rc.3')) -and -not (G $work @('status', '--porcelain'))) ''
+
+  # 14e. The final merges the candidates and [Unreleased]; the review takes an edit to the merged notes, and asks again
+  #      while VERSION no longer names the release.
+  Add-Entry '- **Change after the last candidate.** One line.' 'Changed'
+  $review = '(y) commit + tag + push  (d) show the diff  (n) abort: '
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '2'
+    Wait-Prompt $run 'Version [1.6.7]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "9.9.9`n")
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "1.6.7`n")
+    $file = Join-Path $work 'CHANGELOG.md'
+    [IO.File]::WriteAllText($file, ((Get-Content -LiteralPath $file -Raw) -replace '- \*\*Candidate-only fix\.\*\* One line\.\r?\n', ''))
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'the final exits 0' ($r.Code -eq 0) $r.Text
+  Check 'it offered the next candidate first, then the final' ($r.Text -match '1\) next release candidate -> v1\.6\.7-rc\.3' -and $r.Text -match '2\) final -> v1\.6\.7') $r.Text
+  Check 'it warned about the commit no candidate had' ($r.Text -match 'v1\.6\.7 would ship 1 commit\(s\) that no release candidate had \(since v1\.6\.7-rc\.2\)') $r.Text
+  Check 'the plan merges both candidates and [Unreleased]' ($r.Text -match "merge CHANGELOG\.md's \[1\.6\.7-rc\.2\], \[1\.6\.7-rc\.1\] and \[Unreleased\] sections into \[1\.6\.7\]" -and
+    $r.Text -match 'Release notes \(CHANGELOG\.md \[Unreleased\] and \[1\.6\.7-rc\.2\], \[1\.6\.7-rc\.1\], merged\)') $r.Text
+  Check 'the review asked again while VERSION said 9.9.9' ($r.Text -match 'VERSION no longer says 1\.6\.7') $r.Text
+  Check 'VERSION is 1.6.7, and origin has v1.6.7 on the release commit' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw) -eq "1.6.7`n" -and
+    (G $work @('log', '-1', '--format=%s')) -eq 'chore(release): v1.6.7' -and (G $origin @('rev-parse', 'v1.6.7^{commit}')) -eq (G $work @('rev-parse', 'HEAD'))) ''
+  $log = Read-Changelog
+  $merged = "## [Unreleased]`n`n## [1.6.7] - $today`n`n### Added`n`n- **Candidate feature.** One line.`n`n### Changed`n`n" +
+    "- **Change after the last candidate.** One line.`n`n### Fixed`n`n- **Third fix.** One line.`n`n## [1.6.6]"
+  Check 'the final merged the candidates in group order, without the edited-out entry' ($log.Contains($merged)) $log
+  Check 'no candidate section or link is left' ($log -notmatch '1\.6\.7-rc\.') $log
+  Check 'its link starts where the first candidate did' ($log.Contains("[Unreleased]: $link/v1.6.7...HEAD`n[1.6.7]: $link/v1.6.6...v1.6.7`n[1.6.6]: ")) $log
+  Check 'CHANGELOG.md still has CRLF only' (-not ((Get-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Raw) -match '(?<!\r)\n')) ''
+  Check 'its notes are the merged section' ((Invoke-Notes @('-Version', '1.6.7')).Text -eq ($merged -replace '(?s)^.*?- \d{4}-\d\d-\d\d\n\n', '' -replace '\n\n## \[1\.6\.6\]$', '')) ''
+  Check 'its pull request list starts at v1.6.6' ((Get-StartTag 'v1.6.7') -eq 'v1.6.6') ''
+  Check 'the next steps are a final''s' ($r.Text -match 'draft=false --latest' -and $r.Text -notmatch 'call it') $r.Text
+
+  # 14g. The final again after a failed build: its own release commit is not one that no candidate had.
+  G $work @('push', '--quiet', 'origin', ':refs/tags/v1.6.7') | Out-Null
+  G $work @('tag', '-d', 'v1.6.7') | Out-Null
+  $r = Invoke-Release @('1', '', 'y')
+  Check 'the final again exits 0' ($r.Code -eq 0 -and $r.Text -match '1\) 1\.6\.7 again \(release commit') $r.Text
+  Check '  and counts only the commit after the candidate' ($r.Text -match 'v1\.6\.7 would ship 1 commit\(s\) that no release candidate had') $r.Text
+  Check '  and offers the next cycle after it' ($r.Text -match '2\) patch release candidate -> v1\.6\.8-rc\.1' -and $r.Text -match '5\) patch -> v1\.6\.8') $r.Text
+
+  # 14f. The merge on its own: text before any group, a group in another case, an unknown group and an empty one, a
+  #      final version below the candidates, and no Unreleased link.
+  Import-Module (Join-Path $work 'build' 'Changelog.psm1') -Force
+  $in = ("# Changelog`n`n## [Unreleased]`n`n### fixed`n`n- u`n`n## [2.0.0-rc.2] - D2`n`n### Fixed`n`n- c`n`n### Notes`n`n- n`n`n" +
+    "## [2.0.0-rc.1] - D1`n`n- loose`n`n### Security`n`n- s`n`n### Fixed`n`n- a`n  - nested`n`n### Added`n`n## [1.0.0] - D0`n`n- old`n`n" +
+    "[Unreleased]: https://h/compare/v2.0.0-rc.2...HEAD`n[2.0.0-rc.2]: https://h/compare/v2.0.0-rc.1...v2.0.0-rc.2`n" +
+    "[2.0.0-rc.1]: https://h/compare/v1.0.0...v2.0.0-rc.1`n[1.0.0]: https://h/compare/abc...v1.0.0`n")
+  $out = Update-ChangelogForRelease -Text $in -Version '2.0.0' -Date 'D' -Tag 'v2.0.0'
+  $want = ("# Changelog`n`n## [Unreleased]`n`n## [2.0.0] - D`n`n- loose`n`n### Fixed`n`n- a`n  - nested`n- c`n- u`n`n### Security`n`n- s`n`n" +
+    "### Notes`n`n- n`n`n## [1.0.0] - D0`n`n- old`n`n[Unreleased]: https://h/compare/v2.0.0...HEAD`n[2.0.0]: https://h/compare/v1.0.0...v2.0.0`n" +
+    "[1.0.0]: https://h/compare/abc...v1.0.0`n")
+  Check 'the merge orders groups and keeps older versions' ($out -eq $want) $out
+  $out = Update-ChangelogForRelease -Text "## [Unreleased]`n`n## [3.0.0-rc.1] - D`n`n- x" -Version '3.0.0' -Date 'E' -Tag 'v3.0.0'
+  Check 'a lone candidate without links merges, ending as it did' ($out -eq "## [Unreleased]`n`n## [3.0.0] - E`n`n- x") $out
+  $threw = $null
+  try { Update-ChangelogForRelease -Text "## [Unreleased]`n`n## [3.0.0-rc.1] - D`n`n### Added`n" -Version '3.0.0' -Date 'E' -Tag 'v3.0.0' | Out-Null }
+  catch { $threw = $_.Exception.Message }
+  Check 'a final with no entries anywhere is refused' ($threw -match 'no entries under \[Unreleased\] or its release candidates') $threw
+  $out = Update-ChangelogForRelease -Text $in -Version '2.0.0-rc.3' -Date 'D' -Tag 'v2.0.0-rc.3'
+  Check 'a release candidate leaves the other candidates alone' ($out.Contains("## [Unreleased]`n`n## [2.0.0-rc.3] - D`n`n### fixed`n`n- u`n`n## [2.0.0-rc.2] - D2") -and
+    $out.Contains("[Unreleased]: https://h/compare/v2.0.0-rc.3...HEAD`n[2.0.0-rc.3]: https://h/compare/v2.0.0-rc.2...v2.0.0-rc.3`n[2.0.0-rc.2]: ")) $out
 }
 
 if (Test-Path -LiteralPath $Sandbox) { throw "$Sandbox already exists: pass another -Sandbox" }

@@ -3,8 +3,8 @@ name: Build D2BS.dll
 on:
   push:
     branches: [master]
-    # Release tags only (v1.6.5); the build fails a tag that doesn't match VERSION.
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+    # Release tags only (v1.6.5) and release candidates' (v1.6.5-rc.1); the build fails a tag that doesn't match VERSION.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+']
   pull_request:
   workflow_dispatch:
   schedule:
@@ -23,6 +23,8 @@ jobs:
   build:
     runs-on: windows-2025
     timeout-minutes: 45
+    outputs:
+      start-tag: ${{ steps.notes.outputs.start-tag }}
     steps:
       # A pull request builds its head commit, not GitHub's temporary merge commit, so the commit stamped into the
       # DLL and the artifact's name is one that exists on the branch.
@@ -31,8 +33,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       # A release tag's notes are its CHANGELOG.md section; a tag without one, or with no entries in it, fails here,
-      # before the build.
+      # before the build. The step's start-tag output is where the release's generated list of pull requests starts.
       - name: Release notes
+        id: notes
         if: github.ref_type == 'tag'
         shell: pwsh
         env:
@@ -111,10 +114,17 @@ jobs:
           name: D2BS-${{ github.ref_name }}
           path: dist
 
-      - name: Create the draft release
+      - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        # A draft, published by hand after a smoke test (build/Release-D2BS.ps1 prints the command). The CHANGELOG.md
-        # notes come first, then GitHub's generated list of pull requests and its compare link.
-        run: gh release create "$TAG" dist/D2BS.dll dist/D2BS.pdb --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "D2BS $TAG" --notes-file dist/release-notes.md --generate-notes
+          START_TAG: ${{ needs.build.outputs.start-tag }}
+        # A release candidate is published at once as a pre-release, never Latest, for testers. A final is a draft,
+        # published by hand after a smoke test (build/Release-D2BS.ps1 prints the command). The CHANGELOG.md notes come
+        # first, then GitHub's generated list of pull requests since START_TAG and its compare link.
+        run: |
+          kind=(--draft)
+          case "$TAG" in *-rc.*) kind=(--prerelease --latest=false) ;; esac
+          start=()
+          if [ -n "$START_TAG" ]; then start=(--notes-start-tag "$START_TAG"); fi
+          gh release create "$TAG" dist/D2BS.dll dist/D2BS.pdb --repo "$GITHUB_REPOSITORY" --verify-tag "${kind[@]}" --title "D2BS $TAG" --notes-file dist/release-notes.md --generate-notes "${start[@]}"

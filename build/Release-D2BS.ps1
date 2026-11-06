@@ -1,10 +1,13 @@
 #Requires -Version 7.2
 <#
-  Interactive release for D2BS. Checks that master is ready, proposes the next patch, minor or major version (or the
-  same version again, when its release commit exists but its tag was deleted), writes VERSION, dates CHANGELOG.md's
-  Unreleased section as that version, and after a review commits both as "chore(release): v<version>", tags it
-  (annotated) and pushes master and the tag in one atomic push. The tag push makes the build workflow create a DRAFT
-  GitHub release with D2BS.dll and D2BS.pdb, whose notes are the version's CHANGELOG.md section; publish it after a test.
+  Interactive release for D2BS. Checks that master is ready, proposes the next version: a release candidate (1.7.0-rc.1,
+  then 1.7.0-rc.2) or a final (1.7.0), or the same version again when its release commit exists but its tag was
+  deleted. It writes VERSION and updates CHANGELOG.md: a release candidate dates the Unreleased section as its own, and
+  a final merges the release candidates' sections and Unreleased into one dated section. After a review (CHANGELOG.md
+  can be edited there) it commits both as "chore(release): v<version>", tags it (annotated) and pushes master and the
+  tag in one atomic push. The tag push makes the build workflow publish a release candidate as a GitHub pre-release,
+  or create a final as a DRAFT release to publish after a test; each carries D2BS.dll and D2BS.pdb, and its notes are
+  the version's CHANGELOG.md section.
 
     pwsh -File build\Release-D2BS.ps1             interactive
     pwsh -File build\Release-D2BS.ps1 -DryRun     rehearse: prints every step that would change something, changes nothing
@@ -67,13 +70,16 @@ function Invoke-GitStep([string[]]$GitArgs, [string[]]$Undo = @()) {
   }
 }
 
-# major.minor.patch, each at most 65535: the DLL's file version holds 16-bit numbers.
+# major.minor.patch, each at most 65535 (the DLL's file version holds 16-bit numbers), and -rc.N from 1 for a release
+# candidate, as a semantic version: 1.7.0-rc.2 sorts after 1.7.0-rc.1 and before 1.7.0.
 function ConvertTo-Version([string]$Text) {
-  if ($Text -notmatch '^(\d{1,5})\.(\d{1,5})\.(\d{1,5})$') { return $null }
+  if ($Text -notmatch '^(\d{1,5})\.(\d{1,5})\.(\d{1,5})(-rc\.(\d{1,5}))?$') { return $null }
   $parts = @([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
-  if (@($parts | Where-Object { $_ -gt 65535 }).Count) { return $null }
-  [version]::new($parts[0], $parts[1], $parts[2])
+  $rc = if ($Matches.Contains(5)) { [int]$Matches[5] } else { 0 }
+  if (@($parts | Where-Object { $_ -gt 65535 }).Count -or $rc -gt 65535 -or ($Matches.Contains(5) -and $rc -lt 1)) { return $null }
+  if ($rc) { [semver]::new($parts[0], $parts[1], $parts[2], "rc.$rc") } else { [semver]::new($parts[0], $parts[1], $parts[2]) }
 }
+function Test-Candidate($Version) { [bool]$Version.PreReleaseLabel }
 function Test-LocalTag([string]$Tag) { [bool](Read-Git @('tag', '--list', $Tag)) }
 # $true or $false when origin answered, $null when it could not be asked (or -NoFetch).
 function Test-RemoteTag([string]$Tag) {
@@ -120,7 +126,7 @@ function Read-TextFile([string]$Path) { $text = Get-Content -LiteralPath $Path -
 $current = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
 $currentVersion = ConvertTo-Version $current
 if (-not $currentVersion -or $currentVersion.ToString() -ne $current) {
-  Stop-Release "VERSION must hold major.minor.patch without leading zeros, not '$current'"
+  Stop-Release "VERSION must hold major.minor.patch or major.minor.patch-rc.N without leading zeros, not '$current'"
 }
 
 function Read-Changelog { Read-TextFile $changelogFile }
@@ -168,10 +174,20 @@ if ($latestTag) {
   if ($log.Count -eq 0) { Warn "nothing has changed since $latestTag" }
 } else { Say '  This is the first release tag.' }
 # The entries per group, e.g. "Added 2, Fixed 5": Semantic Versioning makes an Added entry a minor version.
+function Format-EntryCounts($Counts) { ($Counts.Keys | ForEach-Object { "$_ $($Counts[$_])" }) -join ', ' }
 $groups = Get-ChangelogEntryCounts $unreleased
+# The release candidates' sections since the last final release, which the next final merges.
+$candidates = Get-ChangelogCandidates $changelog
+foreach ($name in $candidates) {
+  $counts = Get-ChangelogEntryCounts (Get-ChangelogSection -Text $changelog -Name $name)
+  Say "  CHANGELOG.md [$name]: $(if ($counts.Count) { Format-EntryCounts $counts } else { 'no entries' })"
+}
+if ($candidates.Count) { Say '  A final release merges these release candidates and [Unreleased] into one section.' }
 if ($groups.Count) {
-  Say "  CHANGELOG.md [Unreleased]: $(($groups.Keys | ForEach-Object { "$_ $($groups[$_])" }) -join ', ')"
+  Say "  CHANGELOG.md [Unreleased]: $(Format-EntryCounts $groups)"
   if ($groups.Contains('Added')) { Say '  It has Added entries: Semantic Versioning makes that a minor version.' }
+} elseif ($candidates.Count) {
+  Say '  CHANGELOG.md has no entries under [Unreleased]: a final can still merge the release candidates, but another candidate needs new entries there first'
 } else {
   Warn 'CHANGELOG.md has no entries under [Unreleased]: a new version needs them there first'
 }
@@ -187,9 +203,21 @@ $sameAgain = [bool]($releaseCommit -and -not (Test-LocalTag $currentTag) -and -n
 if ($sameAgain) {
   $options += [pscustomobject]@{ Label = "$current again (release commit $releaseCommit, tag deleted)"; Version = $current }
 }
-$options += [pscustomobject]@{ Label = 'patch'; Version = '{0}.{1}.{2}' -f $currentVersion.Major, $currentVersion.Minor, ($currentVersion.Build + 1) }
-$options += [pscustomobject]@{ Label = 'minor'; Version = '{0}.{1}.0' -f $currentVersion.Major, ($currentVersion.Minor + 1) }
-$options += [pscustomobject]@{ Label = 'major'; Version = '{0}.0.0' -f ($currentVersion.Major + 1) }
+if (Test-Candidate $currentVersion) {
+  # Inside a release candidate cycle: the next candidate, or the final of the version they lead to.
+  $final = '{0}.{1}.{2}' -f $currentVersion.Major, $currentVersion.Minor, $currentVersion.Patch
+  $rc = [int]($currentVersion.PreReleaseLabel -replace '^rc\.', '')
+  $options += [pscustomobject]@{ Label = 'next release candidate'; Version = "$final-rc.$($rc + 1)" }
+  $options += [pscustomobject]@{ Label = 'final'; Version = $final }
+} else {
+  $next = [ordered]@{
+    patch = '{0}.{1}.{2}' -f $currentVersion.Major, $currentVersion.Minor, ($currentVersion.Patch + 1)
+    minor = '{0}.{1}.0' -f $currentVersion.Major, ($currentVersion.Minor + 1)
+    major = '{0}.0.0' -f ($currentVersion.Major + 1)
+  }
+  foreach ($kind in $next.Keys) { $options += [pscustomobject]@{ Label = "$kind release candidate"; Version = "$($next[$kind])-rc.1" } }
+  foreach ($kind in $next.Keys) { $options += [pscustomobject]@{ Label = $kind; Version = $next[$kind] } }
+}
 for ($i = 0; $i -lt $options.Count; $i++) { Say ("  {0}) {1} -> v{2}" -f ($i + 1), $options[$i].Label, $options[$i].Version) }
 $pick = $null
 while (-not $pick) {
@@ -204,7 +232,7 @@ while (-not $chosen) {
   if (-not $candidate) { $candidate = $pick.Version }
   $candidate = $candidate.TrimStart('v')
   $candidateVersion = ConvertTo-Version $candidate
-  if (-not $candidateVersion) { Warn 'a version is major.minor.patch, e.g. 1.6.5'; continue }
+  if (-not $candidateVersion) { Warn 'a version is major.minor.patch, or major.minor.patch-rc.N for a release candidate: e.g. 1.6.5 or 1.6.5-rc.1'; continue }
   # Tags and VERSION use the normalized form, so a leading-zero spelling can't duplicate an existing release.
   $candidate = $candidateVersion.ToString()
   if (Test-LocalTag "v$candidate") { Warn "tag v$candidate already exists here"; continue }
@@ -220,18 +248,27 @@ while (-not $chosen) {
 }
 $tag = "v$chosen"
 $bump = $chosen -ne $current
+$isCandidate = Test-Candidate (ConvertTo-Version $chosen)
+# A final merges the release candidates' sections into its own; a release candidate dates [Unreleased] alone.
+$merging = @(if (-not $isCandidate) { $candidates })
 # The tag build posts the version's CHANGELOG.md section as the release notes and fails without one.
 $date = Get-Date -Format 'yyyy-MM-dd'
 $newChangelog = $null
 if ($bump) {
   try { $newChangelog = Update-ChangelogForRelease -Text $changelog -Version $chosen -Date $date -Tag $tag }
   catch { Fail $_.Exception.Message }
-  $notes = $unreleased
+  $notes = if ($newChangelog) { Get-ChangelogSection -Text $newChangelog -Name $chosen } else { $unreleased }
 } else {
   $notes = Get-ChangelogSection -Text $changelog -Name $chosen
   if (-not (Test-ChangelogEntries $notes)) { Fail "CHANGELOG.md has no entries under [$chosen]: the release would have no notes" }
   # A fix made for a re-release belongs to the version it fixes, which is the section the release posts.
   if (Test-ChangelogEntries $unreleased) { Warn "[Unreleased] has entries, and re-releasing $tag posts only [$chosen]: move a fix's entry there first" }
+}
+# A final is meant to be the code its last release candidate's testers ran; its own release commit (there when it is
+# released again) changes only VERSION and CHANGELOG.md.
+$untested = @($log | Where-Object { $_ -notmatch '^\S+ chore\(release\): ' })
+if (-not $isCandidate -and $latestTag -and (Test-Candidate (ConvertTo-Version $latestTag.Substring(1))) -and $untested.Count) {
+  Warn "$tag would ship $($untested.Count) commit(s) that no release candidate had (since $latestTag): cut another release candidate to have them tested"
 }
 
 # === 4. Plan ========================================================================================================
@@ -240,18 +277,22 @@ Say ('-' * 60)
 Say 'Release plan'
 Say "  Version: $chosen  (tag $tag)"
 Say '  Steps:'
+$mergedNames = "[$($merging -join '], [')]"
 if ($bump) {
   Say "    1. write VERSION: $current -> $chosen"
-  Say "    2. date CHANGELOG.md's Unreleased section: [$chosen] - $date"
-  Say '    3. review the change'
+  if ($merging.Count) { Say "    2. merge CHANGELOG.md's $mergedNames and [Unreleased] sections into [$chosen] - $date" }
+  else { Say "    2. date CHANGELOG.md's Unreleased section: [$chosen] - $date" }
+  Say '    3. review the change; CHANGELOG.md can be edited there'
   Say "    4. commit VERSION and CHANGELOG.md as `"chore(release): $tag`""
 } else {
   Say "    1. VERSION already says ${chosen}: the tag goes on HEAD ($(Read-Git @('log', '-1', '--format=%h %s')))"
 }
 Say "    $(if ($bump) { 5 } else { 2 }). annotated tag $tag"
-Say "    $(if ($bump) { 6 } else { 3 }). push master and $tag in one atomic push; the tag builds a DRAFT release"
+$built = if ($isCandidate) { 'builds and publishes a pre-release' } else { 'builds a DRAFT release' }
+Say "    $(if ($bump) { 6 } else { 3 }). push master and $tag in one atomic push; the tag $built"
 if ($notes) {
-  Say "  Release notes (CHANGELOG.md [$(if ($bump) { 'Unreleased' } else { $chosen })]):"
+  $source = if (-not $bump) { "[$chosen]" } elseif ($merging.Count) { "[Unreleased] and $mergedNames, merged" } else { '[Unreleased]' }
+  Say "  Release notes (CHANGELOG.md ${source}):"
   $notes -split "`n" | ForEach-Object { Say "    $_" }
   foreach ($line in Get-ChangelogWrappedLines $notes) { Warn "a wrapped line shows as its own line on GitHub; join it to its entry: $($line.Trim())" }
 }
@@ -269,7 +310,8 @@ if ($bump) {
   Say ''
   Say 'Preparing'
   Say "  > write VERSION: $chosen"
-  Say "  > write CHANGELOG.md: [Unreleased] -> [$chosen] - $date"
+  if ($merging.Count) { Say "  > write CHANGELOG.md: $mergedNames and [Unreleased] -> [$chosen] - $date" }
+  else { Say "  > write CHANGELOG.md: [Unreleased] -> [$chosen] - $date" }
   Say ''
   Say 'Review'
   if ($DryRun) { Say '  (dry run: nothing written, no review)' }
@@ -280,11 +322,20 @@ if ($bump) {
       [IO.File]::WriteAllText($versionFile, "$chosen`n")
       [IO.File]::WriteAllText($changelogFile, $newChangelog)
       & git -C $repo --no-pager diff --stat
+      Say '  CHANGELOG.md can be edited before you answer; (d) shows the diff as it is then.'
+      if ($merging.Count) {
+        Say "  [$chosen] holds every release candidate's entries: drop the ones for problems that only a release candidate had."
+      }
       while ($true) {
         $answer = (Ask '(y) commit + tag + push  (d) show the diff  (n) abort: ').ToLower()
         if ($answer -in 'y', 'yes') {
           # A commit made while this prompt waited would go out on top of the release unseen.
           if ((Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart) { Stop-Release 'HEAD changed during the review: run this again' }
+          # The commit takes the files as they are now, edits included; the tag build needs the version's notes.
+          if ((Read-TextFile $versionFile).Trim() -ne $chosen) { Warn "VERSION no longer says ${chosen}: put it back, or answer n"; continue }
+          if (-not (Test-ChangelogEntries (Get-ChangelogSection -Text (Read-Changelog) -Name $chosen))) {
+            Warn "CHANGELOG.md has no entries under [$chosen] now: the release would have no notes"; continue
+          }
           $approved = $true; break
         }
         if ($answer -eq 'd') { & git -C $repo --no-pager diff -- VERSION CHANGELOG.md; continue }
@@ -344,15 +395,27 @@ Say 'Next steps:'
 $repoArg = if ($slug) { $slug } else { '<owner>/<repo>' }
 Say '  1. Wait for the build to go green:'
 Say "     $url/actions/workflows/build.yml"
-Say "  2. Review the DRAFT release `"D2BS $tag`" (D2BS.dll, D2BS.pdb, the notes): $url/releases"
-Say '  3. Try the DLL on a test install, e.g. with one D2Bot profile.'
-Say '  4. Publish it and mark it Latest:'
-Say "     gh release edit $tag --repo $repoArg --draft=false --latest"
-Say '  If the build fails on a download, re-run it from its Actions page. If the code or the DLL is at fault:'
-Say "     gh release delete $tag --repo $repoArg --yes   (if the draft exists)"
+if ($isCandidate) {
+  Say "  2. It publishes the pre-release `"D2BS $tag`" (D2BS.dll, D2BS.pdb, the notes): $url/releases/tag/$tag"
+  Say "  3. Give its D2BS.dll to the testers; the D2BS log and version() call it $($chosen -replace '-', 'U-')."
+  Say '  4. Fixes for what they find add their CHANGELOG.md entries under [Unreleased]. Then run this again: for the'
+  Say '     next release candidate, or for the final once a release candidate holds up.'
+  Say '  If the build fails on a download, re-run it from its Actions page. If the code or the DLL is at fault and no'
+  Say '  tester has the DLL yet:'
+  Say "     gh release delete $tag --repo $repoArg --yes   (if the release exists)"
+} else {
+  Say "  2. Review the DRAFT release `"D2BS $tag`" (D2BS.dll, D2BS.pdb, the notes): $url/releases"
+  Say '  3. Try the DLL on a test install, e.g. with one D2Bot profile.'
+  Say '  4. Publish it and mark it Latest:'
+  Say "     gh release edit $tag --repo $repoArg --draft=false --latest"
+  Say '  If the build fails on a download, re-run it from its Actions page. If the code or the DLL is at fault:'
+  Say "     gh release delete $tag --repo $repoArg --yes   (if the draft exists)"
+}
 Say "     git push origin :refs/tags/$tag"
 Say "     git tag -d $tag"
 Say "  then fix master and run this script again: it offers $chosen again."
+# Testers report against the name, so a release candidate they have keeps its one DLL.
+if ($isCandidate) { Say '  Once testers have it, cut the next release candidate instead.' }
 if ($slug -and $hasGh -and -not $DryRun -and (Confirm-Step 'Watch the release build now?' $true -EofMeansNo)) {
   # The run for this tag's commit: a tag pushed again after a failed build also has the old tag's run.
   $tagCommit = Read-Git @('rev-parse', "$tag^{commit}")

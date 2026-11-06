@@ -982,7 +982,7 @@ Whether not the key is pressed.
 
 #### `public void `[`addEventListener`](#group__globalFunctions_1gaef5f2e6f72ff80cc13fd4ab84ab34810)`(String event,Function eventHandler)` 
 
-Add an event handler to the list of listeners for the given event.
+Add an event handler to the list of listeners for the given event. A function already listening to that event is not added again, so it runs once per event and one removeEventListener() call removes it.
 
 #### Parameters
 * `event` The name of the event. Can be:

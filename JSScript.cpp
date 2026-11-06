@@ -107,9 +107,9 @@ JSAPI_FUNC(script_resume) {
 JSAPI_FUNC(script_send) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     Script* script = (Script*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &script_class, NULL);
-    Event* evt = new Event;
     if (!script || !script->IsRunning())
         return JS_TRUE;
+    Event* evt = new Event;
     ScriptEngine::LockScriptList("script.send");
     evt->owner = script;
     evt->argc = argc;

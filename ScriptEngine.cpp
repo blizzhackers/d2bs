@@ -510,6 +510,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_EndRequest(cx);
             for (int j = 0; j < 4; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
+            delete[] argv;
         }
         delete evt->arg1;
         free(evt->arg2);
@@ -539,6 +540,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_EndRequest(cx);
             for (int j = 0; j < 5; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
+            delete[] argv;
         }
         delete evt->arg1;
         delete evt->arg2;
@@ -566,6 +568,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_EndRequest(cx);
             for (int j = 0; j < 2; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
+            delete[] argv;
         }
         delete evt->arg1;
         free(evt->arg2);
@@ -593,6 +596,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_EndRequest(cx);
             for (int j = 0; j < 2; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
+            delete[] argv;
         }
         if (strcmp(evtName, "chatmsgblocker") == 0 || strcmp(evtName, "chatinputblocker") == 0 || strcmp(evtName, "whispermsgblocker") == 0) {
             CompleteBlocker(evt, block);
@@ -655,6 +659,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_EndRequest(cx);
             for (int j = 0; j < 4; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
+            delete[] argv;
         }
         delete evt->arg1;
         delete evt->arg2;
@@ -679,6 +684,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             }
             JS_EndRequest(cx);
             JS_RemoveValueRoot(cx, &argv[0]);
+            delete[] argv;
         }
         if (strcmp(evtName, "keydownblocker") == 0) {
             CompleteBlocker(evt, block);
@@ -710,6 +716,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS_EndRequest(cx);
             for (int j = 0; j < 3; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
+            delete[] argv;
         }
         // The hook's function roots belong to this script's context, so they go here, on its thread.
         for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++)
@@ -763,11 +770,13 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
 
             for (uint j = 0; j < *argc; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);
+            delete[] argv;
         }
         for (uint i = 0; i < evt->argc; i++) {
             evt->argv[i]->clear();
             delete evt->argv[i];
         }
+        delete[] evt->argv;
         delete evt->arg1;
         free(evt->name);
         delete evt;

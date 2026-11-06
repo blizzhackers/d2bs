@@ -502,11 +502,8 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             for (int j = 0; j < 4; j++)
                 JS_AddValueRoot(cx, &argv[j]);
             jsval rval;
-            bool block;
-            for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
+            for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++)
                 JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 4, argv, &rval);
-                block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
-            }
             JS_EndRequest(cx);
             for (int j = 0; j < 4; j++)
                 JS_RemoveValueRoot(cx, &argv[j]);

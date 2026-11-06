@@ -14,15 +14,16 @@ and on demand (Run workflow).
   commit, so that commit is the one in the name and in the DLL.
   A build that fails while compiling, linking or checking the DLL's version uploads its whole `build.log` alone, as
   `D2BS-build-log-<commit>` (or `-<tag>`); the job log shows the failing tool's first errors and last lines. A failure
-  before that (a tag without release notes, fetching the toolset, a missing toolset, a tag that doesn't match
-  `VERSION`) shows its cause in the job log.
+  before that (a tag whose release notes fail their checks, fetching the toolset, a missing toolset, a tag that
+  doesn't match `VERSION`) shows its cause in the job log.
 - **Release tags (`v<major>.<minor>.<patch>`, e.g. `v1.6.5`) and release candidates' (`v1.6.5-rc.1`):** the build is
   a release, and the workflow creates a GitHub Release with the DLL and PDB. A final's is a draft, which you publish
   by hand (see Releasing); a release candidate's is published at once as a pre-release, never marked Latest. Its notes
   are the version's section of `CHANGELOG.md`, followed by GitHub's generated list of pull requests since the release
   tag the section's compare link starts from (when the link starts from a commit, or that tag no longer exists, GitHub
-  picks the start). A tag whose version has no section there, or a section without entries, fails before the build.
-  The artifact is named `D2BS-<tag>` and kept for 90 days. Other tags don't start a build.
+  picks the start). A tag fails before the build when its version has no section there, the section has no entries,
+  or an HTML comment or code fence in the section never closes. The artifact is named `D2BS-<tag>` and kept for 90
+  days. Other tags don't start a build.
 - **The toolset:** on its first run, the workflow downloads the two Microsoft packages in `toolset.json` (about
   725 MB), checks their SHA-256, and unpacks them. It keeps the result in the Actions cache.
   - Later runs restore the cache instead of downloading again.
@@ -113,12 +114,14 @@ On an up-to-date `master` with no uncommitted changes, the script:
    (release candidates included) needs a confirmation (except when it offers the same version again, below). A
    release candidate needs entries under `[Unreleased]`; a final needs them there or in its release candidates'
    sections. A final warns about commits made since the last release candidate, which no tester has run.
-3. Shows the plan with the release notes. After you confirm (it stops if `VERSION`, `CHANGELOG.md` or the commit
-   changed during the prompts), it writes `VERSION`, updates `CHANGELOG.md` as above (under a new, empty
-   `[Unreleased]`), points the links at the bottom at the new tag, and shows the change for review. You can edit
-   `CHANGELOG.md` before answering the review; `d` shows the diff as it is then, and `y` takes the files as they are,
-   as long as `VERSION` still names the version and its section still has entries. Leaving the review any other way
-   puts both files back, after copying an edited `CHANGELOG.md` to your temp folder (the script prints where).
+3. Shows the plan with the release notes. Notes the tag build would refuse (a missing section, no entries, or an
+   HTML comment or code fence that never closes) stop it there instead. After you confirm (it stops if `VERSION`,
+   `CHANGELOG.md` or the commit changed during the prompts), it writes `VERSION`, updates `CHANGELOG.md` as above
+   (under a new, empty `[Unreleased]`), points the links at the bottom at the new tag, and shows the change for
+   review. You can edit `CHANGELOG.md` before answering the review; `d` shows the diff as it is then, and `y` takes
+   the files as they are, as long as `VERSION` still names the version and the notes still pass those checks.
+   Leaving the review any other way puts both files back, after copying an edited `CHANGELOG.md` to your temp folder
+   (the script prints where).
 4. Commits both files as `chore(release): v1.6.5`, unless a commit was made during the review, which stops it.
 5. Creates the annotated tag `v1.6.5`.
 6. Pushes `master` and the tag in one atomic push.

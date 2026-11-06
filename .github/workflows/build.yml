@@ -33,8 +33,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      # A release tag's notes are its CHANGELOG.md section; a tag without one, or with no entries in it, fails here,
-      # before the build. The step's start-tag output is where the release's generated list of pull requests starts.
+      # A release tag's notes are its CHANGELOG.md section. The tag fails here, before the build, when the section is
+      # missing, has no entries, or has an HTML comment or code fence that never closes. The step's start-tag output
+      # is where the release's generated list of pull requests starts.
       - name: Release notes
         id: notes
         if: github.ref_type == 'tag'

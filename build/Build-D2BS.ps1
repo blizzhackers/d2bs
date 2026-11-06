@@ -49,16 +49,18 @@ if (($made -join "`n") -ne ($wanted -join "`n")) {
   throw "$Toolset was made by another toolset recipe or from other packages ($first): run build\Get-Toolset.ps1 again"
 }
 
-# Version: VERSION holds major.minor.patch, and -rc.N for a release candidate; the U suffix is D2BS's (Unicode build)
-# since 1.6.4U, and a release candidate's label follows it (1.7.0U-rc.2).
+# Version: VERSION holds major.minor.patch, and -rc.N for a release candidate, spelled exactly as build\Release-D2BS.ps1
+# writes them (lowercase rc, no leading zeros, each number at most 65535). The U suffix marks D2BS's Unicode build
+# (since 1.5.1871U), and a release candidate's label follows it (1.7.0U-rc.2).
 $version = (Get-Content -LiteralPath (Join-Path $repo 'VERSION') -Raw).Trim()
-if ($version -notmatch '^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(-rc\.[1-9]\d{0,4})?$') {
+if ($version -cnotmatch '^(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})(-rc\.([1-9][0-9]{0,4}))?$') {
   throw "VERSION must be major.minor.patch or major.minor.patch-rc.N without leading zeros, not '$version'"
 }
 $numbers = @([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
 $candidate = if ($Matches.Contains(4)) { $Matches[4] } else { '' }
 if (@($numbers | Where-Object { $_ -gt 65535 }).Count) { throw "VERSION $version does not fit a file version: each number is at most 65535" }
-if ($Release -and $Tag -ne "v$version") { throw "release tag '$Tag' does not match VERSION $version (expected v$version)" }
+if ($candidate -and [int]$Matches[5] -gt 65535) { throw "VERSION $version has a release candidate number over 65535" }
+if ($Release -and $Tag -cne "v$version") { throw "release tag '$Tag' does not match VERSION $version (expected v$version)" }
 $commit = (git -C $repo rev-parse --short=7 HEAD 2>$null)
 if ($LASTEXITCODE -or -not $commit) { $commit = 'nogit' }
 # Untracked files (e.g. a Visual Studio build's Release\ folder) never reach this build: only tracked changes count.

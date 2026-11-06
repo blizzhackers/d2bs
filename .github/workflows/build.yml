@@ -72,7 +72,8 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
-          # The last file-version number: 1-65535 for dev builds (0 is reserved for releases).
+          # The last file-version number: the run number, 1-65535, for dev builds and release candidates (0 is reserved
+          # for final releases).
           $build = @{ Toolset = "$env:RUNNER_TEMP/toolset"; Out = "$env:RUNNER_TEMP/out"; BuildNumber = 1 + ([int]$env:RUN_NUMBER - 1) % 65535 }
           if ($env:REF_TYPE -eq 'tag') { $build.Release = $true; $build.Tag = $env:REF_NAME }
           ./build/Build-D2BS.ps1 @build
@@ -121,10 +122,22 @@ jobs:
           START_TAG: ${{ needs.build.outputs.start-tag }}
         # A release candidate is published at once as a pre-release, never Latest, for testers. A final is a draft,
         # published by hand after a smoke test (build/Release-D2BS.ps1 prints the command). The CHANGELOG.md notes come
-        # first, then GitHub's generated list of pull requests since START_TAG and its compare link.
+        # first, then GitHub's generated list of pull requests and its compare link, starting at START_TAG. GitHub
+        # refuses a start tag that no longer exists (a tag deleted after a failed build) with HTTP 400, so a tag the
+        # API reports missing (404) is left out and GitHub picks the start, as it does when START_TAG is empty; when
+        # the check itself fails, the tag is passed anyway.
         run: |
           kind=(--draft)
           case "$TAG" in *-rc.*) kind=(--prerelease --latest=false) ;; esac
           start=()
-          if [ -n "$START_TAG" ]; then start=(--notes-start-tag "$START_TAG"); fi
+          if [ -n "$START_TAG" ]; then
+            if err=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$START_TAG" --silent 2>&1); then start=(--notes-start-tag "$START_TAG")
+            elif [[ $err == *"HTTP 404"* ]]; then echo "::warning::$START_TAG, where CHANGELOG.md's compare link for $TAG starts, is no tag: GitHub picks where the list of pull requests starts"
+            else
+              # A workflow command is one line, with % escaped.
+              err=${err//'%'/'%25'}; err=${err//$'\r'/}; err=${err//$'\n'/ }
+              echo "::warning::could not check that $START_TAG exists ($err); starting the list of pull requests there anyway"
+              start=(--notes-start-tag "$START_TAG")
+            fi
+          fi
           gh release create "$TAG" dist/D2BS.dll dist/D2BS.pdb --repo "$GITHUB_REPOSITORY" --verify-tag "${kind[@]}" --title "D2BS $TAG" --notes-file dist/release-notes.md --generate-notes "${start[@]}"

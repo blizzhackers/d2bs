@@ -2,8 +2,9 @@
 <#
   Prints a version's release notes: its section of CHANGELOG.md, without the heading. The build workflow runs it for a
   release tag before building, so a tag without notes fails early, and the release job posts the notes it wrote.
-  In Actions it also sets the step output start-tag: the release tag the version's CHANGELOG.md compare link starts
-  from, where GitHub's generated list of pull requests starts (empty when the link starts from a commit or is missing).
+  In Actions it also sets the step output start-tag: where the version's CHANGELOG.md compare link starts, when that is
+  named like a release tag (empty when the link starts from a commit or is missing). The release job starts GitHub's
+  generated list of pull requests there once it has checked that the tag exists.
 
     pwsh -File build\Get-ReleaseNotes.ps1 -Version 1.6.5                       print them
     pwsh -File build\Get-ReleaseNotes.ps1 -Version v1.6.5 -OutFile notes.md    write them (UTF-8)
@@ -42,7 +43,7 @@ foreach ($line in Get-ChangelogWrappedLines $notes) {
 # GitHub doesn't document which tag its generated notes start from when given none, so the release job passes this.
 if ($actions -and $env:GITHUB_OUTPUT) {
   $base = Get-ChangelogCompareBase -Text $text -Name $Version
-  $start = if ($base -match '^v\d+\.\d+\.\d+(-rc\.\d+)?$') { $base } else { '' }
+  $start = if ($base -match '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$') { $base } else { '' }
   Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "start-tag=$start" -Encoding utf8
 }
 

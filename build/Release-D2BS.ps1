@@ -71,9 +71,10 @@ function Invoke-GitStep([string[]]$GitArgs, [string[]]$Undo = @()) {
 }
 
 # major.minor.patch, each at most 65535 (the DLL's file version holds 16-bit numbers), and -rc.N from 1 for a release
-# candidate, as a semantic version: 1.7.0-rc.2 sorts after 1.7.0-rc.1 and before 1.7.0.
+# candidate (capped alike, as build\Build-D2BS.ps1 caps it), as a semantic version: 1.7.0-rc.2 sorts after 1.7.0-rc.1
+# and before 1.7.0. Any case and leading zeros are read here; ToString() gives the one spelling VERSION and tags use.
 function ConvertTo-Version([string]$Text) {
-  if ($Text -notmatch '^(\d{1,5})\.(\d{1,5})\.(\d{1,5})(-rc\.(\d{1,5}))?$') { return $null }
+  if ($Text -notmatch '^([0-9]{1,5})\.([0-9]{1,5})\.([0-9]{1,5})(-rc\.([0-9]{1,5}))?$') { return $null }
   $parts = @([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
   $rc = if ($Matches.Contains(5)) { [int]$Matches[5] } else { 0 }
   if (@($parts | Where-Object { $_ -gt 65535 }).Count -or $rc -gt 65535 -or ($Matches.Contains(5) -and $rc -lt 1)) { return $null }
@@ -125,7 +126,7 @@ elseif ([int]$ahead -gt 0) {
 function Read-TextFile([string]$Path) { $text = Get-Content -LiteralPath $Path -Raw -Encoding utf8; if ($null -eq $text) { '' } else { $text } }
 $current = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
 $currentVersion = ConvertTo-Version $current
-if (-not $currentVersion -or $currentVersion.ToString() -ne $current) {
+if (-not $currentVersion -or $currentVersion.ToString() -cne $current) {
   Stop-Release "VERSION must hold major.minor.patch or major.minor.patch-rc.N without leading zeros, not '$current'"
 }
 
@@ -136,7 +137,10 @@ if (-not (Read-Git @('ls-files', '--', 'CHANGELOG.md'))) { Fail 'CHANGELOG.md is
 $changelog = Read-Changelog
 $unreleased = Get-ChangelogSection -Text $changelog -Name 'Unreleased'
 if ($null -eq $unreleased) { Stop-Release 'CHANGELOG.md has no "## [Unreleased]" heading' }
-if ($changelog -notmatch '(?m)^\[Unreleased\]: ') { Warn 'CHANGELOG.md has no [Unreleased] link at its end, so the release adds no compare link' }
+if ($null -eq (Get-ChangelogLink -Text $changelog -Name 'Unreleased')) { Warn 'CHANGELOG.md has no [Unreleased] link at its end, so the release adds no compare link' }
+if (Test-ChangelogUnclosed $changelog) {
+  Warn 'CHANGELOG.md has an HTML comment or a code fence that never closes: GitHub hides the rest of the file or shows it as code, and this script reads no headings, links or entries there'
+}
 
 # GitHub extras (the CI check and watching the release build) need gh and a GitHub origin; without them they are skipped.
 $slug = $null
@@ -191,6 +195,18 @@ if ($groups.Count) {
 } else {
   Warn 'CHANGELOG.md has no entries under [Unreleased]: a new version needs them there first'
 }
+# The next version's compare link starts where [Unreleased]'s does (a final's where its oldest release candidate's
+# does), and the tag build starts the notes' list of pull requests there, so that tag must still exist.
+$linkStarts = [ordered]@{ 'Unreleased' = Get-ChangelogCompareBase -Text $changelog -Name 'Unreleased' }
+if ($candidates.Count) { $linkStarts[$candidates[$candidates.Count - 1]] = Get-ChangelogCompareBase -Text $changelog -Name $candidates[$candidates.Count - 1] }
+foreach ($name in $linkStarts.Keys) {
+  $base = $linkStarts[$name]
+  if ($base -match '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$' -and -not (Test-LocalTag $base)) {
+    # [Unreleased]'s link starts at VERSION's own tag, which "again" can recreate; an older one can't come back.
+    $consequence = if ($name -eq 'Unreleased') { "if its build failed, release $($base.Substring(1)) again first; otherwise the next release's" } else { "a final's" }
+    Warn "CHANGELOG.md's [$name] link starts at $base, which is no local tag: $consequence list of pull requests starts wherever GitHub picks"
+  }
+}
 
 # === 3. Version =====================================================================================================
 Say ''
@@ -219,10 +235,12 @@ if (Test-Candidate $currentVersion) {
   foreach ($kind in $next.Keys) { $options += [pscustomobject]@{ Label = $kind; Version = $next[$kind] } }
 }
 for ($i = 0; $i -lt $options.Count; $i++) { Say ("  {0}) {1} -> v{2}" -f ($i + 1), $options[$i].Label, $options[$i].Version) }
+# Inside a cycle with no new entries, another release candidate would have no notes, so the final is the default.
+$default = if ((Test-Candidate $currentVersion) -and -not $groups.Count -and -not $sameAgain) { $options.Count } else { 1 }
 $pick = $null
 while (-not $pick) {
-  $answer = Ask 'Choice [1]: '
-  if (-not $answer) { $answer = '1' }
+  $answer = Ask "Choice [$default]: "
+  if (-not $answer) { $answer = "$default" }
   if ($answer -match '^\d+$' -and [int]$answer -ge 1 -and [int]$answer -le $options.Count) { $pick = $options[[int]$answer - 1] }
   else { Warn "enter 1-$($options.Count)" }
 }
@@ -239,8 +257,8 @@ while (-not $chosen) {
   $remote = Test-RemoteTag "v$candidate"
   if ($remote) { Warn "tag v$candidate already exists on origin"; continue }
   if ($null -eq $remote -and -not $NoFetch) { Warn "could not ask origin about v$candidate; the atomic push still refuses a duplicate" }
-  # Newer than the latest release tag and than VERSION (the latest release, even one shipped untagged, like 1.6.4U);
-  # only the "again" case may reuse VERSION's number.
+  # Newer than the latest release tag and than VERSION (the last version cut, which may have no tag: 1.6.4U shipped
+  # without one at the time); only the "again" case may reuse VERSION's number.
   $notNewer = if ($latestTag -and $candidateVersion -le (ConvertTo-Version $latestTag.Substring(1))) { $latestTag }
   elseif ($candidateVersion -lt $currentVersion -or ($candidateVersion -eq $currentVersion -and -not $sameAgain)) { "VERSION $current" }
   if ($notNewer -and -not (Confirm-Step "v$candidate is not newer than $notNewer. Use it anyway?" $false)) { continue }
@@ -318,9 +336,11 @@ if ($bump) {
   else {
     # Leaving the review any way but y (n, the end of piped input, Ctrl+C) puts both files back.
     $approved = $false
+    $written = $false
     try {
       [IO.File]::WriteAllText($versionFile, "$chosen`n")
       [IO.File]::WriteAllText($changelogFile, $newChangelog)
+      $written = $true
       & git -C $repo --no-pager diff --stat
       Say '  CHANGELOG.md can be edited before you answer; (d) shows the diff as it is then.'
       if ($merging.Count) {
@@ -332,8 +352,10 @@ if ($bump) {
           # A commit made while this prompt waited would go out on top of the release unseen.
           if ((Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart) { Stop-Release 'HEAD changed during the review: run this again' }
           # The commit takes the files as they are now, edits included; the tag build needs the version's notes.
-          if ((Read-TextFile $versionFile).Trim() -ne $chosen) { Warn "VERSION no longer says ${chosen}: put it back, or answer n"; continue }
-          if (-not (Test-ChangelogEntries (Get-ChangelogSection -Text (Read-Changelog) -Name $chosen))) {
+          $versionNow = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
+          if ($versionNow -cne $chosen) { Warn "VERSION no longer says ${chosen}: put it back, or answer n"; continue }
+          $changelogNow = if (Test-Path -LiteralPath $changelogFile) { Read-Changelog } else { '' }
+          if (-not (Test-ChangelogEntries (Get-ChangelogSection -Text $changelogNow -Name $chosen))) {
             Warn "CHANGELOG.md has no entries under [$chosen] now: the release would have no notes"; continue
           }
           $approved = $true; break
@@ -344,6 +366,15 @@ if ($bump) {
       }
     } finally {
       if (-not $approved) {
+        # The review invites edits to CHANGELOG.md, and the restore below would drop them: keep a copy outside the repo.
+        # Only once the release's own text was written: before that, the file on disk is the one the release found.
+        try {
+          if ($written -and (Test-Path -LiteralPath $changelogFile) -and (Read-Changelog) -cne $newChangelog) {
+            $kept = Join-Path ([IO.Path]::GetTempPath()) "d2bs-CHANGELOG-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID.md"
+            Copy-Item -LiteralPath $changelogFile -Destination $kept
+            Write-Host "Your edits to CHANGELOG.md are kept in $kept"
+          }
+        } catch { Write-Host "Could not keep a copy of your edits to CHANGELOG.md: $($_.Exception.Message)" -ForegroundColor Red }
         # git restore copies from the index, so a commit made during the review that took the release files keeps
         # them: compare with the commit the release started from before saying they are back.
         & git -C $repo restore -- VERSION CHANGELOG.md
@@ -377,6 +408,8 @@ if (-not $DryRun) {
   & git -C $repo push --atomic origin master $tag
   if ($LASTEXITCODE) {
     Bad "push failed (atomic: neither master nor $tag reached origin)"
+    # The undo drops the release commit, and with it any edits made to CHANGELOG.md at the review.
+    if ($bump) { $releaseSha = Read-Git @('rev-parse', '--short', 'HEAD'); Say "The release commit keeps the CHANGELOG.md you reviewed: git show ${releaseSha}:CHANGELOG.md" }
     Say 'Undo the local release, update, and release again:'
     @($undoCommit) + @("git tag -d $tag", 'git pull origin master', 'pwsh -File build\Release-D2BS.ps1') | ForEach-Object { Say "  $_" }
     exit 1

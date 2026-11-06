@@ -19,9 +19,10 @@ and on demand (Run workflow).
 - **Release tags (`v<major>.<minor>.<patch>`, e.g. `v1.6.5`) and release candidates' (`v1.6.5-rc.1`):** the build is
   a release, and the workflow creates a GitHub Release with the DLL and PDB. A final's is a draft, which you publish
   by hand (see Releasing); a release candidate's is published at once as a pre-release, never marked Latest. Its notes
-  are the version's section of `CHANGELOG.md`, followed by GitHub's generated list of pull requests since the tag the
-  section's compare link starts from; a tag whose version has no section there, or a section without entries, fails
-  before the build. The artifact is named `D2BS-<tag>` and kept for 90 days. Other tags don't start a build.
+  are the version's section of `CHANGELOG.md`, followed by GitHub's generated list of pull requests since the release
+  tag the section's compare link starts from (when the link starts from a commit, or that tag no longer exists, GitHub
+  picks the start). A tag whose version has no section there, or a section without entries, fails before the build.
+  The artifact is named `D2BS-<tag>` and kept for 90 days. Other tags don't start a build.
 - **The toolset:** on its first run, the workflow downloads the two Microsoft packages in `toolset.json` (about
   725 MB), checks their SHA-256, and unpacks them. It keeps the result in the Actions cache.
   - Later runs restore the cache instead of downloading again.
@@ -106,15 +107,18 @@ On an up-to-date `master` with no uncommitted changes, the script:
 2. Counts the entries under `[Unreleased]` and each release candidate's section per group, and offers the next
    version: after a final release, the first release candidate of the next patch, minor or major version (e.g.
    `1.6.5-rc.1` after `1.6.4`), or that version's final; after a release candidate, the next one (`1.6.5-rc.2`) or the
-   final (`1.6.5`). You can type another; one that isn't newer than `VERSION` or the latest release tag (release
-   candidates included) needs a confirmation (except when it offers the same version again, below). A release
-   candidate needs entries under `[Unreleased]`; a final needs them there or in its release candidates' sections. A
-   final warns about commits made since the last release candidate, which no tester has run.
+   final (`1.6.5`). The default is the same version again when that is offered; otherwise the patch release
+   candidate after a final, and the next release candidate after one, or the final when nothing new is under
+   `[Unreleased]`. You can type another version; one that isn't newer than `VERSION` or the latest release tag
+   (release candidates included) needs a confirmation (except when it offers the same version again, below). A
+   release candidate needs entries under `[Unreleased]`; a final needs them there or in its release candidates'
+   sections. A final warns about commits made since the last release candidate, which no tester has run.
 3. Shows the plan with the release notes. After you confirm (it stops if `VERSION`, `CHANGELOG.md` or the commit
    changed during the prompts), it writes `VERSION`, updates `CHANGELOG.md` as above (under a new, empty
    `[Unreleased]`), points the links at the bottom at the new tag, and shows the change for review. You can edit
    `CHANGELOG.md` before answering the review; `d` shows the diff as it is then, and `y` takes the files as they are,
-   as long as `VERSION` still names the version and its section still has entries.
+   as long as `VERSION` still names the version and its section still has entries. Leaving the review any other way
+   puts both files back, after copying an edited `CHANGELOG.md` to your temp folder (the script prints where).
 4. Commits both files as `chore(release): v1.6.5`, unless a commit was made during the review, which stops it.
 5. Creates the annotated tag `v1.6.5`.
 6. Pushes `master` and the tag in one atomic push.

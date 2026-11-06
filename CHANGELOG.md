@@ -2,9 +2,9 @@
 
 All notable changes to D2BS are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Versions before 1.6.4 were never tagged; their history is in the git log.
+Versions up to 1.6.4 have no section here; their history is in the git log, and 1.6.4 is tagged `v1.6.4`.
 
-Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listing what changed since the one before; the final release brings them together in one section.
+Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listing what changed since the release before it; the final release brings them together in one section.
 
 ## [Unreleased]
 

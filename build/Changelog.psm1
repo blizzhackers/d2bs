@@ -4,24 +4,64 @@
 Set-StrictMode -Version 3
 
 # A version label: major.minor.patch, or a release candidate's major.minor.patch-rc.N.
-$script:versionLabel = '\d+\.\d+\.\d+(-rc\.\d+)?'
+$script:versionLabel = '[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?'
 # The order Keep a Changelog gives its groups; a merged section keeps it, with any other group after them.
 $script:groupOrder = 'Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security'
 
 function Split-ChangelogLines([AllowEmptyString()][string]$Text) { , @($Text -split '\r?\n') }
 
+# Which lines carry no Markdown structure on GitHub: an HTML comment block, which it hides (from a line opening with
+# "<!--" to the line holding "-->"), and a fenced code block, which it shows as code (its fences included; it closes
+# on a fence of the same character, at least as long, with nothing after it). One left open runs to the end. Every
+# reader of CHANGELOG.md's structure here skips these lines, so a commented-out template is never taken for a heading,
+# a link or an entry. A "<!--" later in a line opens no block: it hides at most its own paragraph's text, where no
+# heading can sit.
+function Find-ChangelogHiddenLines([string[]]$Lines) {
+  $hidden = [bool[]]::new($Lines.Count)
+  $comment = $false
+  $fence = $null
+  for ($i = 0; $i -lt $Lines.Count; $i++) {
+    $line = $Lines[$i]
+    if ($fence) {
+      $hidden[$i] = $true
+      if ($line -match ('^ {0,3}' + [regex]::Escape($fence) + [regex]::Escape([string]$fence[0]) + '*[ \t]*$')) { $fence = $null }
+    } elseif ($comment) {
+      $hidden[$i] = $true
+      if ($line.Contains('-->')) { $comment = $false }
+    } elseif ($line -match '^ {0,3}(`{3,})[^`]*$' -or $line -match '^ {0,3}(~{3,})') {
+      # A backtick in the info string makes the line inline code, not a fence.
+      $hidden[$i] = $true
+      $fence = $Matches[1]
+    } elseif ($line -match '^ {0,3}<!--') {
+      # The "--" that opens the comment may start its "-->" too, so "<!-->" closes on its own line.
+      $hidden[$i] = $true
+      $comment = $line.IndexOf('-->', $line.IndexOf('<!--') + 2) -lt 0
+    }
+  }
+  , $hidden
+}
+
+# Whether an HTML comment or a code fence never closes, so the rest of the file carries no structure.
+function Test-ChangelogUnclosed([AllowEmptyString()][string]$Text) {
+  $lines = [Collections.Generic.List[string]]::new([string[]](Split-ChangelogLines $Text))
+  $lines.Add('end')
+  (Find-ChangelogHiddenLines $lines.ToArray())[-1]
+}
+
 # The line index of "## [<Name>]" (with or without " - <date>"), or -1. Labels match in any case, as Markdown's do.
 function Find-ChangelogHeading([string[]]$Lines, [string]$Name) {
   $pattern = '^## \[' + [regex]::Escape($Name) + '\]( |$)'
-  for ($i = 0; $i -lt $Lines.Count; $i++) { if ($Lines[$i] -match $pattern) { return $i } }
+  $hidden = Find-ChangelogHiddenLines $Lines
+  for ($i = 0; $i -lt $Lines.Count; $i++) { if (-not $hidden[$i] -and $Lines[$i] -match $pattern) { return $i } }
   -1
 }
 
 # Where the section whose heading is at $Start ends: the next "## " heading, the next [Unreleased] or [<version>] link
 # line, or the end of the file.
 function Find-ChangelogSectionEnd([string[]]$Lines, [int]$Start) {
+  $hidden = Find-ChangelogHiddenLines $Lines
   $end = $Start + 1
-  while ($end -lt $Lines.Count -and $Lines[$end] -notmatch '^## ' -and $Lines[$end] -notmatch "^\[(Unreleased|$script:versionLabel)\]: ") { $end++ }
+  while ($end -lt $Lines.Count -and ($hidden[$end] -or ($Lines[$end] -notmatch '^## ' -and $Lines[$end] -notmatch "^\[(Unreleased|$script:versionLabel)\]: "))) { $end++ }
   $end
 }
 
@@ -52,7 +92,7 @@ function Find-ChangelogCandidates([string[]]$Lines) {
   $unreleased = Find-ChangelogHeading $Lines 'Unreleased'
   if ($unreleased -lt 0) { return , $found.ToArray() }
   $at = Find-ChangelogSectionEnd $Lines $unreleased
-  while ($at -lt $Lines.Count -and $Lines[$at] -match '^## \[(\d+\.\d+\.\d+-rc\.\d+)\]( |$)') {
+  while ($at -lt $Lines.Count -and $Lines[$at] -match '^## \[([0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+)\]( |$)') {
     $name = $Matches[1]
     $end = Find-ChangelogSectionEnd $Lines $at
     $found.Add([pscustomobject]@{ Name = $name; Start = $at; End = $end })
@@ -67,12 +107,32 @@ function Get-ChangelogCandidates([AllowEmptyString()][string]$Text) {
   , @(foreach ($c in $candidates) { $c.Name })
 }
 
+# The target of a "[<Name>]: <target>" link line outside hidden text, or $null. Labels match in any case.
+function Get-ChangelogLink([AllowEmptyString()][string]$Text, [string]$Name) {
+  $pattern = '^\[' + [regex]::Escape($Name) + '\]: (\S+)'
+  $lines = Split-ChangelogLines $Text
+  $hidden = Find-ChangelogHiddenLines $lines
+  for ($i = 0; $i -lt $lines.Count; $i++) { if (-not $hidden[$i] -and $lines[$i] -match $pattern) { return $Matches[1] } }
+  $null
+}
+
 # The <base> of a version's "[<Name>]: <repo>/compare/<base>...<tag>" link, or $null.
 function Get-ChangelogCompareBase([AllowEmptyString()][string]$Text, [string]$Name) {
-  $pattern = '^\[' + [regex]::Escape($Name) + '\]: \S+/compare/(\S+?)\.\.\.\S+$'
-  $lines = Split-ChangelogLines $Text
-  foreach ($line in $lines) { if ($line -match $pattern) { return $Matches[1] } }
-  $null
+  $target = Get-ChangelogLink $Text $Name
+  if ($target -match '/compare/(\S+?)\.\.\.\S+$') { $Matches[1] } else { $null }
+}
+
+# Chunks of section text joined in order. A chunk that opens with a bullet or with "1." goes on the next line, so the
+# lists of several sections stay one list (Markdown lets only those start a list right after a paragraph); any other
+# starts after a blank line, so a paragraph never joins the item before it.
+function Join-ChangelogChunks([string[]]$Chunks) {
+  $text = ''
+  foreach ($chunk in $Chunks) {
+    if (-not $text) { $text = $chunk }
+    elseif ($chunk -match '^ {0,3}([-*+]|1[.)])[ \t]') { $text += "`n$chunk" }
+    else { $text += "`n`n$chunk" }
+  }
+  $text
 }
 
 # Section bodies merged into one, oldest first: their text before any "### " group, then each group once, holding the
@@ -81,10 +141,11 @@ function Merge-ChangelogBodies([string[]]$Bodies) {
   $segments = [Collections.Generic.List[object]]::new()
   foreach ($body in $Bodies) {
     $lines = Split-ChangelogLines $body
+    $hidden = Find-ChangelogHiddenLines $lines
     $group = $null
     $from = 0
     for ($i = 0; $i -le $lines.Count; $i++) {
-      if ($i -eq $lines.Count -or $lines[$i] -match '^### (.+)$') {
+      if ($i -eq $lines.Count -or (-not $hidden[$i] -and $lines[$i] -match '^### (.+)$')) {
         $text = Join-ChangelogBody $lines $from $i
         if ($text) { $segments.Add([pscustomobject]@{ Group = $group; Text = $text }) }
         if ($i -lt $lines.Count) { $group = $Matches[1].Trim(); $from = $i + 1 }
@@ -96,18 +157,19 @@ function Merge-ChangelogBodies([string[]]$Bodies) {
   foreach ($s in $segments) { if ($null -ne $s.Group -and $s.Group -notin $names) { $names.Add($s.Group) } }
   $ordered = @(foreach ($g in $script:groupOrder) { $names | Where-Object { $_ -eq $g } }) + @($names | Where-Object { $_ -notin $script:groupOrder })
   $parts = [Collections.Generic.List[string]]::new()
-  $intro = @($segments | Where-Object { $null -eq $_.Group } | ForEach-Object { $_.Text }) -join "`n"
+  $intro = Join-ChangelogChunks @($segments | Where-Object { $null -eq $_.Group } | ForEach-Object { $_.Text })
   if ($intro) { $parts.Add($intro) }
   foreach ($g in $ordered) {
-    $parts.Add("### $g`n`n" + (@($segments | Where-Object { $null -ne $_.Group -and $_.Group -eq $g } | ForEach-Object { $_.Text }) -join "`n"))
+    $parts.Add("### $g`n`n" + (Join-ChangelogChunks @($segments | Where-Object { $null -ne $_.Group -and $_.Group -eq $g } | ForEach-Object { $_.Text })))
   }
   $parts -join "`n`n"
 }
 
-# A section without its HTML comments and fenced code, which GitHub doesn't show as text; one left open runs to the
-# end of the section.
+# A section without its HTML comment blocks and fenced code (see Find-ChangelogHiddenLines).
 function Remove-ChangelogHidden([AllowEmptyString()][string]$Section) {
-  $Section -replace '(?s)<!--.*?(-->|\z)', '' -replace '(?ms)^ {0,3}(```|~~~).*?(^ {0,3}\1[^\n]*$|\z)', ''
+  $lines = Split-ChangelogLines $Section
+  $hidden = Find-ChangelogHiddenLines $lines
+  @(for ($i = 0; $i -lt $lines.Count; $i++) { if (-not $hidden[$i]) { $lines[$i] } }) -join "`n"
 }
 
 # A section's entries per "### " group, e.g. Added = 2: its top-level list items (no deeper than the first one),
@@ -159,7 +221,7 @@ function Update-ChangelogForRelease {
   if ($unreleased -lt 0) { throw 'CHANGELOG.md has no "## [Unreleased]" heading' }
   if ((Find-ChangelogHeading $lines $Version) -ge 0) { throw "CHANGELOG.md already has a [$Version] section" }
   $candidates = @()
-  if ($Version -notmatch '-rc\.\d+$') { $candidates = Find-ChangelogCandidates $lines }
+  if ($Version -notmatch '-rc\.[0-9]+$') { $candidates = Find-ChangelogCandidates $lines }
 
   $linkBase = $null
   if (-not $candidates.Count) {
@@ -186,8 +248,9 @@ function Update-ChangelogForRelease {
     } elseif ($lines[$lines.Count - 1] -eq '') { $merged.Add('') }
     $oldest = $candidates[$candidates.Count - 1].Name
     $names = @($candidates | ForEach-Object { $_.Name })
+    $hidden = Find-ChangelogHiddenLines $merged.ToArray()
     for ($i = $merged.Count - 1; $i -ge 0; $i--) {
-      if ($merged[$i] -match '^\[(\d+\.\d+\.\d+-rc\.\d+)\]: ' -and $Matches[1] -in $names) {
+      if (-not $hidden[$i] -and $merged[$i] -match '^\[([0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+)\]: ' -and $Matches[1] -in $names) {
         if ($Matches[1] -eq $oldest -and $merged[$i] -match '/compare/(\S+?)\.\.\.\S+$') { $linkBase = $Matches[1] }
         $merged.RemoveAt($i)
       }
@@ -196,7 +259,8 @@ function Update-ChangelogForRelease {
   }
 
   $link = -1
-  for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^\[Unreleased\]: ') { $link = $i; break } }
+  $hidden = Find-ChangelogHiddenLines $lines.ToArray()
+  for ($i = 0; $i -lt $lines.Count; $i++) { if (-not $hidden[$i] -and $lines[$i] -match '^\[Unreleased\]: ') { $link = $i; break } }
   if ($link -ge 0) {
     if ($lines[$link] -notmatch '^\[Unreleased\]: (\S+)/compare/(\S+)\.\.\.HEAD$') {
       throw "CHANGELOG.md's [Unreleased] link is not <repo>/compare/<base>...HEAD: $($lines[$link])"
@@ -210,4 +274,4 @@ function Update-ChangelogForRelease {
 }
 
 Export-ModuleMember -Function Get-ChangelogSection, Get-ChangelogEntryCounts, Test-ChangelogEntries, Get-ChangelogWrappedLines,
-  Get-ChangelogCandidates, Get-ChangelogCompareBase, Update-ChangelogForRelease
+  Get-ChangelogCandidates, Get-ChangelogLink, Get-ChangelogCompareBase, Test-ChangelogUnclosed, Update-ChangelogForRelease

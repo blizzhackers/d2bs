@@ -8,6 +8,8 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-13
+
 ### Added
 
 - **`clearAllTimers()`** cancels every timer of the calling script, including an interval whose callback is running, and returns how many it cancelled.
@@ -54,4 +56,5 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 - **Dependable file reads, seeks and closes.** `FileTools.readText()` throws when reading the file fails, a `File` whose `close()` throws is closed and can be reopened, `file.seek(n)` on a file opened with locking moves `n` bytes, and a binary `file.read(count)` returns 0 for each value past the end of the file and frees its memory when done.
 - **Steady memory for busy bots.** Every event a listener receives and every `getPath()` call frees the memory it used, so bots that trade many chat, `copydata` and script messages keep a steady footprint over long runs.
 
-[Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.6.4...HEAD
+[Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/blizzhackers/d2bs/compare/v1.6.4...v1.7.0

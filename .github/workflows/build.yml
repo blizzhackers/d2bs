@@ -80,6 +80,24 @@ jobs:
           if ($env:REF_TYPE -eq 'tag') { $build.Release = $true; $build.Tag = $env:REF_NAME }
           ./build/Build-D2BS.ps1 @build
 
+      # A release's zip for a bot folder: its d2bs folder, extracted into kolbot's, replaces D2BS.dll and CHANGELOG.md
+      # where kolbot keeps them and adds D2BS.pdb beside them. Entry names are spelled with "/" so every unzip tool
+      # makes the folder.
+      - name: Package
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $out = "$env:RUNNER_TEMP/out"
+          $zip = [IO.Compression.ZipFile]::Open("$out/D2BS-$env:REF_NAME.zip", 'Create')
+          try {
+            foreach ($file in "$out/D2BS.dll", "$out/D2BS.pdb", "$env:GITHUB_WORKSPACE/CHANGELOG.md") {
+              [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $file, "d2bs/$(Split-Path -Leaf $file)", 'Optimal') | Out-Null
+            }
+          } finally { $zip.Dispose() }
+
       - uses: actions/upload-artifact@v7 # floating major; v7.0.2 was current on 2026-10-15
         with:
           name: D2BS-${{ github.ref_type == 'tag' && github.ref_name || github.event.pull_request.head.sha || github.sha }}
@@ -88,6 +106,7 @@ jobs:
             ${{ runner.temp }}/out/D2BS.pdb
             ${{ runner.temp }}/out/build.log
             ${{ runner.temp }}/out/release-notes.md
+            ${{ runner.temp }}/out/D2BS-*.zip
           if-no-files-found: error
           retention-days: ${{ github.ref_type == 'tag' && 90 || 30 }}
           overwrite: true # a re-run replaces the earlier attempt's artifact
@@ -142,4 +161,4 @@ jobs:
               start=(--notes-start-tag "$START_TAG")
             fi
           fi
-          gh release create "$TAG" dist/D2BS.dll dist/D2BS.pdb --repo "$GITHUB_REPOSITORY" --verify-tag "${kind[@]}" --title "D2BS $TAG" --notes-file dist/release-notes.md --generate-notes "${start[@]}"
+          gh release create "$TAG" dist/D2BS.dll dist/D2BS.pdb "dist/D2BS-$TAG.zip" --repo "$GITHUB_REPOSITORY" --verify-tag "${kind[@]}" --title "D2BS $TAG" --notes-file dist/release-notes.md --generate-notes "${start[@]}"

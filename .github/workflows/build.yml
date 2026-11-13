@@ -80,9 +80,9 @@ jobs:
           if ($env:REF_TYPE -eq 'tag') { $build.Release = $true; $build.Tag = $env:REF_NAME }
           ./build/Build-D2BS.ps1 @build
 
-      # A release's zip for a bot folder: its d2bs folder, extracted into kolbot's, replaces D2BS.dll and CHANGELOG.md
-      # where kolbot keeps them and adds D2BS.pdb beside them. Entry names are spelled with "/" so every unzip tool
-      # makes the folder.
+      # A release's zip for a bot folder: extracted into a kolbot folder, its d2bs folder replaces D2BS.dll and
+      # CHANGELOG.md where kolbot keeps them and adds D2BS.pdb beside them. Entry names are spelled with "/" so every
+      # unzip tool makes the folder. build/Release-D2BS.ps1's next steps name the zip D2BS-<tag>.zip too.
       - name: Package
         if: github.ref_type == 'tag'
         shell: pwsh

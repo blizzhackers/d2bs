@@ -6,9 +6,9 @@
   a final merges the release candidates' sections and Unreleased into one dated section. After a review (CHANGELOG.md
   can be edited there) it commits both as "chore(release): v<version>", tags it (annotated) and pushes master and the
   tag in one atomic push. The tag push makes the build workflow publish a release candidate as a GitHub pre-release,
-  or create a final as a DRAFT release to publish after a test; each carries D2BS.dll, D2BS.pdb and D2BS-<tag>.zip
-  (both with CHANGELOG.md, in a d2bs folder to extract into a kolbot folder), and its notes are the version's
-  CHANGELOG.md section.
+  or create a final as a DRAFT release to publish after a test. Each carries D2BS.dll, D2BS.pdb and D2BS-<tag>.zip
+  (the DLL, the PDB and CHANGELOG.md in a d2bs folder, to extract into a kolbot folder), and its notes open with the
+  version's CHANGELOG.md section.
 
     pwsh -File build\Release-D2BS.ps1             interactive
     pwsh -File build\Release-D2BS.ps1 -DryRun     rehearse: prints every step that would change something, changes nothing
@@ -443,7 +443,8 @@ Say '  1. Wait for the build to go green:'
 Say "     $url/actions/workflows/build.yml"
 if ($isCandidate) {
   Say "  2. It publishes the pre-release `"D2BS $tag`" (D2BS.dll, D2BS.pdb, D2BS-$tag.zip, the notes): $url/releases/tag/$tag"
-  Say "  3. Give its D2BS.dll to the testers; the D2BS log and version() call it $($chosen -replace '-', 'U-')."
+  Say "  3. Give the testers its D2BS-$tag.zip (to extract into a kolbot folder) or its D2BS.dll; the D2BS log and"
+  Say "     version() call it $($chosen -replace '-', 'U-')."
   Say '  4. Fixes for what they find add their CHANGELOG.md entries under [Unreleased]. Then run this again: for the'
   Say '     next release candidate, or for the final once a release candidate holds up.'
   Say '  If the build fails on a download, re-run it from its Actions page. If the code or the DLL is at fault and no'
@@ -451,7 +452,7 @@ if ($isCandidate) {
   Say "     gh release delete $tag --repo $repoArg --yes   (if the release exists)"
 } else {
   Say "  2. Review the DRAFT release `"D2BS $tag`" (D2BS.dll, D2BS.pdb, D2BS-$tag.zip, the notes): $url/releases"
-  Say '  3. Try the DLL on a test install, e.g. with one D2Bot profile.'
+  Say "  3. Try the DLL on a test install, e.g. with one D2Bot profile (D2BS-$tag.zip extracts into a kolbot folder)."
   Say '  4. Publish it and mark it Latest:'
   Say "     gh release edit $tag --repo $repoArg --draft=false --latest"
   Say '  If the build fails on a download, re-run it from its Actions page. If the code or the DLL is at fault:'

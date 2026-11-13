@@ -10,21 +10,23 @@ SP1 (v100) toolset. The scripts here use a copy of that toolset in a plain folde
 and on demand (Run workflow).
 
 - **Every build:** the run's artifact holds `D2BS.dll`, `D2BS.pdb` and `build.log` (a release tag's artifact also
-  holds `release-notes.md` and `D2BS-<tag>.zip`). It is named `D2BS-<commit>` and kept for 30 days. A pull request
-  builds its own head commit, so that commit is the one in the name and in the DLL.
+  holds `release-notes.md` and `D2BS-<tag>.zip`). It is named `D2BS-<commit>` and kept for 30 days (a release tag's:
+  see below). A pull request builds its own head commit, so that commit is the one in the name and in the DLL.
   A build that fails while compiling, linking or checking the DLL's version uploads its whole `build.log` alone, as
   `D2BS-build-log-<commit>` (or `-<tag>`); the job log shows the failing tool's first errors and last lines. A failure
   before that (a tag whose release notes fail their checks, fetching the toolset, a missing toolset, a tag that
   doesn't match `VERSION`) shows its cause in the job log.
 - **Release tags (`v<major>.<minor>.<patch>`, e.g. `v1.6.5`) and release candidates' (`v1.6.5-rc.1`):** the build is a
-  release, and the workflow creates a GitHub Release with the DLL, the PDB and `D2BS-<tag>.zip`. The zip holds both
-  with `CHANGELOG.md` in a `d2bs` folder: extracted into a kolbot folder, it updates all three where kolbot keeps
-  them. A final's is a draft, which you publish by hand (see Releasing); a release candidate's is published at once as
-  a pre-release, never marked Latest. Its notes are the version's section of `CHANGELOG.md`, followed by GitHub's
-  generated list of pull requests since the release tag the section's compare link starts from (when the link starts
-  from a commit, or that tag no longer exists, GitHub picks the start). A tag fails before the build when its version
-  has no section there, the section has no entries, or an HTML comment or code fence in the section never closes. The
-  artifact is named `D2BS-<tag>` and kept for 90 days. Other tags don't start a build.
+  release, and pushing the tag creates a GitHub Release (a manual run on a tag builds it but creates none). A final's
+  release is a draft, which you publish by hand (see Releasing); a release candidate's is published at once as a
+  pre-release, never marked Latest. The release carries `D2BS.dll`, `D2BS.pdb` and `D2BS-<tag>.zip`, which holds the
+  DLL, the PDB and `CHANGELOG.md` in a `d2bs` folder: extracted into a kolbot folder, it replaces the DLL and
+  `CHANGELOG.md` in kolbot's `d2bs` folder and adds the PDB beside them. The release's notes are the version's section
+  of `CHANGELOG.md`, followed by GitHub's generated list of pull requests since the release tag the section's compare
+  link starts from (when the link starts from a commit, or that tag no longer exists, GitHub picks the start). A tag
+  fails before the build when its version has no section there, the section has no entries, or an HTML comment or
+  code fence in the section never closes. The artifact is named `D2BS-<tag>` and kept for 90 days. Pushing other tags
+  starts no build.
 - **The toolset:** on its first run, the workflow downloads the two Microsoft packages in `toolset.json` (about
   725 MB), checks their SHA-256, and unpacks them. It keeps the result in the Actions cache.
   - Later runs restore the cache instead of downloading again.

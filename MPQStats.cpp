@@ -3,6 +3,7 @@
 #include "Core.h"
 MPQTable BaseStatTable[] = {
     // DWORD dwEntry, DWORD dwMaxEntriesOffset, BinField* pTable, char szTableName, WORD wTableSize, WORD wUnknown
+    // Scripts also address tables by index: add new tables at the end, just before {0}, so existing indices keep their table.
     {0x8426F0, 0x8426EC, itemTable, "items", ARRAYSIZE(itemTable), 0xFFFF},
     {0xA78, 0xA80, monstatsTable, "monstats", ARRAYSIZE(monstatsTable), 0xFFFF},
     {0xB8C, 0xB94, skilldescTable, "skilldesc", ARRAYSIZE(skilldescTable), 0xFFFF},
@@ -29,7 +30,6 @@ MPQTable BaseStatTable[] = {
     {0x96C8A8, 0x0, experienceTable, "experience", ARRAYSIZE(experienceTable), 0xFFFF}, // v - doesnt tap the last 2 levels of exp, ends at level 97 - TechnoHunter
     {0xBE8, 0xBF0, pettypeTable, "pettable", ARRAYSIZE(pettypeTable), 0xFFFF},
     {0xAD4, 0xADC, superuniquesTable, "superuniques", ARRAYSIZE(superuniquesTable), 0xFFFF},
-    // Scripts also address tables by index: add new tables at the end, just before {0}, so existing indices keep their table.
     {0xB70, 0xB74, monlvlTable, "monlvl", ARRAYSIZE(monlvlTable), 0xFFFF},
     {0}};
 

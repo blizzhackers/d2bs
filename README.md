@@ -569,7 +569,7 @@ Get the base stat from the given table with the given class ID and stat name.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -581,7 +581,7 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -593,7 +593,7 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -605,7 +605,7 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -621,7 +621,7 @@ Get the base stat from the given table with the given class ID and stat name.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -633,7 +633,7 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -645,7 +645,7 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -657,7 +657,7 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -673,7 +673,7 @@ Get the base stat from the given table with the given class ID and stat ID.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -685,7 +685,7 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -697,7 +697,7 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -709,7 +709,7 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -725,7 +725,7 @@ Get the base stat from the given table with the given class ID and stat ID.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -737,7 +737,7 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -749,7 +749,7 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.
@@ -761,7 +761,7 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's, for example "L-DM(H)".
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
 
 #### Returns
 The stat.

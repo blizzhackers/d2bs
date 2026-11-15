@@ -452,7 +452,8 @@ Area getArea(int32_t nArea);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -475,7 +476,8 @@ String getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -498,7 +500,8 @@ String getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -521,7 +524,8 @@ String getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -544,7 +548,8 @@ String getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -567,7 +572,8 @@ int getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -590,7 +596,8 @@ int getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -613,7 +620,8 @@ int getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -636,7 +644,8 @@ int getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -659,7 +668,8 @@ bool getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -682,7 +692,8 @@ bool getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -705,7 +716,8 @@ bool getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -728,7 +740,8 @@ bool getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -751,7 +764,8 @@ double getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -774,7 +788,8 @@ double getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -797,7 +812,8 @@ double getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
- * columns are MonLvl.txt's, for example "L-DM(H)".
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */

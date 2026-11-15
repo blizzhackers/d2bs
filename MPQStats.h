@@ -2123,7 +2123,7 @@ static BinField superuniquesTable[] = {
     {"TC(N)", FIELDTYPE_NAME_TO_WORD, 0x0, 0x2e},       {"TC(H)", FIELDTYPE_NAME_TO_WORD, 0x0, 0x30},     {"end", FIELDTYPE_END, 0x0, 0x34},
 };
 // MonLvl.txt's 30 value columns as DWORDs in file order; the row index is the monster level (the Level column is not
-// stored). Layout from 1.14d's own loader (0x659500) and readers (0x6538A0).
+// stored). Layout from 1.14d's own loader (0x659500) and readers (0x5A0000, 0x6538A0).
 static BinField monlvlTable[] = {
     {"AC", FIELDTYPE_DATA_DWORD, 0x0, 0x0},     {"AC(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x4},     {"AC(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x8},
     {"L-AC", FIELDTYPE_DATA_DWORD, 0x0, 0xc},   {"L-AC(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x10},  {"L-AC(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x14},

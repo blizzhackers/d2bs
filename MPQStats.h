@@ -2122,3 +2122,18 @@ static BinField superuniquesTable[] = {
     {"Utrans(N)", FIELDTYPE_DATA_BYTE, 0x0, 0x29},      {"Utrans(H)", FIELDTYPE_DATA_BYTE, 0x0, 0x2a},    {"TC", FIELDTYPE_NAME_TO_WORD, 0x0, 0x2c},
     {"TC(N)", FIELDTYPE_NAME_TO_WORD, 0x0, 0x2e},       {"TC(H)", FIELDTYPE_NAME_TO_WORD, 0x0, 0x30},     {"end", FIELDTYPE_END, 0x0, 0x34},
 };
+// MonLvl.txt's 30 value columns as DWORDs in file order; the row index is the monster level (the Level column is not
+// stored). Layout from 1.14d's own loader (0x659500) and readers (0x5A0000, 0x6538A0).
+static BinField monlvlTable[] = {
+    {"AC", FIELDTYPE_DATA_DWORD, 0x0, 0x0},     {"AC(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x4},     {"AC(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x8},
+    {"L-AC", FIELDTYPE_DATA_DWORD, 0x0, 0xc},   {"L-AC(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x10},  {"L-AC(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x14},
+    {"TH", FIELDTYPE_DATA_DWORD, 0x0, 0x18},    {"TH(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x1c},    {"TH(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x20},
+    {"L-TH", FIELDTYPE_DATA_DWORD, 0x0, 0x24},  {"L-TH(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x28},  {"L-TH(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x2c},
+    {"HP", FIELDTYPE_DATA_DWORD, 0x0, 0x30},    {"HP(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x34},    {"HP(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x38},
+    {"L-HP", FIELDTYPE_DATA_DWORD, 0x0, 0x3c},  {"L-HP(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x40},  {"L-HP(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x44},
+    {"DM", FIELDTYPE_DATA_DWORD, 0x0, 0x48},    {"DM(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x4c},    {"DM(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x50},
+    {"L-DM", FIELDTYPE_DATA_DWORD, 0x0, 0x54},  {"L-DM(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x58},  {"L-DM(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x5c},
+    {"XP", FIELDTYPE_DATA_DWORD, 0x0, 0x60},    {"XP(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x64},    {"XP(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x68},
+    {"L-XP", FIELDTYPE_DATA_DWORD, 0x0, 0x6c},  {"L-XP(N)", FIELDTYPE_DATA_DWORD, 0x0, 0x70},  {"L-XP(H)", FIELDTYPE_DATA_DWORD, 0x0, 0x74},
+    {"end", FIELDTYPE_END, 0x0, 0x78},
+};

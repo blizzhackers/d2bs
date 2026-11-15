@@ -446,7 +446,14 @@ Area getArea(int32_t nArea);
  *
  * \param szStatName The stat name.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -463,7 +470,14 @@ String getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  *
  * \param szStatName The stat name.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -480,7 +494,14 @@ String getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  *
  * \param nStat The stat ID.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -497,7 +518,14 @@ String getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  *
  * \param nStat The stat ID.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -514,7 +542,14 @@ String getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  *
  * \param szStatName The stat name.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -531,7 +566,14 @@ int getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  *
  * \param szStatName The stat name.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -548,7 +590,14 @@ int getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  *
  * \param nStat The stat ID.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -565,7 +614,14 @@ int getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  *
  * \param nStat The stat ID.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -582,7 +638,14 @@ int getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  *
  * \param szStatName The stat name.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -599,7 +662,14 @@ bool getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  *
  * \param szStatName The stat name.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -616,7 +686,14 @@ bool getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  *
  * \param nStat The stat ID.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -633,7 +710,14 @@ bool getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  *
  * \param nStat The stat ID.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -650,7 +734,14 @@ bool getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  *
  * \param szStatName The stat name.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -667,7 +758,14 @@ double getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  *
  * \param szStatName The stat name.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -684,7 +782,14 @@ double getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  *
  * \param nStat The stat ID.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */
@@ -701,7 +806,14 @@ double getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  *
  * \param nStat The stat ID.
  *
- * \todo Determine what these tables are.
+ * Tables, by index (either the name or the index selects a table): 0 items,
+ * 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2,
+ * 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp,
+ * 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets,
+ * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
+ * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
+ * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
+ * column is not stored, since the row is the level.
  *
  * \return The stat.
  */

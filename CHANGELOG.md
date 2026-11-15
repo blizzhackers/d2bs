@@ -8,6 +8,10 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 ## [Unreleased]
 
+### Added
+
+- **Monster level stats.** `getBaseStat("monlvl", level, column)` reads the game's MonLvl table: the per-level defense, to-hit, life, damage and experience that monster stats are percentages of, for each difficulty, classic and expansion. The columns are named as in MonLvl.txt, for example `"L-DM(H)"`.
+
 ## [1.7.0] - 2026-11-13
 
 ### Added

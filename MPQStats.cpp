@@ -29,6 +29,8 @@ MPQTable BaseStatTable[] = {
     {0x96C8A8, 0x0, experienceTable, "experience", ARRAYSIZE(experienceTable), 0xFFFF}, // v - doesnt tap the last 2 levels of exp, ends at level 97 - TechnoHunter
     {0xBE8, 0xBF0, pettypeTable, "pettable", ARRAYSIZE(pettypeTable), 0xFFFF},
     {0xAD4, 0xADC, superuniquesTable, "superuniques", ARRAYSIZE(superuniquesTable), 0xFFFF},
+    // Scripts also address tables by index: append new tables here so existing indices keep their table.
+    {0xB70, 0xB74, monlvlTable, "monlvl", ARRAYSIZE(monlvlTable), 0xFFFF},
     {0}};
 
 DWORD GetBaseTable(int table, int row) {

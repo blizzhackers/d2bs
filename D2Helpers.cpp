@@ -43,6 +43,9 @@ void LogNoFormat(const wchar_t* szString) {
     FILE* log = stderr;
 #else
     FILE* log = _wfsopen(path, L"a+", _SH_DENYNO);
+    // A log that can't be opened loses the line; fprintf on NULL would end the game.
+    if (!log)
+        return;
 #endif
     static DWORD id = GetProcessId(GetCurrentProcess());
     char* sString = UnicodeToAnsi(szString);

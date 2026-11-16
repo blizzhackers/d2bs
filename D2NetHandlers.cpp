@@ -41,8 +41,11 @@ DWORD ReassignPlayerHandler(BYTE* pPacket, DWORD dwSize) {
 
     UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
 
-    if (ReassignWouldHalt(type, id, pPlayer))
+    if (ReassignWouldHalt(type, id, pPlayer)) {
+        // A dropped packet reads as BLOCK in the packet log, the same as a script listener's block.
+        Log(L"Dropped S2C 0x15 for unit %u (type %u): the game would skip its move with no room and halt (1336)", id, (DWORD)type);
         return FALSE;
+    }
 
     // Unit ids are unique per type only: the merc can share the player's id.
     if (type == UNIT_PLAYER && pPlayer && id == pPlayer->dwUnitId)

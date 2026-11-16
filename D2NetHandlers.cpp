@@ -15,8 +15,36 @@ using namespace std;
 
 Variables Vars = {};
 
+// Mirrors the game's 0x15 handler (0x45D160): it looks the unit up with FindClientSideUnit, moves it
+// (0x4654C0), then halts (1336) if GetRoomFromUnit is NULL. The mover returns without moving a unit
+// flagged 0x10000 or in a death/dead mode, so such a unit with no room yet can only halt. A unit has
+// no room between a waypoint and this packet; a merc dying there hits it. The local player is left to
+// the game: the mover calls 0x466FE0 for it before the skip check.
+static bool ReassignWouldHalt(BYTE type, DWORD id, UnitAny* pPlayer) {
+    UnitAny* pUnit = D2CLIENT_FindClientSideUnit(id, type);
+    if (!pUnit || pUnit == pPlayer || !pUnit->pPath)
+        return false;
+
+    bool skipsMove = (pUnit->dwFlags & 0x10000) != 0;
+    if (pUnit->dwType == UNIT_PLAYER)
+        skipsMove |= pUnit->dwMode == PLAYER_MODE_DEATH || pUnit->dwMode == PLAYER_MODE_DEAD;
+    else if (pUnit->dwType == UNIT_MONSTER)
+        skipsMove |= pUnit->dwMode == NPC_MODE_DEATH || pUnit->dwMode == NPC_MODE_DEAD;
+
+    return skipsMove && !D2COMMON_GetRoomFromUnit(pUnit);
+}
+
 DWORD ReassignPlayerHandler(BYTE* pPacket, DWORD dwSize) {
-    if (*(LPDWORD)&pPacket[2] == D2CLIENT_GetPlayerUnit()->dwUnitId)
+    BYTE type = pPacket[1];
+    DWORD id = *(LPDWORD)&pPacket[2];
+
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+
+    if (ReassignWouldHalt(type, id, pPlayer))
+        return FALSE;
+
+    // Unit ids are unique per type only: the merc can share the player's id.
+    if (type == UNIT_PLAYER && pPlayer && id == pPlayer->dwUnitId)
         pPacket[10] = NULL;
 
     return TRUE;

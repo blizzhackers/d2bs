@@ -12,6 +12,10 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 - **Monster level stats.** `getBaseStat("monlvl", level, column)` reads the game's MonLvl table: the per-level defense, to-hit, life, damage and experience that monster stats are percentages of, for each difficulty, classic and expansion. The row is the monster level, and the columns are MonLvl.txt's value columns, for example `"L-DM(H)"`.
 
+### Fixed
+
+- **Waypoint trips with a fallen mercenary.** The game keeps running when you take a waypoint back to the area where your mercenary died.
+
 ## [1.7.0] - 2026-11-13
 
 ### Added

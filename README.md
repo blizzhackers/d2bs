@@ -569,10 +569,10 @@ Get the base stat from the given table with the given class ID and stat name.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `szTableName` The name of the table to look in.
@@ -581,10 +581,10 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `szTableName` The name of the table to look in.
@@ -593,10 +593,10 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `szTableName` The name of the table to look in.
@@ -605,10 +605,10 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### `public String `[`getBaseStat`](#group__globalFunctions_1ga79338ba3a14fe002f38d987fed2809b3)`(int32_t nBaseStat,int32_t nClassId,String szStatName)` 
 
@@ -621,10 +621,10 @@ Get the base stat from the given table with the given class ID and stat name.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `nBaseStat` The stat to look up.
@@ -633,10 +633,10 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `nBaseStat` The stat to look up.
@@ -645,10 +645,10 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `nBaseStat` The stat to look up.
@@ -657,10 +657,10 @@ The stat.
 
 * `szStatName` The stat name.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### `public String `[`getBaseStat`](#group__globalFunctions_1gac86c8437c691e21b5593552ab9def9ba)`(String szTableName,int32_t nClassId,int32_t nStat)` 
 
@@ -673,10 +673,10 @@ Get the base stat from the given table with the given class ID and stat ID.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `szTableName` The name of the table to look in.
@@ -685,10 +685,10 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `szTableName` The name of the table to look in.
@@ -697,10 +697,10 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `szTableName` The name of the table to look in.
@@ -709,10 +709,10 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### `public String `[`getBaseStat`](#group__globalFunctions_1gafcfdd2f8d3eb3a2c30436ddfc4add78b)`(int32_t nBaseStat,int32_t nClassId,int32_t nStat)` 
 
@@ -725,10 +725,10 @@ Get the base stat from the given table with the given class ID and stat ID.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `nBaseStat` The stat to look up.
@@ -737,10 +737,10 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `nBaseStat` The stat to look up.
@@ -749,10 +749,10 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### Parameters
 * `nBaseStat` The stat to look up.
@@ -761,10 +761,10 @@ The stat.
 
 * `nStat` The stat ID.
 
-Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level.
+Tables, by index (either the name or the index selects a table): 0 items, 1 monstats, 2 skilldesc, 3 skills, 4 objects, 5 missiles, 6 monstats2, 7 itemstatcost, 8 levels, 9 leveldefs, 10 lvlmaze, 11 lvlsub, 12 lvlwarp, 13 lvlprest, 14 lvltypes, 15 charstats, 16 setitems, 17 uniqueitems, 18 sets, 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable, 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level column is not stored, since the row is the level. In experience, row 0 holds each class's maximum level and row L + 1 the experience that reaches level L.
 
 #### Returns
-The stat.
+The stat, or undefined when the table, row or column does not exist.
 
 #### `public `[`Control`](#classControl)` `[`getControl`](#group__globalFunctions_1gaad0e54fb02bc1ce440b96204167da80f)`(int32_t nType,int32_t nX,int32_t nY,int32_t nXSize,int32_t nYSize)` 
 

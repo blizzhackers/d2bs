@@ -1205,6 +1205,7 @@ JSAPI_FUNC(my_useSkillPoint) {
 }
 
 JSAPI_FUNC(my_getBaseStat) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (argc > 2) {
         char *szStatName = NULL, *szTableName = NULL;
         jsint nBaseStat = 0;
@@ -1240,7 +1241,7 @@ JSAPI_FUNC(my_getBaseStat) {
             JS_free(cx, szTableName);
             THROW_ERROR(cx, "Invalid column value");
         }
-        jsval rval;
+        jsval rval = JSVAL_VOID;
         FillBaseStat(cx, &rval, nBaseStat, nClassId, nStat, szTableName, szStatName);
         JS_SET_RVAL(cx, vp, rval);
         JS_EndRequest(cx);

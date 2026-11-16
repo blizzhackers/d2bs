@@ -17,9 +17,10 @@ Variables Vars = {};
 
 // Mirrors the game's 0x15 handler (0x45D160): it looks the unit up with FindClientSideUnit, moves it
 // (0x4654C0), then halts (1336) if GetRoomFromUnit is NULL. The mover returns without moving a unit
-// flagged 0x10000 or in a death/dead mode, so such a unit with no room yet can only halt. A unit has
-// no room between a waypoint and this packet; a merc dying there hits it. The local player is left to
-// the game: the mover calls 0x466FE0 for it before the skip check.
+// flagged 0x10000, or a player or monster in a death/dead mode, so such a unit with no room yet can
+// only halt. A merc is often roomless after a waypoint until its 0x15 arrives (rig-measured, PR #20);
+// one dying there hits this. Left to the game: the local player (the mover calls 0x466FE0 for it
+// before the skip check) and a unit without a path (the mover halts on it before the skip check).
 static bool ReassignWouldHalt(BYTE type, DWORD id, UnitAny* pPlayer) {
     UnitAny* pUnit = D2CLIENT_FindClientSideUnit(id, type);
     if (!pUnit || pUnit == pPlayer || !pUnit->pPath)

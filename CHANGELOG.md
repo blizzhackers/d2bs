@@ -14,7 +14,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 ### Fixed
 
-- **Safe `getBaseStat()` lookups.** `getBaseStat()` returns `undefined` for a table or column that doesn't exist, whether named or numbered, and for a row past the end of its table, so scripts can look up any value without risk to the game.
+- **Safe `getBaseStat()` lookups.** `getBaseStat()` returns `undefined` for a table or column that doesn't exist, whether named or numbered, and for a row past the end of its table, so scripts can look up any value without risk to the game. Called with fewer than three arguments, it also returns `undefined`.
 
 ## [1.7.0] - 2026-11-13
 

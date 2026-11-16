@@ -43,8 +43,8 @@ static bool IsBaseStatColumn(int table, int column) {
     return IsBaseStatTable(table) && column >= 0 && column < BaseStatTable[table].wTableSize - 1;
 }
 
-// Experience.txt stores no record count. Its row 0 holds each class's max level and row L + 1 holds level L, which
-// is as far as the game reads (1.14d 0x611800, 0x611830).
+// Experience.txt stores no record count. Its row 0 holds each class's max level, row L the experience that reaches
+// level L, and row max level + 1 the experience cap, which is as far as the game reads (1.14d 0x611800, 0x611830).
 static DWORD ExperienceRows(DWORD dwRecords) {
     if (!dwRecords)
         return 0;

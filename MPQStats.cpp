@@ -13,7 +13,7 @@ MPQTable BaseStatTable[] = {
     {0xA90, 0xA98, monstats2Table, "monstats2", ARRAYSIZE(monstats2Table), 0xFFFF},
     {0xBCC, 0xBD4, itemstatcostTable, "itemstatcost", ARRAYSIZE(itemstatcostTable), 0xFFFF},
     {0xC58, 0xC5C, levelsTable, "levels", ARRAYSIZE(levelsTable), 0xFFFF},
-    {0xC60, 0x00, leveldefsTable, "leveldefs", ARRAYSIZE(leveldefsTable), 0xFFFF},
+    {0xC60, 0xC5C, leveldefsTable, "leveldefs", ARRAYSIZE(leveldefsTable), 0xFFFF}, // one row per levels row, as the game's own readers bound it
     {0x96CA08, 0x96CA0C, lvlmazeTable, "lvlmaze", ARRAYSIZE(lvlmazeTable), 0xFFFF},
     {0x96CA10, 0x96CA14, lvlsubTable, "lvlsub", ARRAYSIZE(lvlsubTable), 0xFFFF},    // v
     {0x96CA00, 0x96CA04, lvlwarpTable, "lvlwarp", ARRAYSIZE(lvlwarpTable), 0xFFFF}, // v
@@ -27,17 +27,39 @@ MPQTable BaseStatTable[] = {
     {0x96CA9C, 0x96CA98, runesTable, "runes", ARRAYSIZE(runesTable), 0xFFFF},          // v
     {0x96D628, 0x96D62C, cubemainTable, "cubemain", ARRAYSIZE(cubemainTable), 0xFFFF}, // v
     {0x96CA94, 0x96CA90, gemsTable, "gems", ARRAYSIZE(gemsTable), 0xFFFF},
-    {0x96C8A8, 0x0, experienceTable, "experience", ARRAYSIZE(experienceTable), 0xFFFF}, // v - doesnt tap the last 2 levels of exp, ends at level 97 - TechnoHunter
+    {0x96C8A8, 0x0, experienceTable, "experience", ARRAYSIZE(experienceTable), 0xFFFF}, // rows counted by ExperienceRows
     {0xBE8, 0xBF0, pettypeTable, "pettable", ARRAYSIZE(pettypeTable), 0xFFFF},
     {0xAD4, 0xADC, superuniquesTable, "superuniques", ARRAYSIZE(superuniquesTable), 0xFFFF},
     {0xB70, 0xB74, monlvlTable, "monlvl", ARRAYSIZE(monlvlTable), 0xFFFF},
     {0}};
 
+// The {0} terminator is not a table, and each table's last field is its "end" stride marker, not a column: excluding
+// both keeps every reader's pTable[column + 1] lookahead inside the table.
+static bool IsBaseStatTable(int table) {
+    return table >= 0 && table < (int)ARRAYSIZE(BaseStatTable) - 1;
+}
+
+static bool IsBaseStatColumn(int table, int column) {
+    return IsBaseStatTable(table) && column >= 0 && column < BaseStatTable[table].wTableSize - 1;
+}
+
+// Experience.txt stores no record count. Its row 0 holds each class's max level, row L the experience that reaches
+// level L, and row max level + 1 the experience cap, which is as far as the game reads (1.14d 0x611800, 0x611830).
+static DWORD ExperienceRows(DWORD dwRecords) {
+    if (!dwRecords)
+        return 0;
+
+    DWORD dwMaxLevel = 0;
+    for (int i = 0; i < (int)ARRAYSIZE(experienceTable) - 1; i++)
+        dwMaxLevel = max(dwMaxLevel, ((DWORD*)dwRecords)[i]);
+    return dwMaxLevel + 2;
+}
+
 DWORD GetBaseTable(int table, int row) {
     DWORD dwResult = NULL;
     DWORD dwD2MPQTable = NULL;
 
-    if (table < sizeof(BaseStatTable)) {
+    if (IsBaseStatTable(table)) {
         DWORD dwTableOffset = BaseStatTable[table].dwEntry;
 
         if (dwTableOffset <= 0xFFFF)
@@ -51,11 +73,12 @@ DWORD GetBaseTable(int table, int row) {
         if (dwMaxEntriesOffset > 0xFFFF)
             dwMaxEntriesOffset = DWORD((dwMaxEntriesOffset - 0x400000) + d2CommonOff);
 
-        DWORD dwMaxEntries;
+        // A table with no known row count reads no rows, rather than guess a bound that could run past its records.
+        DWORD dwMaxEntries = 0;
         if (dwMaxEntriesOffset)
             dwMaxEntries = *(DWORD*)(dwMaxEntriesOffset + dwD2MPQTable);
-        else
-            dwMaxEntries = 0xFF;
+        else if (BaseStatTable[table].pTable == experienceTable)
+            dwMaxEntries = ExperienceRows(*(DWORD*)(dwTableOffset + dwD2MPQTable));
 
         if ((DWORD)row < dwMaxEntries) {
             DWORD dwMultiplicator = BaseStatTable[table].pTable[BaseStatTable[table].wTableSize - 1].dwFieldOffset;
@@ -96,6 +119,9 @@ bool FillBaseStat(char* szTable, int row, int column, void* result, size_t size)
 }
 
 bool FillBaseStat(int table, int row, char* szStat, void* result, size_t size) {
+    if (!IsBaseStatTable(table))
+        return false;
+
     BinField* pTable = BaseStatTable[table].pTable;
 
     int column = -1;
@@ -112,10 +138,13 @@ bool FillBaseStat(int table, int row, char* szStat, void* result, size_t size) {
 }
 
 bool FillBaseStat(int table, int row, int column, void* result, size_t size) {
+    if (!IsBaseStatColumn(table, column))
+        return false;
+
     BinField* pTable = BaseStatTable[table].pTable;
     DWORD dwRetValue = GetBaseTable(table, row);
 
-    if (!dwRetValue || column > BaseStatTable[table].wTableSize)
+    if (!dwRetValue)
         return false;
 
     DWORD dwHelperSize = pTable[column + 1].dwFieldOffset - pTable[column].dwFieldOffset;
@@ -175,6 +204,8 @@ bool FillBaseStat(int table, int row, int column, void* result, size_t size) {
 }
 
 DWORD FillBaseStat(JSContext* cx, jsval* argv, int table, int row, int column, char* szTable, char* szStat) {
+    *argv = JSVAL_VOID;
+
     if (szTable) {
         table = -1;
         for (int i = 0; BaseStatTable[i].pTable != NULL; i++)
@@ -186,6 +217,9 @@ DWORD FillBaseStat(JSContext* cx, jsval* argv, int table, int row, int column, c
         if (table == -1)
             return false;
     }
+
+    if (!IsBaseStatTable(table))
+        return FALSE;
 
     BinField* pTable = BaseStatTable[table].pTable;
 
@@ -201,7 +235,7 @@ DWORD FillBaseStat(JSContext* cx, jsval* argv, int table, int row, int column, c
             return false;
     }
 
-    if (column > BaseStatTable[table].wTableSize)
+    if (!IsBaseStatColumn(table, column))
         return FALSE;
 
     DWORD dwBuffer = 0;
@@ -222,6 +256,7 @@ DWORD FillBaseStat(JSContext* cx, jsval* argv, int table, int row, int column, c
         delete[] szBuffer;
         return TRUE;
 
+    // Unsigned on purpose: high-level experience totals exceed the signed 32-bit range.
     case FIELDTYPE_DATA_DWORD:
         if (!FillBaseStat(table, row, column, &dwBuffer, sizeof(DWORD)))
             (*argv) = JSVAL_VOID;

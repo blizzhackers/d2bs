@@ -453,9 +453,12 @@ Area getArea(int32_t nArea);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 String getBaseStat(String szTableName, int32_t nClassId, String szStatName);
 
@@ -477,9 +480,12 @@ String getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 String getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
 
@@ -501,9 +507,12 @@ String getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 String getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
 
@@ -525,9 +534,12 @@ String getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 String getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
 
@@ -549,9 +561,12 @@ String getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 int getBaseStat(String szTableName, int32_t nClassId, String szStatName);
 
@@ -573,9 +588,12 @@ int getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 int getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
 
@@ -597,9 +615,12 @@ int getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 int getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
 
@@ -621,9 +642,12 @@ int getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 int getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
 
@@ -645,9 +669,12 @@ int getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 bool getBaseStat(String szTableName, int32_t nClassId, String szStatName);
 
@@ -669,9 +696,12 @@ bool getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 bool getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
 
@@ -693,9 +723,12 @@ bool getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 bool getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
 
@@ -717,9 +750,12 @@ bool getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 bool getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
 
@@ -741,9 +777,12 @@ bool getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 double getBaseStat(String szTableName, int32_t nClassId, String szStatName);
 
@@ -765,9 +804,12 @@ double getBaseStat(String szTableName, int32_t nClassId, String szStatName);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 double getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
 
@@ -789,9 +831,12 @@ double getBaseStat(int32_t nBaseStat, int32_t nClassId, String szStatName);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 double getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
 
@@ -813,9 +858,12 @@ double getBaseStat(String szTableName, int32_t nClassId, int32_t nStat);
  * 19 itemtypes, 20 runes, 21 cubemain, 22 gems, 23 experience, 24 pettable,
  * 25 superuniques, 26 monlvl. In monlvl the row is the monster level and the
  * columns are MonLvl.txt's 30 value columns, for example "L-DM(H)"; its Level
- * column is not stored, since the row is the level.
+ * column is not stored, since the row is the level. In experience, row 0 holds
+ * each class's maximum level, row L (from 1 to the maximum level) the
+ * experience that reaches level L, and the row after that the experience cap.
  *
- * \return The stat.
+ * \return The stat, or undefined when the table, row or column does not
+ * exist.
  */
 double getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
 

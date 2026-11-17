@@ -479,7 +479,7 @@ enum {
     VARPTR(D2LAUNCH, CharSelScrollPos, int, 0x379DCC)      // 1.14d //00779DCC-BASE scrollbar position the scroll callback last saw
     VARPTR(D2LAUNCH, CharSelSelected, int, 0x30CC00)       // 1.14d //0070CC00-BASE the row OK logs in
     VARPTR(D2LAUNCH, CharSelVisible, int, 0x30CC0C)        // 1.14d //0070CC0C-BASE 8 on the expansion screen
-    VARPTR(D2LAUNCH, CharSelScrollbar, Control*, 0x379C84) // 1.14d //00779C84-BASE
+    VARPTR(D2LAUNCH, CharSelScrollbar, Control*, 0x379C84) // 1.14d //00779C84-BASE the box around the scrollbar; the scrollbar control is at +0x90
     VARPTR(D2LAUNCH, CharSelBusy, DWORD, 0x379DA0)         // 1.14d //00779DA0-BASE OK ignores clicks while set
     VARPTR(D2LAUNCH, CharSelRealmRequest, DWORD, 0x379DAC) // 1.14d //00779DAC-BASE a realm list request in flight
     VARPTR(D2LAUNCH, CharSelGatewayList, DWORD, 0x379C6C)  // 1.14d //00779C6C-BASE the gateway list is open

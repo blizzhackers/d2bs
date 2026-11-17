@@ -682,7 +682,8 @@ bool OOG_FocusCharacter(const wchar_t* szName) {
     AutoCriticalRoom room;
     CharSelEntry* pEntry = CharSelListIfReady();
     // Only the expansion screen shows eight rows, two to a line; the classic screen lays them out differently. The
-    // delete and convert confirmations act on whichever row is selected when YES is clicked, so a popup blocks it.
+    // delete and convert confirmations act on whichever row is selected when YES is clicked, and the realm login, delete
+    // and convert waits hand the game lock off from inside their handlers; each shows a popup, so a popup blocks it.
     if (!pEntry || *p_D2LAUNCH_CharSelVisible != 8 || *p_D2LAUNCH_CharSelBusy || *p_D2LAUNCH_CharSelGatewayList || *p_D2LAUNCH_PopupCount)
         return false;
 

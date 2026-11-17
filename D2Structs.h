@@ -177,7 +177,7 @@ struct CharSelEntry {
     BYTE bClass;             // 0x320 0-based class id
     BYTE _1;                 // 0x321
     WORD wLevel;             // 0x322
-    WORD wFlags;             // 0x324 the .d2s status byte (0x04 hardcore, 0x08 has died, 0x20 expansion), progression << 8
+    WORD wFlags;             // 0x324 statstring flags, the .d2s status byte in single player (0x04 hardcore, 0x08 has died, 0x20 expansion), progression << 8
     BYTE _2[8];              // 0x326
     BYTE bLadder;            // 0x32E
     BYTE _3[5];              // 0x32F

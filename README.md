@@ -1294,10 +1294,10 @@ Whether or not character swap was successful.
 
 Get every character on the character select screen in one call, in the order the screen lists them.
 
-On a realm the list holds the characters the realm sent: when an account has more, the screen's "more characters" row is left out.
+Only the expansion character select screen is supported. On a realm the list holds the characters the realm sent: when an account has more, the screen's "more characters" row is left out.
 
 #### Returns
-false when the character select screen is not up, shows no characters (getLocation() reports 42 then, as it does while a list is loading) or a realm is still sending its list; otherwise an array with one object per character: name, realm (empty for single player), classid (0 amazon to 6 assassin), level, hardcore, expansion, ladder, dead (a hardcore character that died and can't be played) and expires (the realm expiry as Unix time in seconds, 0 when there is none, as in single player).
+false when getLocation() does not report 12 (only the expansion character select screen does, and a popup such as the difficulty choice changes the location), a realm is still sending its list, or D2BS is still starting up. A screen with no characters reports 42, as it can while a list is still loading. Otherwise an array with one object per character: name, realm (empty for single player), classid (0 amazon to 6 assassin), level, hardcore, expansion, ladder, dead (a hardcore character that died and can't be played) and expires (the realm expiry as Unix time in seconds, 0 when there is none, as in single player).
 
 #### `public bool `[`focusCharacter`](#group__globalFunctions_focusCharacter)`(String name)` 
 
@@ -1309,7 +1309,7 @@ Selecting does not log in: click OK or press Enter after it returns. A character
 * `name` The character name, not case sensitive. Anything but a string throws.
 
 #### Returns
-true when the character is selected; false when it is not in the list, the character select screen is not up or is the classic one, a realm is still sending its list, or a popup such as the delete confirmation or the gateway list is open.
+true when the character is selected; false when it is not in the list, getLocation() does not report 12, a realm is still sending its list, a character is being deleted, a popup such as the delete confirmation or the gateway list is open, or D2BS is still starting up.
 
 #### `public void `[`createGame`](#group__globalFunctions_1ga73e647c911a4b4a29fa03498a86873f8)`(String name,String pass,int32_t diff)` 
 

@@ -167,6 +167,29 @@ struct Control {
     };
 };
 
+// One row of the character-select list (CharSel.cpp). Single-player and realm lists share it; the realm list can end
+// with a "more characters" row, and the classic screen adds a "create new" row.
+struct CharSelEntry {
+    char szName[0x100];      // 0x000
+    wchar_t wszRealm[0x100]; // 0x100 empty for local characters
+    BYTE bGraphics[0x10];    // 0x300
+    BYTE bColors[0x10];      // 0x310
+    BYTE bClass;             // 0x320 0-based class id
+    BYTE _1;                 // 0x321
+    WORD wLevel;             // 0x322
+    WORD wFlags;             // 0x324 the .d2s status byte (0x04 hardcore, 0x08 has died, 0x20 expansion), progression << 8
+    BYTE _2[8];              // 0x326
+    BYTE bLadder;            // 0x32E
+    BYTE _3[5];              // 0x32F
+    DWORD dwKind;            // 0x334 0 = a character, 1 = "create new" row, 2 = "more characters" row
+    void* pCell;             // 0x338
+    DWORD _4;                // 0x33C
+    DWORD dwSortKeyLo;       // 0x340 single player: the save's last-write FILETIME; sorted newest first when the expansion is installed
+    DWORD dwSortKeyHi;       // 0x344
+    DWORD dwExpires;         // 0x348 realm expiry (time_t), 0 for local characters
+    CharSelEntry* pNext;     // 0x34C
+};
+
 #pragma pack(push)
 #pragma pack(1)
 

@@ -11,6 +11,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 ### Added
 
 - **Monster level stats.** `getBaseStat("monlvl", level, column)` reads the game's MonLvl table: the per-level defense, to-hit, life, damage and experience that monster stats are percentages of, for each difficulty, classic and expansion. The row is the monster level, and the columns are MonLvl.txt's value columns, for example `"L-DM(H)"`.
+- **The whole character list at once.** `getCharacterList()` returns every character on the character select screen with its class, level and hardcore, expansion, ladder and expiry details, and on the expansion screen `focusCharacter(name)` selects any of them by name and scrolls it into view, so a script can pick a character without paging through the list.
 
 ### Fixed
 

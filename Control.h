@@ -1,7 +1,22 @@
 #pragma once
 
+#include <string>
+#include <vector>
+
 #include "D2Structs.h"
 #include "Constants.h"
+
+struct CharSelCharacter {
+    std::wstring name;
+    std::wstring realm;
+    int classid;
+    int level;
+    bool hardcore;
+    bool expansion;
+    bool ladder;
+    bool dead;
+    DWORD expires;
+};
 
 Control* findControl(int Type, int LocaleID, int Disabled, int PosX, int PosY, int SizeX, int SizeY);
 Control* findControl(int Type, const wchar_t* Text, int Disabled, int PosX, int PosY, int SizeX, int SizeY);
@@ -13,3 +28,5 @@ void SetControlText(Control* pControl, const wchar_t* Text);
 OOG_Location OOG_GetLocation(void);
 bool OOG_CreateGame(const wchar_t* name, const wchar_t* pass, int difficulty);
 bool OOG_JoinGame(const wchar_t* name, const wchar_t* pass);
+bool OOG_GetCharacterList(std::vector<CharSelCharacter>& list);
+bool OOG_FocusCharacter(const wchar_t* szName);

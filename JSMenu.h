@@ -8,6 +8,8 @@ JSAPI_FUNC(my_getControl);
 JSAPI_FUNC(my_getControls);
 JSAPI_FUNC(my_login);
 JSAPI_FUNC(my_selectChar);
+JSAPI_FUNC(my_getCharacterList);
+JSAPI_FUNC(my_focusCharacter);
 JSAPI_FUNC(my_createGame);
 JSAPI_FUNC(my_joinGame);
 JSAPI_FUNC(my_addProfile);

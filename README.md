@@ -79,6 +79,8 @@
 `public void `[`login`](#group__globalFunctions_1gaf76b7b46958dabf5e4ee9a492f0ec3fa)`()`            | Loads the default (either from config or copydata or DDE) profile from d2bs.ini and gets to the lobby (for battle.net chars) or into a game (for single player characters).
 `public void `[`login`](#group__globalFunctions_1gad9588235f179db8af822d1356337b021)`(String profile)`            | Loads the profile from d2bs.ini and gets to the lobby (for battle.net chars) or into a game (for single player characters).
 `public bool `[`selectCharacter`](#group__globalFunctions_1ga5bec5be39d3ffe649ab5a32fa328d680)`(String profile)`            | Select the character from the given profile.
+`public Object[] `[`getCharacterList`](#group__globalFunctions_getCharacterList)`()`            | Get every character on the character select screen in one call, in the order the screen lists them.
+`public bool `[`focusCharacter`](#group__globalFunctions_focusCharacter)`(String name)`            | Select a character on the character select screen by name and scroll the list to show it.
 `public void `[`createGame`](#group__globalFunctions_1ga73e647c911a4b4a29fa03498a86873f8)`(String name,String pass,int32_t diff)`            | Create a game with the given name and password in the given difficulty.
 `public void `[`joinGame`](#group__globalFunctions_1gae7e03a89a0c5ce69e71e7489b5ff2d28)`(String name,String pass)`            | Join a game with the given name and password.
 `public void `[`addProfile`](#group__globalFunctions_1ga198630d3b1155cad54add069502b17a8)`(String profile,String mode,String gateway,String username,String password,String charname,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` spDifficulty)`            | Create a profile with the given profile name, mode, gateway, username, password, character name and single player difficulty.
@@ -1287,6 +1289,27 @@ Keeps all details except the character name from old profile.
 
 #### Returns
 Whether or not character swap was successful.
+
+#### `public Object[] `[`getCharacterList`](#group__globalFunctions_getCharacterList)`()` 
+
+Get every character on the character select screen in one call, in the order the screen lists them.
+
+On a realm the list holds the characters the realm sent: when an account has more, the screen's "more characters" row is left out.
+
+#### Returns
+false when the character select screen is not up, shows no characters (getLocation() reports 42 then, as it does while a list is loading) or a realm is still sending its list; otherwise an array with one object per character: name, realm (empty for single player), classid (0 amazon to 6 assassin), level, hardcore, expansion, ladder, dead (a hardcore character that died and can't be played) and expires (the realm expiry as Unix time in seconds, 0 when there is none, as in single player).
+
+#### `public bool `[`focusCharacter`](#group__globalFunctions_focusCharacter)`(String name)` 
+
+Select a character on the character select screen by name and scroll the list to show it.
+
+Selecting does not log in: click OK or press Enter after it returns. A character slot click or arrow key in between changes the selection again. Only the expansion character select screen is supported.
+
+#### Parameters
+* `name` The character name, not case sensitive. Anything but a string throws.
+
+#### Returns
+true when the character is selected; false when it is not in the list, the character select screen is not up or is the classic one, a realm is still sending its list, or a popup such as the delete confirmation or the gateway list is open.
 
 #### `public void `[`createGame`](#group__globalFunctions_1ga73e647c911a4b4a29fa03498a86873f8)`(String name,String pass,int32_t diff)` 
 

@@ -2050,7 +2050,7 @@ bool moveNPC(Unit npc, uint32_t x, uint32_t y);
  *
  * \warning This is an exploit function.
  *
- * \return true
+ * \return true when the packet was queued; false outside a game, where nothing is queued
  */
 bool getPacket(...);
 

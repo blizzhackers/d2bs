@@ -15,6 +15,8 @@
 #include "Events.h"
 #include "Console.h"
 #include "D2Ptrs.h"
+#include "D2Helpers.h"
+#include "CriticalSections.h"
 #include "File.h"
 
 #include "JSScript.h"
@@ -660,9 +662,23 @@ JSAPI_FUNC(my_getPacket) {
     }
 
     JS_EndRequest(cx);
-    D2NET_ReceivePacket(aPacket, len);
+
+    bool queued = false;
+    {
+        // The game appends to this queue with no lock on its main thread in single player and under the queue lock on
+        // its receive thread online, so the injection holds both. The queue and its lock exist while SessionActive is
+        // set, area changes included (the client state reads Busy then), so the menu is the only state refused.
+        AutoCriticalRoom cRoom;
+        if (*p_D2NET_SessionActive && ClientState() != ClientStateMenu) {
+            EnterCriticalSection(p_D2NET_CriticalPacketSection);
+            D2NET_ReceivePacket(aPacket, len);
+            LeaveCriticalSection(p_D2NET_CriticalPacketSection);
+            queued = true;
+        }
+    }
+
     delete[] aPacket;
-    JS_SET_RVAL(cx, vp, JSVAL_TRUE);
+    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(queued));
     return JS_TRUE;
 }
 

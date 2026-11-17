@@ -16,6 +16,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 - **Waypoint trips with a fallen mercenary.** The game keeps running when you take a waypoint back to the area where your mercenary died.
 - **Safe `getBaseStat()` lookups.** `getBaseStat()` returns `undefined` for a table or column that doesn't exist, whether named or numbered, and for a row past the end of its table, so scripts can look up any value without risk to the game. Called with fewer than three arguments, it also returns `undefined`.
+- **Reliable `getPacket()`.** Each packet a script passes to `getPacket()` reaches the game whole and exactly once, even while the game is receiving its own packets, in single player and online. Outside a game, `getPacket()` returns `false` and the packet is not queued.
 
 ## [1.7.0] - 2026-11-13
 

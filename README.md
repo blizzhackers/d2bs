@@ -1797,7 +1797,7 @@ Params are length, val, length, val, ... Length is the number of bytes in the fo
 This is an exploit function.
 
 #### Returns
-true
+true when the packet was queued; false outside a game, where nothing is queued
 
 #### `public bool `[`sendPacket`](#globalFuncs_8h_1a4082e1ce7c6ac097efd964d6397d197d)`(...)` 
 

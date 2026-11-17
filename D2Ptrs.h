@@ -373,7 +373,10 @@ enum {
     // D2Net Globals
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    VARPTR(D2NET, CriticalPacketSection, CRITICAL_SECTION, 0xB400) // unused but we need to use it
+    // The incoming packet queue's lock and the flag that says it exists: the game creates the lock before setting the
+    // flag at connect and clears the flag before deleting the lock at disconnect.
+    VARPTR(D2NET, CriticalPacketSection, CRITICAL_SECTION, 0x482CE8) // Updated 1.14d //00882CE8-BASE
+    VARPTR(D2NET, SessionActive, DWORD, 0x482B34)                    // NEW 1.14d //00882B34-BASE
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // D2Gfx Ordinals

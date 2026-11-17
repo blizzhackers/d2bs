@@ -373,8 +373,8 @@ enum {
     // D2Net Globals
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // The incoming packet queue's lock and the flag that says it exists: the game creates the lock before setting the
-    // flag at connect and clears the flag before deleting the lock at disconnect.
+    // The lock of the two incoming packet queues, and the session pointer, non-null only while the lock exists: the
+    // game creates the lock before setting the pointer at connect and clears the pointer before deleting the lock.
     VARPTR(D2NET, CriticalPacketSection, CRITICAL_SECTION, 0x482CE8) // Updated 1.14d //00882CE8-BASE
     VARPTR(D2NET, SessionActive, DWORD, 0x482B34)                    // NEW 1.14d //00882B34-BASE
 

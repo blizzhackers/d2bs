@@ -665,11 +665,13 @@ JSAPI_FUNC(my_getPacket) {
 
     bool queued = false;
     {
-        // The game appends to this queue with no lock on its main thread in single player and under the queue lock on
-        // its receive thread online, so the injection holds both. The queue and its lock exist while SessionActive is
-        // set, area changes included (the client state reads Busy then), so the menu is the only state refused.
+        // In single player the game appends to these queues on its main thread with no lock, and online its receive
+        // thread appends under their lock, so the injection holds both. The game lock excludes the game thread only
+        // once that thread has reached its first hand-off in GameDraw or TimerProc (bGameLoopEntered). SessionActive
+        // is set only while the queue lock exists, area changes included (the client state reads Busy then); at the
+        // menu nothing is queued.
         AutoCriticalRoom cRoom;
-        if (*p_D2NET_SessionActive && ClientState() != ClientStateMenu) {
+        if (Vars.bGameLoopEntered && *p_D2NET_SessionActive && ClientState() != ClientStateMenu) {
             EnterCriticalSection(p_D2NET_CriticalPacketSection);
             D2NET_ReceivePacket(aPacket, len);
             LeaveCriticalSection(p_D2NET_CriticalPacketSection);

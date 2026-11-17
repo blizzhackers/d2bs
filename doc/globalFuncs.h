@@ -1491,6 +1491,37 @@ void login(String profile);
  */
 bool selectCharacter(String profile);
 
+/** Get every character on the character select screen in one call, in the order the screen lists them.
+ *
+ * Only the expansion character select screen is supported. On a realm the list holds the characters the realm sent:
+ * when an account has more, the screen's "more characters" row is left out.
+ *
+ * \ingroup globalFunctions
+ *
+ * \return false when getLocation() does not report 12 (only the expansion character select screen does, and a popup
+ * such as the difficulty choice changes the location), a realm is still sending its list, or D2BS is still starting
+ * up. A screen with no characters reports 42, as it can while a list is still loading. Otherwise an array with one
+ * object per character: name, realm (empty for single player), classid (0 amazon to 6 assassin), level, hardcore,
+ * expansion, ladder, dead (a hardcore character that died and can't be played) and expires (the realm expiry as Unix
+ * time in seconds, 0 when there is none, as in single player).
+ */
+Object[] getCharacterList();
+
+/** Select a character on the character select screen by name and scroll the list to show it.
+ *
+ * Selecting does not log in: click OK or press Enter after it returns. A character slot click or arrow key in between
+ * changes the selection again. Only the expansion character select screen is supported.
+ *
+ * \ingroup globalFunctions
+ *
+ * \param name The character name, not case sensitive. Anything but a string throws.
+ *
+ * \return true when the character is selected; false when it is not in the list, getLocation() does not report 12, a
+ * realm is still sending its list, a character is being deleted, a popup such as the delete confirmation or the
+ * gateway list is open, or D2BS is still starting up.
+ */
+bool focusCharacter(String name);
+
 /** Create a game with the given name and password in the given difficulty.
  *
  * \ingroup globalFunctions

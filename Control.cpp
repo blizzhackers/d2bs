@@ -3,6 +3,7 @@
 #include "D2Helpers.h"
 #include "Helpers.h"
 #include "Constants.h"
+#include "CriticalSections.h"
 
 Control* findControl(int Type, int LocaleID, int Disabled, int PosX, int PosY, int SizeX, int SizeY) {
     if (ClientState() != ClientStateMenu)
@@ -585,4 +586,144 @@ bool OOG_JoinGame(const wchar_t* name, const wchar_t* pass) {
     }
 
     return TRUE;
+}
+
+static_assert(sizeof(CharSelEntry) == 0x350, "the game allocates 0x350 bytes per character-select row");
+static_assert(offsetof(CharSelEntry, wLevel) == 0x322 && offsetof(CharSelEntry, bLadder) == 0x32E && offsetof(CharSelEntry, dwKind) == 0x334 &&
+                  offsetof(CharSelEntry, dwExpires) == 0x348 && offsetof(CharSelEntry, pNext) == 0x34C,
+              "CharSelEntry must match the game's row layout");
+
+// Callers hold the game lock, which keeps the main thread out only after its first timer tick has taken it. The list
+// lives only while the character-select screen is up: leaving it or rebuilding it frees every row, and the screen's
+// control globals keep dangling pointers after it closes.
+static CharSelEntry* CharSelListIfReady(void) {
+    if (!Vars.bGameLoopEntered || ClientState() != ClientStateMenu || OOG_GetLocation() != OOG_CHAR_SELECT)
+        return NULL;
+    // A realm list being requested again is torn down and refilled from the reply.
+    if (*p_D2LAUNCH_CharSelRealmRequest)
+        return NULL;
+    return *p_D2LAUNCH_CharSelList;
+}
+
+typedef wchar_t CharSelNameBuf[sizeof(((CharSelEntry*)0)->szName)];
+
+static void CharSelName(const CharSelEntry* pEntry, CharSelNameBuf& wide) {
+    char name[sizeof(pEntry->szName)];
+    memcpy(name, pEntry->szName, sizeof(name));
+    name[sizeof(name) - 1] = '\0';
+    if (!MultiByteToWideChar(CP_ACP, 0, name, -1, wide, _countof(wide)))
+        wide[0] = L'\0';
+}
+
+bool OOG_GetCharacterList(std::vector<CharSelCharacter>& list) {
+    AutoCriticalRoom room;
+    CharSelEntry* pEntry = CharSelListIfReady();
+    if (!pEntry)
+        return false;
+
+    int count = *p_D2LAUNCH_CharSelCount;
+    list.reserve(count);
+    for (int i = 0; pEntry && i < count; pEntry = pEntry->pNext, i++) {
+        if (pEntry->dwKind != 0)
+            continue;
+        CharSelCharacter character;
+        CharSelNameBuf name;
+        CharSelName(pEntry, name);
+        character.name = name;
+        wchar_t realm[_countof(pEntry->wszRealm)];
+        wmemcpy(realm, pEntry->wszRealm, _countof(realm));
+        realm[_countof(realm) - 1] = L'\0';
+        character.realm = realm;
+        character.classid = pEntry->bClass;
+        character.level = pEntry->wLevel;
+        character.hardcore = (pEntry->wFlags & 0x04) != 0;
+        character.expansion = (pEntry->wFlags & 0x20) != 0;
+        character.ladder = pEntry->bLadder != 0;
+        // The status bit records a death, and only a hardcore character stays dead. Single player and TCP/IP refuse it at
+        // OK; a realm leaves the refusal to its server.
+        character.dead = character.hardcore && (pEntry->wFlags & 0x08) != 0;
+        character.expires = pEntry->dwExpires;
+        list.push_back(character);
+    }
+    return true;
+}
+
+// Refill and update keep ebx/esi/edi/ebp on every 1.14d path, but they are internal entry points with no declared
+// convention, so every register is saved around the call anyway.
+static void CallCharSelProc(DWORD proc) {
+    __asm {
+        pushad
+        call proc
+        popad
+    }
+}
+
+// The scrollbar is its own control, made anew each time the screen opens and reached through +0x90 of the box around
+// it; its max and position sit at +0x48/+0x4C. The scroll callback moves the list by the change from the position it
+// saw last, so both are set together.
+static void SyncCharSelScrollbar(int first) {
+    Control* pBox = *p_D2LAUNCH_CharSelScrollbar;
+    Control* pBar = pBox && pBox->dwType == CONTROL_TEXTBOX ? *(Control**)((BYTE*)pBox + 0x90) : NULL;
+    if (!pBar || pBar->dwType != CONTROL_SCROLLBAR)
+        return;
+    int max = *(int*)((BYTE*)pBar + 0x48);
+    int pos = first / 2;
+    if (pos > max)
+        pos = max;
+    if (pos < 0)
+        pos = 0;
+    *(int*)((BYTE*)pBar + 0x4C) = pos;
+    *p_D2LAUNCH_CharSelScrollPos = pos;
+}
+
+bool OOG_FocusCharacter(const wchar_t* szName) {
+    // One lock covers the lookup and the write: the list can be rebuilt in between otherwise, and the game does not
+    // reset the selected row when it does, so a stale index would select whoever moved into it.
+    AutoCriticalRoom room;
+    CharSelEntry* pEntry = CharSelListIfReady();
+    // Only the expansion screen shows eight rows, two to a line; the classic screen lays them out differently. The
+    // delete and convert confirmations act on whichever row is selected when YES is clicked, and the realm login, delete
+    // and convert waits hand the game lock off from inside their handlers; each shows a popup, so a popup blocks it.
+    if (!pEntry || *p_D2LAUNCH_CharSelVisible != 8 || *p_D2LAUNCH_CharSelBusy || *p_D2LAUNCH_CharSelGatewayList || *p_D2LAUNCH_PopupCount)
+        return false;
+
+    int count = *p_D2LAUNCH_CharSelCount, index = -1;
+    for (int i = 0; pEntry && i < count; pEntry = pEntry->pNext, i++) {
+        CharSelNameBuf name;
+        CharSelName(pEntry, name);
+        if (pEntry->dwKind == 0 && _wcsicmp(name, szName) == 0) {
+            index = i;
+            break;
+        }
+    }
+    if (index < 0)
+        return false;
+
+    const int visible = 8;
+    int first = *p_D2LAUNCH_CharSelFirst;
+    int last = count > visible ? count - visible + ((count - visible) & 1) : 0;
+    // The game keeps the first row even so each column holds one parity, which its Left and Right keys rely on. End
+    // can leave it odd and a scrollbar drag past the end, so both are realigned with the least movement.
+    if (index < first || index >= first + visible || (first & 1) || first > last) {
+        if (index >= first && index < first + visible) {
+            first &= ~1;
+            if (index >= first + visible)
+                first += 2;
+        } else if (index < first)
+            first = index - (index & 1);
+        else
+            first = index - (index & 1) - (visible - 2);
+        if (first > last)
+            first = last;
+        if (first < 0)
+            first = 0;
+    }
+    *p_D2LAUNCH_CharSelFirst = first;
+    *p_D2LAUNCH_CharSelSelected = index;
+    SyncCharSelScrollbar(first);
+
+    // The update also enables OK for the new row: without it OK can stay disabled from an earlier empty-slot click.
+    CallCharSelProc(D2LAUNCH_CharSelRefill_I);
+    CallCharSelProc(D2LAUNCH_CharSelUpdate_I);
+    return true;
 }

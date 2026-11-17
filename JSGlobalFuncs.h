@@ -55,8 +55,10 @@ static JSFunctionSpec global_funcs[] = {
     JS_FN("login", my_login, 1, FUNCTION_FLAGS),
     // JS_FN("createCharacter", my_createCharacter, 4, FUNCTION_FLAGS),
     // this function is not finished
-    JS_FN("selectCharacter", my_selectChar, 1, FUNCTION_FLAGS), JS_FN("createGame", my_createGame, 3, FUNCTION_FLAGS), JS_FN("joinGame", my_joinGame, 2, FUNCTION_FLAGS),
-    JS_FN("addProfile", my_addProfile, 6, FUNCTION_FLAGS), JS_FN("getLocation", my_getOOGLocation, 0, FUNCTION_FLAGS), JS_FN("loadMpq", my_loadMpq, 1, FUNCTION_FLAGS),
+    JS_FN("selectCharacter", my_selectChar, 1, FUNCTION_FLAGS), JS_FN("getCharacterList", my_getCharacterList, 0, FUNCTION_FLAGS),
+    JS_FN("focusCharacter", my_focusCharacter, 1, FUNCTION_FLAGS), JS_FN("createGame", my_createGame, 3, FUNCTION_FLAGS),
+    JS_FN("joinGame", my_joinGame, 2, FUNCTION_FLAGS), JS_FN("addProfile", my_addProfile, 6, FUNCTION_FLAGS), JS_FN("getLocation", my_getOOGLocation, 0, FUNCTION_FLAGS),
+    JS_FN("loadMpq", my_loadMpq, 1, FUNCTION_FLAGS),
 
     // game functions that don't have anything to do with gathering data
     JS_FN("submitItem", my_submitItem, 0, FUNCTION_FLAGS), JS_FN("getMouseCoords", my_getMouseCoords, 1, FUNCTION_FLAGS),

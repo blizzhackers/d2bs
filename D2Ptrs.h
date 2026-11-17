@@ -472,6 +472,21 @@ enum {
 
     VARPTR(D2LAUNCH, BnData, BnetData*, 0x3795D4) // Updated 1.14d //007795D4-BASE
 
+    // Character-select screen
+    VARPTR(D2LAUNCH, CharSelList, CharSelEntry*, 0x379DBC) // 1.14d //00779DBC-BASE
+    VARPTR(D2LAUNCH, CharSelCount, int, 0x379DC4)          // 1.14d //00779DC4-BASE rows, placeholder rows included
+    VARPTR(D2LAUNCH, CharSelFirst, int, 0x379DC8)          // 1.14d //00779DC8-BASE first visible row
+    VARPTR(D2LAUNCH, CharSelScrollPos, int, 0x379DCC)      // 1.14d //00779DCC-BASE scrollbar position the scroll callback last saw
+    VARPTR(D2LAUNCH, CharSelSelected, int, 0x30CC00)       // 1.14d //0070CC00-BASE the row OK logs in
+    VARPTR(D2LAUNCH, CharSelVisible, int, 0x30CC0C)        // 1.14d //0070CC0C-BASE 8 on the expansion screen
+    VARPTR(D2LAUNCH, CharSelScrollbar, Control*, 0x379C84) // 1.14d //00779C84-BASE the box around the scrollbar; the scrollbar control is at +0x90
+    VARPTR(D2LAUNCH, CharSelBusy, DWORD, 0x379DA0)         // 1.14d //00779DA0-BASE OK ignores clicks while set
+    VARPTR(D2LAUNCH, CharSelRealmRequest, DWORD, 0x379DAC) // 1.14d //00779DAC-BASE a realm list request in flight
+    VARPTR(D2LAUNCH, CharSelGatewayList, DWORD, 0x379C6C)  // 1.14d //00779C6C-BASE the gateway list is open
+    VARPTR(D2LAUNCH, PopupCount, int, 0x379948)            // 1.14d //00779948-BASE controls of the open popup (delete, convert, difficulty, ...)
+    ASMPTR(D2LAUNCH, CharSelRefill_I, 0x38560)             // 1.14d //00438560-BASE void(void): refill the visible rows
+    ASMPTR(D2LAUNCH, CharSelUpdate_I, 0x39210)             // 1.14d //00439210-BASE void(void): highlight, name label, buttons
+
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // D2Win Functions
     ////////////////////////////////////////////////////////////////////////////////////////////////

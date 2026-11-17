@@ -58,6 +58,63 @@ JSAPI_FUNC(my_selectChar) {
     return JS_TRUE;
 }
 
+static bool DefineCharacterField(JSContext* cx, JSObject* obj, const char* name, jsval value) {
+    return JS_DefineProperty(cx, obj, name, value, NULL, NULL, JSPROP_ENUMERATE) != JS_FALSE;
+}
+
+static bool DefineCharacterString(JSContext* cx, JSObject* obj, const char* name, const std::wstring& value) {
+    JSString* str = JS_NewUCStringCopyZ(cx, value.c_str());
+    return str && DefineCharacterField(cx, obj, name, STRING_TO_JSVAL(str));
+}
+
+JSAPI_FUNC(my_getCharacterList) {
+    // The rows are copied under the game lock and turned into script objects after it is released.
+    std::vector<CharSelCharacter> list;
+    if (!OOG_GetCharacterList(list)) {
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
+
+    JSObject* arr = JS_NewArrayObject(cx, 0, NULL);
+    if (!arr)
+        return JS_FALSE;
+    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
+
+    for (size_t i = 0; i < list.size(); i++) {
+        const CharSelCharacter& c = list[i];
+        JSObject* obj = JS_NewObject(cx, NULL, NULL, NULL);
+        if (!obj)
+            return JS_FALSE;
+        jsval objVal = OBJECT_TO_JSVAL(obj);
+        if (!JS_SetElement(cx, arr, (uint32_t)i, &objVal))
+            return JS_FALSE;
+        if (!DefineCharacterString(cx, obj, "name", c.name) || !DefineCharacterString(cx, obj, "realm", c.realm) ||
+            !DefineCharacterField(cx, obj, "classid", INT_TO_JSVAL(c.classid)) || !DefineCharacterField(cx, obj, "level", INT_TO_JSVAL(c.level)) ||
+            !DefineCharacterField(cx, obj, "hardcore", BOOLEAN_TO_JSVAL(c.hardcore)) || !DefineCharacterField(cx, obj, "expansion", BOOLEAN_TO_JSVAL(c.expansion)) ||
+            !DefineCharacterField(cx, obj, "ladder", BOOLEAN_TO_JSVAL(c.ladder)) || !DefineCharacterField(cx, obj, "dead", BOOLEAN_TO_JSVAL(c.dead)) ||
+            !DefineCharacterField(cx, obj, "expires", UINT_TO_JSVAL(c.expires)))
+            return JS_FALSE;
+    }
+    return JS_TRUE;
+}
+
+JSAPI_FUNC(my_focusCharacter) {
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "focusCharacter needs a character name");
+
+    size_t length = 0;
+    const wchar_t* name = JS_GetStringCharsZAndLength(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]), &length);
+    if (!name)
+        return JS_FALSE;
+    // The match stops at the first NUL, so a name holding one would select whoever its prefix names.
+    if (length == 0 || wcslen(name) != length)
+        return JS_TRUE;
+
+    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(OOG_FocusCharacter(name)));
+    return JS_TRUE;
+}
+
 JSAPI_FUNC(my_createGame) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     if (ClientState() != ClientStateMenu)

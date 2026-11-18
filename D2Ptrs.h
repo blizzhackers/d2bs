@@ -297,6 +297,8 @@ enum {
     FUNCPTR(D2COMMON, GetLevelText, LevelTxt* __stdcall, (DWORD levelno), 0x21DB70) // Updated 1.14d //0061DB70-BASE
     FUNCPTR(D2COMMON, GetObjectText, ObjectTxt* __stdcall, (DWORD objno), 0x240E90) // Updated 1.14d //00640E90-BASE
     FUNCPTR(D2COMMON, GetItemText, ItemTxt* __stdcall, (DWORD itemno), 0x2335F0)    // Updated 1.14d //006335F0-BASE
+    // Links a 1x1 belt item into the inventory's belt at slot 0-15; FALSE when the slot is taken.
+    FUNCPTR(D2COMMON, PlaceItemInBeltSlot, BOOL __stdcall, (Inventory * pInventory, UnitAny* pItem, DWORD dwSlot), 0x23C4F0) // NEW 1.14d //0063C4F0-BASE
 
     FUNCPTR(D2COMMON, GetLayer, AutomapLayer2* __fastcall, (DWORD dwLevelNo), 0x21E470)          // Updated 1.14d //0061E470-BASE
     FUNCPTR(D2COMMON, GetLevel, Level* __fastcall, (ActMisc * pMisc, DWORD dwLevelNo), 0x242AE0) // Updated 1.14d //00642AE0-BASE

@@ -161,6 +161,27 @@ DWORD EventMessagesHandler(BYTE* pPacket, DWORD dwSize) {
     return TRUE;
 }
 
+// The game's item handlers take an item out of its inventory before they move it and halt when that fails (Halt 3166
+// for a belt item). The client's put-in-belt handler ignores a failed placement into an occupied slot and leaves the
+// item in belt mode linked to no inventory, so the next packet that moves it halts. Placing such an item back into its
+// slot, with the game's own placement, before the packet runs gives the handler the item where it expects it.
+void RelinkOrphanedBeltItem(BYTE* pPacket, DWORD dwSize) {
+    if (dwSize < 8)
+        return;
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    if (!pPlayer || !pPlayer->pInventory)
+        return;
+    UnitAny* pItem = D2CLIENT_FindClientSideUnit(*(DWORD*)(pPacket + 4), UNIT_ITEM);
+    if (!pItem || pItem->dwMode != ITEM_MODE_IN_BELT || !pItem->pItemData || pItem->pItemData->pOwnerInventory)
+        return;
+    int slot = D2CLIENT_GetUnitX(pItem);
+    if (slot >= 0 && slot < 16 && D2COMMON_PlaceItemInBeltSlot(pPlayer->pInventory, pItem, slot))
+        Log(L"Belt: put item 0x%X back in belt slot %d before packet 0x%02X 0x%02X", pItem->dwUnitId, slot, pPacket[0], pPacket[1]);
+    else
+        Log(L"Belt: item 0x%X has no inventory and belt slot %d is taken; packet 0x%02X 0x%02X may halt the game", pItem->dwUnitId, slot,
+            pPacket[0], pPacket[1]);
+}
+
 DWORD ItemActionHandler(BYTE* pPacket, DWORD dwSize) {
     // TODO: fix this code later by changing the way it's parsed
     INT64 icode = 0;

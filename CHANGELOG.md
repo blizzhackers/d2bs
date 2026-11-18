@@ -15,6 +15,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 ### Fixed
 
+- **Uninterrupted belt use.** The game keeps running as potions move down the belt, including right after a pickup fills a belt slot.
 - **Waypoint trips with a fallen mercenary.** The game keeps running when you take a waypoint back to the area where your mercenary died.
 - **Safe `getBaseStat()` lookups.** `getBaseStat()` returns `undefined` for a table or column that doesn't exist, whether named or numbered, and for a row past the end of its table, so scripts can look up any value without risk to the game. Called with fewer than three arguments, it also returns `undefined`.
 - **Reliable `getPacket()`.** Packets a script passes to `getPacket()` join the game's incoming packets reliably, even while the game is receiving its own. Outside a game, `getPacket()` returns `false` and passes nothing on.

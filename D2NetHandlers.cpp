@@ -182,6 +182,8 @@ void RelinkOrphanedBeltItem(BYTE* pPacket, DWORD dwSize) {
     int slot = pItem->pItemPath ? D2CLIENT_GetUnitX(pItem) : -1;
     if (slot >= 0 && slot < 16 && D2COMMON_PlaceItemInBeltSlot(pPlayer->pInventory, pItem, slot))
         Log(L"Belt: put item 0x%X back in belt slot %d before packet 0x%02X 0x%02X", id, slot, pPacket[0], pPacket[1]);
+    else if (slot < 0)
+        Log(L"Belt: item 0x%X has no inventory and no belt position; packet 0x%02X 0x%02X may halt the game", id, pPacket[0], pPacket[1]);
     else
         Log(L"Belt: item 0x%X has no inventory and could not be put back in belt slot %d; packet 0x%02X 0x%02X may halt the game", id,
             slot, pPacket[0], pPacket[1]);

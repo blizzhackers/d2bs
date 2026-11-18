@@ -295,6 +295,7 @@ DWORD ReceivedPacket(BYTE* pPacket, DWORD dwSize) {
         return !GamePacketEvent(pPacket, dwSize) && HPMPUpdateHandler(pPacket, dwSize);
     case 0x9C:
     case 0x9D:
+        RelinkOrphanedBeltItem(pPacket, dwSize);
         return !GamePacketEvent(pPacket, dwSize) && ItemActionHandler(pPacket, dwSize);
     case 0xA7:
         return !GamePacketEvent(pPacket, dwSize) && DelayedStateHandler(pPacket, dwSize);

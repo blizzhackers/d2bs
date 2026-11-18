@@ -161,6 +161,34 @@ DWORD EventMessagesHandler(BYTE* pPacket, DWORD dwSize) {
     return TRUE;
 }
 
+// The client's item handlers take an item out of its owner's inventory before moving it and, in the stock game, halt
+// when that fails (Halt 3166 for a belt item). A belt item can be left in belt mode linked to no inventory: one way is
+// the client's put-in-belt handler, which ignores a failed placement into a taken slot. Placing such an item back into
+// its slot, with the game's own placement, before the packet runs gives the handler the item where it expects it. The
+// item goes back into the player's belt, so a 0x9D owned by any other unit is left alone.
+void RelinkOrphanedBeltItem(BYTE* pPacket, DWORD dwSize) {
+    if (dwSize < 8)
+        return;
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    if (!pPlayer || !pPlayer->pInventory)
+        return;
+    // 0x9D carries its owner after the item id: the type at byte 8, the id at bytes 9-12.
+    if (pPacket[0] == 0x9D && (dwSize < 13 || pPacket[8] != UNIT_PLAYER || *(DWORD*)(pPacket + 9) != pPlayer->dwUnitId))
+        return;
+    DWORD id = *(DWORD*)(pPacket + 4);
+    UnitAny* pItem = D2CLIENT_FindClientSideUnit(id, UNIT_ITEM);
+    if (!pItem || pItem->dwMode != ITEM_MODE_IN_BELT || !pItem->pItemData || pItem->pItemData->pOwnerInventory)
+        return;
+    int slot = pItem->pItemPath ? D2CLIENT_GetUnitX(pItem) : -1;
+    if (slot >= 0 && slot < 16 && D2COMMON_PlaceItemInBeltSlot(pPlayer->pInventory, pItem, slot))
+        Log(L"Belt: put item 0x%X back in belt slot %d before packet 0x%02X 0x%02X", id, slot, pPacket[0], pPacket[1]);
+    else if (slot < 0)
+        Log(L"Belt: item 0x%X has no inventory and no belt position; packet 0x%02X 0x%02X may halt the game", id, pPacket[0], pPacket[1]);
+    else
+        Log(L"Belt: item 0x%X has no inventory and could not be put back in belt slot %d; packet 0x%02X 0x%02X may halt the game", id,
+            slot, pPacket[0], pPacket[1]);
+}
+
 DWORD ItemActionHandler(BYTE* pPacket, DWORD dwSize) {
     // TODO: fix this code later by changing the way it's parsed
     INT64 icode = 0;

@@ -72,6 +72,10 @@ class Genhook {
         init = false;
         DeleteCriticalSection(&globalSection);
     }
+    // For the hang report, which reads the lock's owner without taking it.
+    static CRITICAL_SECTION* SectionForReport(void) {
+        return &globalSection;
+    }
 
   protected:
     virtual void Draw(void) = 0;

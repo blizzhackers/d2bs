@@ -11,9 +11,11 @@ LRESULT CALLBACK KeyPress(int code, WPARAM wParam, LPARAM lParam);
 void GameDraw(void);
 DWORD __fastcall GamePacketReceived(BYTE* pPacket, DWORD dwSize);
 DWORD __fastcall GamePacketSent(BYTE* pPacket, DWORD dwSize);
-// Writes the last packets sent and received to path and stops recording them; false if the file can't be created.
-// Takes no D2BS lock, so a crashing thread that holds one can call it.
-bool WritePacketLog(const wchar_t* path, const char* header);
+// Writes the last packets sent and received to path, and with freeze stops recording them; false if the file can't be
+// created. Takes no D2BS lock, so a crashing thread that holds one can call it.
+bool WritePacketLog(const wchar_t* path, const char* header, bool freeze);
+// True when thread tid's newest recorded packet is still inside D2BS; lock-free, like WritePacketLog.
+bool PacketInD2BS(DWORD tid, BYTE* opcode, char* dir, DWORD* tick);
 void __fastcall GameResetFrames(UnitAny* pOwner);
 void GameDrawOOG(void);
 void SetMaxDiff(void);

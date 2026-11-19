@@ -20,6 +20,7 @@
 #include "Control.h"
 #include "CriticalSections.h"
 #include "JSParty.h"
+#include "HangReport.h"
 
 using namespace std;
 
@@ -33,6 +34,7 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
     bool beginStarter = true;
     bool bInGame = false;
 
+    HangNameThread(L"D2BS main");
     if (!InitHooks()) {
         wcscpy_s(Vars.szPath, MAX_PATH, L"common");
         Log(L"D2BS Engine startup failed. %s", Vars.szCommandLine);
@@ -67,6 +69,7 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
     }
 
     Log(L"D2BS Engine startup complete. %s", D2BS_VERSION);
+    HangEngineStarted();
     Print(L"\u00FFc2D2BS\u00FFc0 :: Engine startup complete!");
 
     while (Vars.bActive) {
@@ -150,9 +153,10 @@ DWORD __fastcall ChannelInput(wchar_t* wMsg) {
     return send; // false means ignore, true means send
 }
 
-// The last packets in both directions, written out by a crash report. The game thread records received packets and any
-// thread that sends records sent ones, so slots are claimed with an interlocked counter. A record counts only once its
-// seq is stamped: the crash-time reader skips torn records without a lock, as the crashing thread may hold any lock.
+// The last packets in both directions, written out by a crash or hang report. The game thread records received packets
+// and any thread that sends records sent ones, so slots are claimed with an interlocked counter. A record counts only
+// once its seq is stamped: readers skip torn records without a lock, as a crashing or stuck thread may hold any lock,
+// and a hang report reads while recording goes on.
 namespace {
 const LONG kPacketRing = 512; // a power of two
 const DWORD kPacketBytes = 48;
@@ -206,8 +210,9 @@ DWORD ReceivedPacket(BYTE* pPacket, DWORD dwSize);
 DWORD SentPacket(BYTE* pPacket, DWORD dwSize);
 } // namespace
 
-bool WritePacketLog(const wchar_t* path, const char* header) {
-    InterlockedExchange(&g_packetsFrozen, 1);
+bool WritePacketLog(const wchar_t* path, const char* header, bool freeze) {
+    if (freeze)
+        InterlockedExchange(&g_packetsFrozen, 1);
     ULONG last = (ULONG)g_packetNext;
     HANDLE hFile = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE)
@@ -219,9 +224,9 @@ bool WritePacketLog(const wchar_t* path, const char* header) {
     char line[512];
     DWORD written;
     int n = _snprintf_s(line, sizeof(line), _TRUNCATE,
-                        "%s\r\nGetTickCount at the crash: %u\r\n"
+                        "%s\r\nGetTickCount at the %s: %u\r\n"
                         "tick thread dir verdict d2bs-us size first-bytes (R = received, S = sent; oldest first)\r\n",
-                        header, GetTickCount());
+                        header, freeze ? "crash" : "hang report", GetTickCount());
     if (n < 0)
         n = (int)strlen(line); // a long header is cut, not dropped
     WriteFile(hFile, line, n, &written, NULL);
@@ -255,6 +260,28 @@ bool WritePacketLog(const wchar_t* path, const char* header) {
     }
     CloseHandle(hFile);
     return true;
+}
+
+bool PacketInD2BS(DWORD tid, BYTE* opcode, char* dir, DWORD* tick) {
+    ULONG last = (ULONG)g_packetNext;
+    ULONG count = last < (ULONG)kPacketRing ? last : (ULONG)kPacketRing;
+    for (ULONG i = 0; i < count; i++) {
+        ULONG seq = last - i;
+        const PacketRecord& slot = g_packets[seq & (kPacketRing - 1)];
+        if ((ULONG)slot.seq != seq || slot.thread != tid)
+            continue;
+        PacketRecord r = slot;
+        MemoryBarrier();
+        if ((ULONG)slot.seq != seq)
+            continue;
+        if (r.verdict != 0)
+            return false; // the thread's newest packet is done
+        *opcode = r.size ? r.data[0] : 0;
+        *dir = r.dir;
+        *tick = r.tick;
+        return true;
+    }
+    return false;
 }
 
 DWORD __fastcall GamePacketReceived(BYTE* pPacket, DWORD dwSize) {
@@ -641,6 +668,9 @@ void CALLBACK TimerProc(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
     EnterCriticalSection(&Vars.cGameLoopSection);
     // Here rather than in a draw hook: D2Win skips drawing some frames, and timer ticks keep coming.
     SnapshotMenuSession();
+    // After the game lock is retaken: a script holding that lock also stops the window from pumping, and the hang
+    // report names the holder.
+    HangTick(hwnd);
 }
 
 void GameLeave(void) {

@@ -12,6 +12,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 - **Monster level stats.** `getBaseStat("monlvl", level, column)` reads the game's MonLvl table: the per-level defense, to-hit, life, damage and experience that monster stats are percentages of, for each difficulty, classic and expansion. The row is the monster level, and the columns are MonLvl.txt's value columns, for example `"L-DM(H)"`.
 - **The whole character list at once.** On the expansion character select screen, `getCharacterList()` returns every character with its class, level and hardcore, expansion, ladder and expiry details, and `focusCharacter(name)` selects any of them by name and scrolls it into view, so a script can pick a character without paging through the list.
+- **Hang reports.** When the game window stops responding for 5 seconds, D2BS writes what the game is stuck on to its log: the game thread's stack, the lock it is waiting on and the thread that holds it, and for the first three hangs of a game process every other thread's stack too. The last packets go to `logs\hang-<profile>-<time>-<pid>.packets.txt`, all in time to beat a bot manager's restart. The game keeps running untouched, and a game that recovers logs how long it was stuck. With `HaltDumps=true`, a hang also writes a memory dump, one per Game.exe (Windows 8.1 or later). The `logs` folder keeps the 20 newest hang packet logs and the 2 newest hang dumps. `HangReportSeconds` in `d2bs.ini` sets the wait, and 0 turns hang reports off.
 
 ### Fixed
 

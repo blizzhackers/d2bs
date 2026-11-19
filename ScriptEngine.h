@@ -37,6 +37,10 @@ class ScriptEngine {
     static EngineState GetState(void) {
         return state;
     }
+    // For the hang report, which reads the lock's owner without taking it.
+    static CRITICAL_SECTION* ListLockForReport(void) {
+        return &scriptListLock;
+    }
 
     static void FlushCache(void);
 

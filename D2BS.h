@@ -74,6 +74,7 @@ struct Variables {
     BOOL bEnableUnsupported;
     BOOL bForwardMessageBox;
     BOOL bHaltDumps;
+    DWORD dwHangReportMs; // 0 = no hang reports
     BOOL bUseRawCDKey;
     BOOL bQuitting;
     BOOL bCacheFix;

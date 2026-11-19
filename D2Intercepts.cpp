@@ -4,6 +4,7 @@
 #include "Helpers.h"
 #include <shlwapi.h>
 #include "RevisionTempPath.h"
+#include "HangReport.h"
 
 DWORD WINAPI RevisionTempPath_Intercept(DWORD bufferLength, LPSTR buffer) {
     DWORD length = GetRevisionTempPath(bufferLength, buffer);
@@ -684,12 +685,13 @@ const DWORD kPacketLogsKept = 50;
 const ULONGLONG kDumpMinFreeBytes = 2ULL << 30;
 const DWORD kDumpTimeoutMs = 60000;
 
-// The longest suffix a report adds to its stem.
+// The longest suffix a report adds to its stem (a hang dump's ".dmp.partial" is as long).
 const wchar_t kLongestSuffix[] = L".packets.txt";
+} // namespace
 
-// <logs>crash-<profile>-<yyyymmdd-hhmmss>-<pid>, one stem per report. False when the logs path leaves no room for it:
+// <logs><prefix><profile>-<yyyymmdd-hhmmss>-<pid>, one stem per report. False when the logs path leaves no room for it:
 // the CRT's _s functions end the process on overflow, so every path here is built truncating and checked.
-bool CrashReportStem(wchar_t* stem, size_t len) {
+bool CrashReportStem(wchar_t* stem, size_t len, const wchar_t* prefix) {
     wchar_t profile[48];
     size_t n = 0;
     for (const wchar_t* p = Vars.szProfile; *p && n < _countof(profile) - 1; p++)
@@ -697,7 +699,7 @@ bool CrashReportStem(wchar_t* stem, size_t len) {
     profile[n] = L'\0';
     SYSTEMTIME t;
     GetLocalTime(&t);
-    return _snwprintf_s(stem, len - (_countof(kLongestSuffix) - 1), _TRUNCATE, L"%scrash-%s-%04u%02u%02u-%02u%02u%02u-%u", Vars.szLogPath,
+    return _snwprintf_s(stem, len - (_countof(kLongestSuffix) - 1), _TRUNCATE, L"%s%s%s-%04u%02u%02u-%02u%02u%02u-%u", Vars.szLogPath, prefix,
                         n ? profile : L"noprofile", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, GetCurrentProcessId()) >= 0;
 }
 
@@ -745,6 +747,7 @@ void PruneCrashFiles(const wchar_t* pattern, DWORD keep) {
     }
 }
 
+namespace {
 // Process snapshots (Windows 8.1, ProcessSnapShot.h and minidumpapiset.h), which this toolset's headers predate.
 const DWORD kSnapshotFlags = 0x00000001 /* PSS_CAPTURE_VA_CLONE */ | 0x00000004 /* PSS_CAPTURE_HANDLES */ |
                              0x00000008 /* PSS_CAPTURE_HANDLE_NAME_INFORMATION */ | 0x00000010 /* PSS_CAPTURE_HANDLE_BASIC_INFORMATION */ |
@@ -829,7 +832,7 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
     CrashReportDone done;
 
     wchar_t stem[MAX_PATH], path[MAX_PATH];
-    if (!CrashReportStem(stem, _countof(stem))) {
+    if (!CrashReportStem(stem, _countof(stem), L"crash-")) {
         Log(L"Crash report: none, the logs path %s is too long", Vars.szLogPath);
         return;
     }
@@ -838,7 +841,7 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
                 Vars.szProfile, GetCurrentProcessId(), GetCurrentThreadId());
     PruneCrashFiles(L"crash-*.packets.txt", kPacketLogsKept - 1);
     _snwprintf_s(path, _countof(path), _TRUNCATE, L"%s.packets.txt", stem);
-    if (WritePacketLog(path, header))
+    if (WritePacketLog(path, header, true))
         Log(L"Crash report: packet log %s", path);
     else
         Log(L"Crash report: no packet log, %s could not be created (%u)", path, GetLastError());
@@ -897,6 +900,9 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
 } // namespace
 
 char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
+    // A halting thread stops ticking while it writes its own report: the hang watch stands down first.
+    HangQuiesce();
+    HangWaitDumpIdle(10000);
     GetStackWalk();
     Log(L"Crash File: %hs\n", crash_file);
     // A Halt raises no exception, so Windows writes no dump of it: this one is the only record of the game's state.
@@ -912,11 +918,14 @@ char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
 // info in ECX (+0x18 = the EXCEPTION_POINTERS). Returning 0 makes that filter answer EXCEPTION_CONTINUE_SEARCH, so
 // Windows Error Reporting gets the real exception.
 DWORD __fastcall FogCrash_Intercept(BYTE* crashInfo, DWORD) {
+    // A crashing thread stops ticking while it writes its own report; one interlocked store, safe even on a stack overflow.
+    HangQuiesce();
     EXCEPTION_POINTERS* ptrs = *(EXCEPTION_POINTERS**)(crashInfo + 0x18);
     // A stack overflow leaves this thread about a page of stack, too little for the stack walk and the report, which
     // would fault again; Windows Error Reporting still gets the exception.
     if (ptrs && ptrs->ExceptionRecord && ptrs->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW)
         return 0;
+    HangWaitDumpIdle(10000);
     if (ptrs && ptrs->ExceptionRecord && ptrs->ContextRecord) {
         ExceptionHandler(ptrs);
         // Packets only: Windows Error Reporting dumps an exception, and a second dump from inside this filter could

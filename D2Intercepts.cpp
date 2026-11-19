@@ -878,18 +878,26 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
     job.written = FALSE;
     job.fromSnapshot = FALSE;
     job.error = 0;
+    // dbghelp is single-threaded: held by this thread for the dump thread's whole run, and bounded, as a hang dump that
+    // never finishes must not keep the process alive.
+    if (!DbgHelpLock(10000)) {
+        Log(L"Crash report: no dump, dbghelp stayed busy for 10 s (a hang dump in progress)");
+        return;
+    }
     // Logged before the dump: a timed-out dump may leave a thread suspended inside the heap lock, so nothing after a
     // timeout may allocate, and this line is then the only trace.
     Log(L"Crash report: writing dump %s", path);
     DWORD started = GetTickCount();
     HANDLE hThread = CreateThread(NULL, 0, WriteDumpThread, &job, 0, NULL);
     if (!hThread) {
+        DbgHelpUnlock();
         Log(L"Crash report: no dump, CreateThread failed (%u)", GetLastError());
         return;
     }
     if (WaitForSingleObject(hThread, kDumpTimeoutMs) != WAIT_OBJECT_0)
         TerminateProcess(GetCurrentProcess(), 0);
     CloseHandle(hThread);
+    DbgHelpUnlock();
     const wchar_t* source = job.fromSnapshot ? L"a snapshot" : L"the live process";
     if (job.written)
         Log(L"Crash report: dump %s written from %s in %u ms", path, source, GetTickCount() - started);
@@ -902,7 +910,6 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
 char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
     // A halting thread stops ticking while it writes its own report: the hang watch stands down first.
     HangQuiesce();
-    HangWaitDumpIdle(10000);
     GetStackWalk();
     Log(L"Crash File: %hs\n", crash_file);
     // A Halt raises no exception, so Windows writes no dump of it: this one is the only record of the game's state.
@@ -925,7 +932,6 @@ DWORD __fastcall FogCrash_Intercept(BYTE* crashInfo, DWORD) {
     // would fault again; Windows Error Reporting still gets the exception.
     if (ptrs && ptrs->ExceptionRecord && ptrs->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW)
         return 0;
-    HangWaitDumpIdle(10000);
     if (ptrs && ptrs->ExceptionRecord && ptrs->ContextRecord) {
         ExceptionHandler(ptrs);
         // Packets only: Windows Error Reporting dumps an exception, and a second dump from inside this filter could

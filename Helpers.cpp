@@ -502,7 +502,55 @@ void InitCommandLine() {
     memcpy(line, cline, sizeof(LPWSTR) * wcslen(cline));
 }
 
+namespace {
+// The owning thread, or 0. A plain interlocked word rather than a CRITICAL_SECTION: it needs no initialization, so a crash
+// before Startup can still take it, and the wait can be bounded.
+volatile LONG g_dbgHelpOwner = 0;
+LONG g_dbgHelpDepth = 0;
+// Threads already waiting: a newcomer yields to them, so a script calling stacktrace() in a loop can't starve a dump.
+volatile LONG g_dbgHelpWaiters = 0;
+
+struct DbgHelpHold {
+    ~DbgHelpHold() {
+        DbgHelpUnlock();
+    }
+};
+} // namespace
+
+bool DbgHelpLock(DWORD maxMs) {
+    LONG self = (LONG)GetCurrentThreadId();
+    if (g_dbgHelpOwner == self) {
+        g_dbgHelpDepth++;
+        return true;
+    }
+    if (!g_dbgHelpWaiters && InterlockedCompareExchange(&g_dbgHelpOwner, self, 0) == 0) {
+        g_dbgHelpDepth = 1;
+        return true;
+    }
+    InterlockedIncrement(&g_dbgHelpWaiters);
+    bool got = false;
+    for (DWORD waited = 0; !got && waited <= maxMs; waited += 10) {
+        Sleep(10);
+        got = InterlockedCompareExchange(&g_dbgHelpOwner, self, 0) == 0;
+    }
+    InterlockedDecrement(&g_dbgHelpWaiters);
+    if (got)
+        g_dbgHelpDepth = 1;
+    return got;
+}
+
+void DbgHelpUnlock(void) {
+    if (g_dbgHelpOwner == (LONG)GetCurrentThreadId() && --g_dbgHelpDepth == 0)
+        InterlockedExchange(&g_dbgHelpOwner, 0);
+}
+
 bool GetStackWalk() {
+    // Bounded: a crash report must not wait for good on a hang dump that never finishes.
+    if (!DbgHelpLock(10000)) {
+        Log(L"Stack walk skipped: dbghelp stayed busy for 10 s (a hang dump in progress)");
+        return false;
+    }
+    DbgHelpHold hold; // released after the walker's destructor below, which still calls dbghelp
     std::vector<DWORD> threadIds = GetThreadIds();
     DWORD current = GetCurrentThreadId();
 

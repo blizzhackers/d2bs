@@ -9,6 +9,7 @@
 #pragma warning(disable : 4512)
 #include "D2BS.h"
 #include "D2Helpers.h"
+#include "Helpers.h"
 #include "D2Handlers.h"
 #include "D2Intercepts.h"
 #include "D2Ptrs.h"
@@ -741,16 +742,24 @@ DWORD WINAPI HangDumpThread(LPVOID) {
     // Go first: when Go and Stop are both set, the posted job still runs and clears the busy flag the watchdog set.
     HANDLE events[2] = {g_hDumpGo, g_hStop};
     while (WaitForMultipleObjects(2, events, FALSE, INFINITE) == WAIT_OBJECT_0) {
-        __try {
-            WriteHangDump();
-        } __except (DumpFault(GetExceptionInformation())) {
-            ReleaseDumpJob(g_dumpJob);
-            DeleteFileW(g_dumpJob.partial);
-            InterlockedExchange(&g_dumpOff, 1); // a fault inside dbghelp would likely come again
+        // A stack walk on another thread may be using dbghelp; the wait is bounded, as that thread may be the stuck one.
+        if (!DbgHelpLock(5000)) {
             g_dumpW.len = 0;
-            Line(g_dumpW, true, "Hang report %d: no dump, stopped by exception 0x%08X at 0x%08X; no more hang dumps in this process",
-                 g_dumpJob.episode, g_dumpFaultCode, g_dumpFaultAddress);
+            Line(g_dumpW, true, "Hang report %d: no dump, a stack walk kept dbghelp busy for 5 s", g_dumpJob.episode);
             Flush(g_dumpW);
+        } else {
+            __try {
+                WriteHangDump();
+            } __except (DumpFault(GetExceptionInformation())) {
+                ReleaseDumpJob(g_dumpJob);
+                DeleteFileW(g_dumpJob.partial);
+                InterlockedExchange(&g_dumpOff, 1); // a fault inside dbghelp would likely come again
+                g_dumpW.len = 0;
+                Line(g_dumpW, true, "Hang report %d: no dump, stopped by exception 0x%08X at 0x%08X; no more hang dumps in this process",
+                     g_dumpJob.episode, g_dumpFaultCode, g_dumpFaultAddress);
+                Flush(g_dumpW);
+            }
+            DbgHelpUnlock();
         }
         // Done before the flag is cleared, so the next claim never sees this job's Done.
         SetEvent(g_hDumpDone);
@@ -809,9 +818,8 @@ void PacketsAndDump(Writer& w, int n, DWORD stallMs) {
         Line(w, true, "Hang report %d: no dump, an earlier attempt stopped by exception", n);
         return;
     }
-    // Claimed before the job is posted and checked against the crash paths' stand-down after: each side stores first and
-    // reads the other's flag second, so either this skips the dump or a crash report waits for it (dbghelp is
-    // single-threaded).
+    // The single job slot is claimed before the job is posted; no new dump starts once a crash or shutdown is under way
+    // (dbghelp itself is serialized by DbgHelpLock).
     if (InterlockedCompareExchange(&g_dumpBusy, 1, 0) != 0) {
         Line(w, true, "Hang report %d: no dump, the earlier one is still being written", n);
         return;
@@ -1186,13 +1194,6 @@ void HangEngineStarted(void) {
 
 void HangQuiesce(void) {
     InterlockedExchange(&g_quiesced, 1);
-}
-
-void HangWaitDumpIdle(DWORD maxMs) {
-    if (GetCurrentThreadId() == g_dumpTid)
-        return;
-    for (DWORD waited = 0; g_dumpBusy && waited < maxMs; waited += 100)
-        Sleep(100);
 }
 
 void HangNameThread(const wchar_t* name) {

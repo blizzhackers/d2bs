@@ -18,8 +18,6 @@ void HangTick(HWND hwnd);
 void HangEngineStarted(void);
 // A crash or halt is being reported: no hang report starts or continues after this.
 void HangQuiesce(void);
-// dbghelp is single-threaded: a crash report waits up to maxMs for a hang dump in progress before it uses dbghelp.
-void HangWaitDumpIdle(DWORD maxMs);
 // Names the calling thread in hang reports; the name is copied.
 void HangNameThread(const wchar_t* name);
 void HangForgetThread(void);

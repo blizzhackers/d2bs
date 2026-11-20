@@ -25,6 +25,8 @@ void GameDrawOOG_Intercept(void);
 void CongratsScreen_Intercept(void);
 void GameActChange_Intercept(void);
 void GameActChange2_Intercept(void);
+void EndNpcSpeech_Intercept();
+void FreeSpeechPanel_Intercept();
 void GameLeave_Intercept(void);
 void ChannelInput_Intercept(void);
 void ChatPacketRecv_Interception();

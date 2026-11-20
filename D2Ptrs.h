@@ -188,6 +188,11 @@ enum {
 
     VARPTR(D2CLIENT, RecentInteractId, DWORD, 0x3C0D25) // Updated 1.14d //007C0D25-BASE
 
+    // What the speech panel runs when a speech ends (the game writes the pair only in 0x49E7E0), and whether an NPC's message chain is on.
+    VARPTR(D2CLIENT, SpeechDoneCallback, DWORD, 0x3BF258)    // NEW 1.14d //007BF258-BASE
+    VARPTR(D2CLIENT, SpeechDoneCallbackArg, DWORD, 0x3BF25C) // NEW 1.14d //007BF25C-BASE
+    VARPTR(D2CLIENT, NpcChainActive, BYTE, 0x3C0C69)         // NEW 1.14d //007C0C69-BASE
+
     VARPTR(D2CLIENT, ItemPriceList, DWORD, 0x3C0D43) // Updated 1.14d //007C0D43-BASE
 
     VARPTR(D2CLIENT, TransactionDialog, void*, 0x3C0D63)                           // Updated 1.14d //007C0D63-BASE
@@ -262,6 +267,11 @@ enum {
     ASMPTR(D2CLIENT, GetMinionCount_I, 0x78EE0) // Updated 1.14d //00478EE0-BASE
 
     ASMPTR(D2CLIENT, GameLeave_I, 0x81830) // Updated 1.14d //00481830-BASE
+
+    ASMPTR(D2CLIENT, EndNpcSpeech_I, 0xA1730)        // NEW 1.14d //004A1730-BASE ends the NPC's speech, frees its message list
+    ASMPTR(D2CLIENT, FreeSpeechPanel_I, 0xA0680)     // NEW 1.14d //004A0680-BASE the game exit's free of the list and speech
+    ASMPTR(D2CLIENT, NpcQuestSpeechDone_I, 0xB6A30)  // NEW 1.14d //004B6A30-BASE plays the NPC's next quest message
+    ASMPTR(D2CLIENT, NpcGossipSpeechDone_I, 0xB18C0) // NEW 1.14d //004B18C0-BASE plays the NPC's next gossip message
 
     ASMPTR(D2CLIENT, CongratsScreen_I, 0xF6190) // Updated 1.14d //004F6190-BASE
 

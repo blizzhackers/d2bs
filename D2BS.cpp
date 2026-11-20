@@ -14,6 +14,7 @@
 #include "D2Ptrs.h"
 #include "CommandLine.h"
 #include "RevisionTempPath.h"
+#include "HangReport.h"
 
 #ifdef _MSVC_DEBUG
 #include "D2Loader.h"
@@ -96,6 +97,8 @@ BOOL WINAPI DllMain(HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved) {
             return FALSE;
     } break;
     case DLL_PROCESS_DETACH:
+        // lpReserved is non-NULL at process exit, when Windows has already ended every other thread.
+        HangStop(lpReserved ? HangStopProcessExit : HangStopUnload);
         if (Vars.bNeedShutdown) {
             Vars.bShutdownFromDllMain = TRUE;
             Shutdown();
@@ -139,6 +142,8 @@ BOOL Startup(void) {
     if ((hD2Thread = CreateThread(NULL, NULL, D2Thread, NULL, NULL, NULL)) == NULL)
         return FALSE;
     //	hEventThread = CreateThread(0, 0, EventThread, NULL, 0, 0);
+    // Last, after the patches: the watchdog suspends threads, and so does a guarded patch write.
+    HangStart();
     return TRUE;
 }
 
@@ -146,6 +151,9 @@ void Shutdown(void) {
     if (!Vars.bNeedShutdown)
         return;
 
+    // First: the D2Thread join, RemovePatches and KillTimer below all stop the ticks the watchdog counts.
+    if (!Vars.bShutdownFromDllMain)
+        HangStop(HangStopJoin);
     Vars.bActive = FALSE;
     if (!Vars.bShutdownFromDllMain)
         WaitForSingleObject(hD2Thread, INFINITE);

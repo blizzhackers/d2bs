@@ -281,6 +281,7 @@ XCOPY "$(ProjectDir)resources" "$(OutDir)release-pkg"
       <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Level3</WarningLevel>
     </ClCompile>
     <ClCompile Include="StackWalker.cpp" />
+    <ClCompile Include="HangReport.cpp" />
     <ClCompile Include="stringhash.cpp" />
     <ClCompile Include="Control.cpp" />
     <ClCompile Include="Core.cpp" />
@@ -356,6 +357,7 @@ XCOPY "$(ProjectDir)resources" "$(OutDir)release-pkg"
     <ClInclude Include="Profile.h" />
     <ClInclude Include="sqlite3.h" />
     <ClInclude Include="StackWalker.h" />
+    <ClInclude Include="HangReport.h" />
     <ClInclude Include="stringhash.h" />
     <ClInclude Include="SyncObj.h" />
     <ClInclude Include="TimedAlloc.h" />

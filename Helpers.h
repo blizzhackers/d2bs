@@ -6,6 +6,10 @@
 #include "Script.h"
 
 ULONGLONG TickCount64();
+// dbghelp is single-threaded: every stack walk and dump takes this first. Recursive per thread; false when another
+// thread held it past maxMs.
+bool DbgHelpLock(DWORD maxMs);
+void DbgHelpUnlock(void);
 bool GetStackWalk();
 wchar_t* AnsiToUnicode(const char* str, UINT codepage = CP_UTF8);
 char* UnicodeToAnsi(const wchar_t* str, UINT codepage = CP_UTF8);

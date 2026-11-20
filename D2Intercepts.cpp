@@ -4,6 +4,8 @@
 #include "Helpers.h"
 #include <shlwapi.h>
 #include "RevisionTempPath.h"
+#include "HangReport.h"
+#include "D2Intercepts.h"
 
 DWORD WINAPI RevisionTempPath_Intercept(DWORD bufferLength, LPSTR buffer) {
     DWORD length = GetRevisionTempPath(bufferLength, buffer);
@@ -711,15 +713,16 @@ const MINIDUMP_TYPE kCrashDumpType =
                     MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules | MiniDumpIgnoreInaccessibleMemory);
 const DWORD kCrashDumpsKept = 5;        // a dump is a few hundred MB, and every profile writes to the same logs folder
 const DWORD kPacketLogsKept = 50;
-const ULONGLONG kDumpMinFreeBytes = 2ULL << 30;
 const DWORD kDumpTimeoutMs = 60000;
+const DWORD kDbgHelpWaitMs = 10000; // the dump's wait for dbghelp (DbgHelpLock), before kDumpTimeoutMs starts
 
-// The longest suffix a report adds to its stem.
+// The longest suffix a report adds to its stem (a hang dump's ".dmp.partial" is as long).
 const wchar_t kLongestSuffix[] = L".packets.txt";
+} // namespace
 
-// <logs>crash-<profile>-<yyyymmdd-hhmmss>-<pid>, one stem per report. False when the logs path leaves no room for it:
+// <logs><prefix><profile>-<yyyymmdd-hhmmss>-<pid>, one stem per report. False when the logs path leaves no room for it:
 // the CRT's _s functions end the process on overflow, so every path here is built truncating and checked.
-bool CrashReportStem(wchar_t* stem, size_t len) {
+bool CrashReportStem(wchar_t* stem, size_t len, const wchar_t* prefix) {
     wchar_t profile[48];
     size_t n = 0;
     for (const wchar_t* p = Vars.szProfile; *p && n < _countof(profile) - 1; p++)
@@ -727,13 +730,13 @@ bool CrashReportStem(wchar_t* stem, size_t len) {
     profile[n] = L'\0';
     SYSTEMTIME t;
     GetLocalTime(&t);
-    return _snwprintf_s(stem, len - (_countof(kLongestSuffix) - 1), _TRUNCATE, L"%scrash-%s-%04u%02u%02u-%02u%02u%02u-%u", Vars.szLogPath,
+    return _snwprintf_s(stem, len - (_countof(kLongestSuffix) - 1), _TRUNCATE, L"%s%s%s-%04u%02u%02u-%02u%02u%02u-%u", Vars.szLogPath, prefix,
                         n ? profile : L"noprofile", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, GetCurrentProcessId()) >= 0;
 }
 
 // Deletes the oldest files matching pattern in the logs folder until at most keep remain. A file it can't delete (one
-// open in a debugger) is passed over for the next oldest, up to kSkipMax of them; no allocations of its own, as in the
-// rest of the report.
+// open in a debugger) is passed over for the next oldest, up to kSkipMax of them, so more than keep can remain; no
+// allocations of its own, as in the rest of the report.
 void PruneCrashFiles(const wchar_t* pattern, DWORD keep) {
     const int kSkipMax = 8;
     wchar_t skipped[kSkipMax][MAX_PATH];
@@ -775,6 +778,7 @@ void PruneCrashFiles(const wchar_t* pattern, DWORD keep) {
     }
 }
 
+namespace {
 // Process snapshots (Windows 8.1, ProcessSnapShot.h and minidumpapiset.h), which this toolset's headers predate.
 const DWORD kSnapshotFlags = 0x00000001 /* PSS_CAPTURE_VA_CLONE */ | 0x00000004 /* PSS_CAPTURE_HANDLES */ |
                              0x00000008 /* PSS_CAPTURE_HANDLE_NAME_INFORMATION */ | 0x00000010 /* PSS_CAPTURE_HANDLE_BASIC_INFORMATION */ |
@@ -837,6 +841,9 @@ DWORD WINAPI WriteDumpThread(LPVOID param) {
 // itself.
 volatile LONG g_crashReportState = 0;
 volatile DWORD g_crashReportThread = 0;
+// Set by the writer as its dump thread starts: the second thread then waits until 5 s past that dump's own deadline.
+volatile LONG g_crashDumpStarted = 0;
+volatile DWORD g_crashDumpEnd = 0;
 
 struct CrashReportDone {
     ~CrashReportDone() {
@@ -851,15 +858,22 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
     if (InterlockedCompareExchange(&g_crashReportState, 1, 0) != 0) {
         if (g_crashReportThread == GetCurrentThreadId())
             return;
-        for (DWORD waited = 0; g_crashReportState == 1 && waited < kDumpTimeoutMs + 5000; waited += 100)
+        // Until 5 s past the writer's dump deadline, or, before its dump starts, 30 s for the packet log, the pruning and
+        // the dbghelp wait; elapsed time, as Sleep(100) lasts longer than 100 ms at the default timer resolution.
+        DWORD started = GetTickCount();
+        while (g_crashReportState == 1) {
+            DWORD now = GetTickCount();
+            if (g_crashDumpStarted ? (LONG)(now - g_crashDumpEnd) >= 5000 : now - started >= kDbgHelpWaitMs + 20000)
+                break;
             Sleep(100);
+        }
         return;
     }
     g_crashReportThread = GetCurrentThreadId();
     CrashReportDone done;
 
     wchar_t stem[MAX_PATH], path[MAX_PATH];
-    if (!CrashReportStem(stem, _countof(stem))) {
+    if (!CrashReportStem(stem, _countof(stem), L"crash-")) {
         Log(L"Crash report: none, the logs path %s is too long", Vars.szLogPath);
         return;
     }
@@ -868,7 +882,7 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
                 Vars.szProfile, GetCurrentProcessId(), GetCurrentThreadId());
     PruneCrashFiles(L"crash-*.packets.txt", kPacketLogsKept - 1);
     _snwprintf_s(path, _countof(path), _TRUNCATE, L"%s.packets.txt", stem);
-    if (WritePacketLog(path, header))
+    if (WritePacketLog(path, header, true))
         Log(L"Crash report: packet log %s", path);
     else
         Log(L"Crash report: no packet log, %s could not be created (%u)", path, GetLastError());
@@ -883,7 +897,7 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
         return;
     }
     if (freeBytes.QuadPart < kDumpMinFreeBytes) {
-        Log(L"Crash report: no dump, less than 2 GB free in %s", Vars.szLogPath);
+        Log(L"Crash report: no dump, less than %u GB free in %s", (DWORD)(kDumpMinFreeBytes >> 30), Vars.szLogPath);
         return;
     }
     _snwprintf_s(path, _countof(path), _TRUNCATE, L"%s.dmp", stem);
@@ -905,18 +919,29 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
     job.written = FALSE;
     job.fromSnapshot = FALSE;
     job.error = 0;
+    // dbghelp is single-threaded: held by this thread for the dump thread's whole run, and bounded, as a hang dump that
+    // never finishes must not keep the process alive.
+    if (!DbgHelpLock(kDbgHelpWaitMs)) {
+        Log(L"Crash report: no dump, dbghelp stayed busy for %u s (a stack walk or another dump in progress)", kDbgHelpWaitMs / 1000);
+        return;
+    }
     // Logged before the dump: a timed-out dump may leave a thread suspended inside the heap lock, so nothing after a
     // timeout may allocate, and this line is then the only trace.
     Log(L"Crash report: writing dump %s", path);
     DWORD started = GetTickCount();
     HANDLE hThread = CreateThread(NULL, 0, WriteDumpThread, &job, 0, NULL);
     if (!hThread) {
+        DbgHelpUnlock();
         Log(L"Crash report: no dump, CreateThread failed (%u)", GetLastError());
         return;
     }
+    // Published as the timed wait below begins, so the second thread's deadline and this one's match.
+    g_crashDumpEnd = GetTickCount() + kDumpTimeoutMs;
+    InterlockedExchange(&g_crashDumpStarted, 1);
     if (WaitForSingleObject(hThread, kDumpTimeoutMs) != WAIT_OBJECT_0)
         TerminateProcess(GetCurrentProcess(), 0);
     CloseHandle(hThread);
+    DbgHelpUnlock();
     const wchar_t* source = job.fromSnapshot ? L"a snapshot" : L"the live process";
     if (job.written)
         Log(L"Crash report: dump %s written from %s in %u ms", path, source, GetTickCount() - started);
@@ -927,6 +952,8 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
 } // namespace
 
 char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
+    // A halting thread stops ticking while it writes its own report: the hang watch stands down first.
+    HangQuiesce();
     GetStackWalk();
     Log(L"Crash File: %hs\n", crash_file);
     // A Halt raises no exception, so Windows writes no dump of it: this one is the only record of the game's state.
@@ -942,6 +969,8 @@ char __fastcall ErrorReportLaunch(const char* crash_file, int a2) {
 // info in ECX (+0x18 = the EXCEPTION_POINTERS). Returning 0 makes that filter answer EXCEPTION_CONTINUE_SEARCH, so
 // Windows Error Reporting gets the real exception.
 DWORD __fastcall FogCrash_Intercept(BYTE* crashInfo, DWORD) {
+    // A crashing thread stops ticking while it writes its own report; one interlocked store, safe even on a stack overflow.
+    HangQuiesce();
     EXCEPTION_POINTERS* ptrs = *(EXCEPTION_POINTERS**)(crashInfo + 0x18);
     // A stack overflow leaves this thread about a page of stack, too little for the stack walk and the report, which
     // would fault again; Windows Error Reporting still gets the exception.

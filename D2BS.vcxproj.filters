@@ -205,6 +205,7 @@
       <Filter>Spidermonkey Engine\Core\JS</Filter>
     </ClCompile>
     <ClCompile Include="StackWalker.cpp" />
+    <ClCompile Include="HangReport.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="D2BS.h">
@@ -470,6 +471,7 @@
       <Filter>Spidermonkey Engine\Core\API</Filter>
     </ClInclude>
     <ClInclude Include="StackWalker.h" />
+    <ClInclude Include="HangReport.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="dependencies\include\jsproto.tbl">

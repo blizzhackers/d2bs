@@ -9,6 +9,7 @@
 #include "Helpers.h"
 #include "ScriptEngine.h"
 #include "D2BS.h"
+#include "HangReport.h"
 
 using namespace std;
 
@@ -479,7 +480,9 @@ DWORD WINAPI ScriptThread(void* data) {
 #ifdef DEBUG
         SetThreadName(0xFFFFFFFF, script->GetShortFilename());
 #endif
+        HangNameThread(script->GetShortFilename());
         script->Run();
+        HangForgetThread();
         if (Vars.bDisableCache)
             ScriptEngine::DisposeScript(script);
     }

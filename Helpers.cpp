@@ -10,6 +10,7 @@
 #include "DbgHelp.h"
 #include "Profile.h"
 #include "StackWalker.h"
+#include "HangReport.h"
 #include <tlhelp32.h>
 #include <wctype.h>
 
@@ -117,7 +118,7 @@ bool SwitchToProfile(const wchar_t* profile) {
 void InitSettings(void) {
     wchar_t fname[_MAX_FNAME + _MAX_PATH], scriptPath[_MAX_PATH], defaultStarter[_MAX_FNAME], defaultGame[_MAX_FNAME], defaultConsole[_MAX_FNAME], hosts[256],
         debug[6], quitOnHostile[6], quitOnError[6], maxGameTime[6], gameTimeout[6], startAtMenu[6], disableCache[6], memUsage[6], gamePrint[6], useProfilePath[6],
-        logConsole[6], enableUnsupported[6], forwardMessageBox[6], haltDumps[6], consoleFont[6];
+        logConsole[6], enableUnsupported[6], forwardMessageBox[6], haltDumps[6], hangReport[6], consoleFont[6];
 
     swprintf_s(fname, _countof(fname), L"%sd2bs.ini", Vars.szPath);
 
@@ -140,6 +141,7 @@ void InitSettings(void) {
     GetPrivateProfileStringW(L"settings", L"EnableUnsupported", L"false", enableUnsupported, 6, fname);
     GetPrivateProfileStringW(L"settings", L"ForwardMessageBox", L"false", forwardMessageBox, 6, fname);
     GetPrivateProfileStringW(L"settings", L"HaltDumps", L"false", haltDumps, 6, fname);
+    GetPrivateProfileStringW(L"settings", L"HangReportSeconds", L"5", hangReport, 6, fname);
     GetPrivateProfileStringW(L"settings", L"ConsoleFont", L"0", consoleFont, 6, fname);
     swprintf_s(Vars.szScriptPath, _MAX_PATH, L"%s%s", Vars.szPath, scriptPath);
     wcscpy_s(Vars.szStarter, _MAX_FNAME, defaultStarter);
@@ -164,6 +166,9 @@ void InitSettings(void) {
     Vars.bEnableUnsupported = StringToBool(enableUnsupported);
     Vars.bForwardMessageBox = StringToBool(forwardMessageBox);
     Vars.bHaltDumps = StringToBool(haltDumps);
+    // Windows marks a window hung only after 5 s without a message loop pass, so a shorter wait means 5.
+    int hangSeconds = _wtoi(hangReport);
+    Vars.dwHangReportMs = hangSeconds <= 0 ? 0 : (hangSeconds < 5 ? 5 : hangSeconds > 60 ? 60 : hangSeconds) * 1000;
     Vars.dwMemUsage = abs(_wtoi(memUsage));
     Vars.dwConsoleFont = abs(_wtoi(consoleFont));
     if (Vars.dwMemUsage < 1)
@@ -405,6 +410,8 @@ char* DllLoadAddrStrs() {
 }
 
 LONG WINAPI ExceptionHandler(EXCEPTION_POINTERS* ptrs) {
+    // First, as in FogCrash_Intercept: when D2BS is injected after Fog set its filter, crashes come here directly.
+    HangQuiesce();
     GetStackWalk();
 
     EXCEPTION_RECORD* rec = ptrs->ExceptionRecord;
@@ -498,7 +505,58 @@ void InitCommandLine() {
     memcpy(line, cline, sizeof(LPWSTR) * wcslen(cline));
 }
 
+namespace {
+// The owning thread, or 0. A plain interlocked word rather than a CRITICAL_SECTION: it needs no initialization, so a crash
+// before Startup can still take it, and the wait can be bounded.
+volatile LONG g_dbgHelpOwner = 0;
+LONG g_dbgHelpDepth = 0;
+// Threads already waiting: a newcomer joins them instead of taking a just-released lock, so a script calling stacktrace()
+// in a loop can't keep a dump out by re-taking it at once. Waiters then race each other, with no queue order.
+volatile LONG g_dbgHelpWaiters = 0;
+
+struct DbgHelpHold {
+    ~DbgHelpHold() {
+        DbgHelpUnlock();
+    }
+};
+} // namespace
+
+bool DbgHelpLock(DWORD maxMs) {
+    LONG self = (LONG)GetCurrentThreadId();
+    if (g_dbgHelpOwner == self) {
+        g_dbgHelpDepth++;
+        return true;
+    }
+    if (!g_dbgHelpWaiters && InterlockedCompareExchange(&g_dbgHelpOwner, self, 0) == 0) {
+        g_dbgHelpDepth = 1;
+        return true;
+    }
+    InterlockedIncrement(&g_dbgHelpWaiters);
+    bool got = false;
+    // Elapsed time, not a count of sleeps: at the default timer resolution Sleep(10) lasts about 15.6 ms.
+    DWORD started = GetTickCount();
+    while (!got && GetTickCount() - started < maxMs) {
+        Sleep(10);
+        got = InterlockedCompareExchange(&g_dbgHelpOwner, self, 0) == 0;
+    }
+    InterlockedDecrement(&g_dbgHelpWaiters);
+    if (got)
+        g_dbgHelpDepth = 1;
+    return got;
+}
+
+void DbgHelpUnlock(void) {
+    if (g_dbgHelpOwner == (LONG)GetCurrentThreadId() && --g_dbgHelpDepth == 0)
+        InterlockedExchange(&g_dbgHelpOwner, 0);
+}
+
 bool GetStackWalk() {
+    // Bounded: a crash report must not wait for good on a dump or another walk that never finishes.
+    if (!DbgHelpLock(10000)) {
+        Log(L"Stack walk skipped: dbghelp stayed busy for 10 s (another stack walk or a dump in progress)");
+        return false;
+    }
+    DbgHelpHold hold; // released after the walker's destructor below, which still calls dbghelp
     std::vector<DWORD> threadIds = GetThreadIds();
     DWORD current = GetCurrentThreadId();
 

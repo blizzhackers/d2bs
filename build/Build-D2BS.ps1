@@ -141,7 +141,7 @@ try {
     ($defines | ForEach-Object { "/D$_" })
   $sources = 'CommandLine.cpp', 'D2BS.cpp', 'D2Helpers.cpp', 'D2Intercepts.cpp', 'RevisionTempPath.cpp', 'D2Handlers.cpp', 'D2NetHandlers.cpp',
     'Console.cpp', 'Events.cpp', 'Helpers.cpp', 'js32.cpp', 'JSProfile.cpp', 'JSSocket.cpp', 'Offset.cpp', 'Profile.cpp',
-    'sqlite3.c', 'StackWalker.cpp', 'stringhash.cpp', 'Control.cpp', 'Core.cpp', 'dde.cpp', 'File.cpp', 'Game.cpp',
+    'sqlite3.c', 'StackWalker.cpp', 'HangReport.cpp', 'stringhash.cpp', 'Control.cpp', 'Core.cpp', 'dde.cpp', 'File.cpp', 'Game.cpp',
     'Hash.cpp', 'MPQStats.cpp', 'Room.cpp', 'ScreenHook.cpp', 'Unit.cpp', 'JSArea.cpp', 'JSControl.cpp', 'JSCore.cpp',
     'JSDirectory.cpp', 'JSExits.cpp', 'JSFile.cpp', 'JSFileTools.cpp', 'JSGame.cpp', 'JSGlobalClasses.cpp', 'JSHash.cpp',
     'JSMenu.cpp', 'JSParty.cpp', 'JSPresetUnit.cpp', 'JSRoom.cpp', 'JSSandbox.cpp', 'JSScreenHook.cpp', 'JSScript.cpp',

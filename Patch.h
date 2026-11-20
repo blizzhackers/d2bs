@@ -13,6 +13,13 @@ static const BYTE StormStreamCheckOld[] = {0x83, 0x7E, 0x28, 0x00, 0x74, 0x38, 0
 static_assert(sizeof(StormStreamCheckOld) == 0x41A736 - 0x41A725, "StormStreamUpdate_Intercept returns to 0x41A736, the end of these bytes");
 static const CallSwap StormStreamCheck = {StormStreamCheckOld, (DWORD)StormStreamUpdate_Intercept};
 
+// The two calls that free an NPC's message list, see ClearNpcSpeechCallback: the NPC close's (0x4B3C20) and the game
+// exit's (0x456D80).
+static const BYTE EndNpcSpeechCallOld[] = {0xE8, 0x69, 0xDA, 0xFE, 0xFF};    // call 0x4A1730
+static const BYTE FreeSpeechPanelCallOld[] = {0xE8, 0x72, 0x98, 0x04, 0x00}; // call 0x4A0680
+static const CallSwap EndNpcSpeechCall = {EndNpcSpeechCallOld, (DWORD)EndNpcSpeech_Intercept};
+static const CallSwap FreeSpeechPanelCall = {FreeSpeechPanelCallOld, (DWORD)FreeSpeechPanel_Intercept};
+
 PatchHook Patches[] = {
     {PatchCall, GetDllOffset("D2Client.dll", 0x7C89D), (DWORD)GameInput_Intercept, 5},          // Updated 1.14d //0047C89D-BASE
     {PatchJmp, GetDllOffset("D2Client.dll", 0x53B30), (DWORD)GameDraw_Intercept, 5},            // Updated 1.14d //00453B30-BASE
@@ -27,6 +34,8 @@ PatchHook Patches[] = {
     {PatchJmp, GetDllOffset("D2Client.dll", 0x567EB), (DWORD)GameActChange2_Intercept, 5},      // Updated 1.14d //004567EB-BASE
     {PatchCall, GetDllOffset("D2Client.dll", 0x4F57C), (DWORD)GameLeave_Intercept, 5},          // Updated 1.14d //0044F57C-BASE
     {PatchCall, GetDllOffset("D2Client.dll", 0x61704), (DWORD)GameAttack_Intercept, 5},         // Updated 1.14d //00461704-BASE
+    {PatchSwapCall, GetDllOffset("D2Client.dll", 0xB3CC2), (DWORD)&EndNpcSpeechCall, 5},        // NEW 1.14d //004B3CC2-BASE
+    {PatchSwapCall, GetDllOffset("D2Client.dll", 0x56E09), (DWORD)&FreeSpeechPanelCall, 5},     // NEW 1.14d //00456E09-BASE
     //	{PatchCall,	GetDllOffset("D2Client.dll", 0xA7364),	(DWORD)AddUnit_Intercept,				5},
     //	{PatchCall,	GetDllOffset("D2Client.dll", 0xA6F25),	(DWORD)RemoveUnit_Interept,			9},
 

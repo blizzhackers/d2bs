@@ -25,4 +25,5 @@ void HangEngineStarted(void);
 void HangQuiesce(void);
 // Names the calling thread in hang reports; the name is copied.
 void HangNameThread(const wchar_t* name);
+// Drops the calling thread's name; called before the thread exits, as a later thread that reuses its id would inherit it.
 void HangForgetThread(void);

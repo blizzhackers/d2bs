@@ -5,6 +5,7 @@
 #include <shlwapi.h>
 #include "RevisionTempPath.h"
 #include "HangReport.h"
+#include "D2Intercepts.h"
 
 DWORD WINAPI RevisionTempPath_Intercept(DWORD bufferLength, LPSTR buffer) {
     DWORD length = GetRevisionTempPath(bufferLength, buffer);
@@ -682,7 +683,6 @@ const MINIDUMP_TYPE kCrashDumpType =
                     MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules | MiniDumpIgnoreInaccessibleMemory);
 const DWORD kCrashDumpsKept = 5;        // a dump is a few hundred MB, and every profile writes to the same logs folder
 const DWORD kPacketLogsKept = 50;
-const ULONGLONG kDumpMinFreeBytes = 2ULL << 30;
 const DWORD kDumpTimeoutMs = 60000;
 const DWORD kDbgHelpWaitMs = 10000; // the dump's wait for dbghelp (DbgHelpLock), before kDumpTimeoutMs starts
 
@@ -867,7 +867,7 @@ void WriteCrashReport(const char* reason, const char* detail, bool withDump) {
         return;
     }
     if (freeBytes.QuadPart < kDumpMinFreeBytes) {
-        Log(L"Crash report: no dump, less than 2 GB free in %s", Vars.szLogPath);
+        Log(L"Crash report: no dump, less than %u GB free in %s", (DWORD)(kDumpMinFreeBytes >> 30), Vars.szLogPath);
         return;
     }
     _snwprintf_s(path, _countof(path), _TRUNCATE, L"%s.dmp", stem);

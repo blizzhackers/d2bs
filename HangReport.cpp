@@ -38,7 +38,6 @@ const int kOtherFrames = 16;
 const DWORD kHangPacketLogsKept = 20;
 const DWORD kHangDumpsKept = 2;
 const DWORD kHangDumpCode = 0xE0D20002;
-const ULONGLONG kDumpMinFreeBytes = 2ULL << 30;
 
 const MINIDUMP_TYPE kHangDumpType =
     (MINIDUMP_TYPE)(MiniDumpWithPrivateReadWriteMemory | MiniDumpWithDataSegs | MiniDumpWithFullMemoryInfo | MiniDumpWithThreadInfo |
@@ -931,7 +930,7 @@ void WriteHangDump(void) {
         }
         if (freeBytes.QuadPart < kDumpMinFreeBytes) {
             ReleaseDumpJob(job);
-            Line(w, true, "Hang report %d: no dump, less than 2 GB free in the logs folder", job.episode);
+            Line(w, true, "Hang report %d: no dump, less than %u GB free in the logs folder", job.episode, (DWORD)(kDumpMinFreeBytes >> 30));
             return;
         }
         SnapshotGameContext(job);

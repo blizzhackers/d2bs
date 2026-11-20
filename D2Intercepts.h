@@ -36,7 +36,7 @@ int WINAPI LogMessageBoxA_Intercept(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, 
 DWORD __fastcall FogCrash_Intercept(BYTE* crashInfo, DWORD);
 // The logs-folder file stem of a crash or hang report: <logs><prefix><profile>-<time>-<pid>.
 bool CrashReportStem(wchar_t* stem, size_t len, const wchar_t* prefix);
-// Deletes the oldest logs-folder files matching pattern until at most keep remain.
+// Deletes the oldest logs-folder files matching pattern until at most keep remain, passing over up to 8 it can't delete.
 void PruneCrashFiles(const wchar_t* pattern, DWORD keep);
 
 #endif

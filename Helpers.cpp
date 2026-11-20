@@ -10,6 +10,7 @@
 #include "DbgHelp.h"
 #include "Profile.h"
 #include "StackWalker.h"
+#include "HangReport.h"
 #include <tlhelp32.h>
 #include <wctype.h>
 
@@ -409,6 +410,8 @@ char* DllLoadAddrStrs() {
 }
 
 LONG WINAPI ExceptionHandler(EXCEPTION_POINTERS* ptrs) {
+    // First, as in FogCrash_Intercept: when D2BS is injected after Fog set its filter, crashes come here directly.
+    HangQuiesce();
     GetStackWalk();
 
     EXCEPTION_RECORD* rec = ptrs->ExceptionRecord;
@@ -507,7 +510,8 @@ namespace {
 // before Startup can still take it, and the wait can be bounded.
 volatile LONG g_dbgHelpOwner = 0;
 LONG g_dbgHelpDepth = 0;
-// Threads already waiting: a newcomer yields to them, so a script calling stacktrace() in a loop can't starve a dump.
+// Threads already waiting: a newcomer joins them instead of taking a just-released lock, so a script calling stacktrace()
+// in a loop can't keep a dump out by re-taking it at once. Waiters then race each other, with no queue order.
 volatile LONG g_dbgHelpWaiters = 0;
 
 struct DbgHelpHold {
@@ -529,7 +533,9 @@ bool DbgHelpLock(DWORD maxMs) {
     }
     InterlockedIncrement(&g_dbgHelpWaiters);
     bool got = false;
-    for (DWORD waited = 0; !got && waited <= maxMs; waited += 10) {
+    // Elapsed time, not a count of sleeps: at the default timer resolution Sleep(10) lasts about 15.6 ms.
+    DWORD started = GetTickCount();
+    while (!got && GetTickCount() - started < maxMs) {
         Sleep(10);
         got = InterlockedCompareExchange(&g_dbgHelpOwner, self, 0) == 0;
     }
@@ -545,9 +551,9 @@ void DbgHelpUnlock(void) {
 }
 
 bool GetStackWalk() {
-    // Bounded: a crash report must not wait for good on a hang dump that never finishes.
+    // Bounded: a crash report must not wait for good on a dump or another walk that never finishes.
     if (!DbgHelpLock(10000)) {
-        Log(L"Stack walk skipped: dbghelp stayed busy for 10 s (a hang dump in progress)");
+        Log(L"Stack walk skipped: dbghelp stayed busy for 10 s (another stack walk or a dump in progress)");
         return false;
     }
     DbgHelpHold hold; // released after the walker's destructor below, which still calls dbghelp

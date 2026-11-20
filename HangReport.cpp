@@ -53,6 +53,34 @@ const DWORD kHangSnapshotFlags = 0x00000001 /* PSS_CAPTURE_VA_CLONE */ | 0x00000
 const int kIsProcessSnapshotCallback = 16;
 typedef DWORD(WINAPI* PssCaptureSnapshotFn)(HANDLE process, DWORD flags, DWORD threadContextFlags, HANDLE* snapshot);
 typedef DWORD(WINAPI* PssFreeSnapshotFn)(HANDLE process, HANDLE snapshot);
+typedef DWORD(WINAPI* PssWalkMarkerCreateFn)(void* allocator, HANDLE* marker);
+typedef DWORD(WINAPI* PssWalkMarkerFreeFn)(HANDLE marker);
+typedef DWORD(WINAPI* PssWalkSnapshotFn)(HANDLE snapshot, int infoClass, HANDLE marker, void* buffer, DWORD bufferLength);
+const int kPssWalkThreads = 3; // PSS_WALK_THREADS
+
+// PSS_THREAD_ENTRY (processsnapshot.h, Windows 8.1), x86
+struct PssThreadEntry {
+    DWORD exitStatus;
+    void* teb;
+    DWORD processId;
+    DWORD threadId;
+    ULONG_PTR affinityMask;
+    int priority;
+    int basePriority;
+    void* lastSyscallFirstArgument;
+    WORD lastSyscallNumber;
+    FILETIME createTime;
+    FILETIME exitTime;
+    FILETIME kernelTime;
+    FILETIME userTime;
+    void* win32StartAddress;
+    FILETIME captureTime;
+    DWORD flags;
+    WORD suspendCount;
+    WORD sizeOfContextRecord;
+    CONTEXT* contextRecord;
+};
+static_assert(sizeof(PssThreadEntry) == 92, "PSS_THREAD_ENTRY is 92 bytes on x86");
 typedef LONG(NTAPI* NtQueryVirtualMemoryFn)(HANDLE process, PVOID address, int infoClass, PVOID info, SIZE_T length, SIZE_T* returned);
 typedef LONG(NTAPI* NtQueryInformationThreadFn)(HANDLE thread, int infoClass, PVOID info, ULONG length, PULONG returned);
 
@@ -104,6 +132,7 @@ struct NameSlot {
 struct Capture {
     BOOL held;
     BOOL ctxOk;
+    LONG ticksDone; // g_ticksDone while the thread was held
     DWORD prevSuspend;
     DWORD err;
     DWORD got;
@@ -114,6 +143,7 @@ struct Capture {
 struct Writer {
     char buf[16384];
     int len;
+    int lost; // flushes that did not reach the log, since the report reset it
     char line[1100];
     wchar_t path[MAX_PATH * 2];
     wchar_t ntPath[MAX_PATH * 2 + 8];
@@ -124,16 +154,24 @@ struct DumpJob {
     wchar_t partial[MAX_PATH + 16];
     int episode;
     DWORD gameTid;
-    BOOL hasCtx; // false when the game thread's registers could not be read: the dump then has no exception context
+    // The game thread's registers as the snapshot holds them, so they match the dumped stack; false when the snapshot
+    // walk could not find them, and the dump then has no exception context.
+    BOOL hasCtx;
+    LONG ticks; // the game thread's tick count during this episode's stall
     HANDLE snapshot;
+    HANDLE marker;
     HANDLE file;
     CONTEXT ctx;
     EXCEPTION_RECORD rec;
 };
 
 volatile LONG g_ticks = 0;
+volatile LONG g_ticksDone = 0; // g_ticks once that tick's resume time is stored
+LONG g_episodeTicks = 0;       // the watchdog's: g_ticks during the open episode's stall
 volatile DWORD g_tickTime = 0;
-volatile DWORD g_resumeTime = 0; // the first tick after a gap: when a stall ended, even while a report was being written
+// The first tick after a gap inside the open episode: when a stall ended, even while a report was being written.
+volatile DWORD g_resumeTime = 0;
+volatile DWORD g_openTick = 0; // the open episode's last tick before the stall
 volatile LONG g_tickState = 0;
 HWND volatile g_hwnd = NULL;
 volatile DWORD g_gameTid = 0;
@@ -156,6 +194,9 @@ volatile DWORD g_dumpTid = 0;
 
 PssCaptureSnapshotFn g_pssCapture = NULL;
 PssFreeSnapshotFn g_pssFree = NULL;
+PssWalkMarkerCreateFn g_pssMarkerCreate = NULL;
+PssWalkMarkerFreeFn g_pssMarkerFree = NULL;
+PssWalkSnapshotFn g_pssWalk = NULL;
 NtQueryVirtualMemoryFn g_ntQueryVirtualMemory = NULL;
 NtQueryInformationThreadFn g_ntQueryInformationThread = NULL;
 NtCreateFileFn g_ntCreateFile = NULL;
@@ -163,6 +204,12 @@ NtCreateFileFn g_ntCreateFile = NULL;
 char g_version[64];
 LockRef g_locks[kMaxLocks];
 int g_lockCount = 0;
+int g_gameLock = -1;
+int g_loaderLock = -1;
+bool g_oldLockCount = false; // Windows 2000, XP and Server 2003 RTM count a critical section's LockCount up from -1
+// Vars.szLogPath normalized once at startup: NtCreateFile takes no "\\", "." or ".." parts, which a DLL in a drive root
+// ("C:\\logs\") or an odd loader path would leave in it.
+wchar_t g_logDir[MAX_PATH * 2];
 LockState g_lockStates[kMaxLocks];
 ModuleInfo g_mods[kMaxModules];
 int g_modCount = 0;
@@ -172,10 +219,12 @@ BYTE g_gameStack[65536];
 BYTE g_otherStack[16384];
 __declspec(align(8)) BYTE g_mappedName[1024];
 Capture g_gameCap;
+BOOL g_capWindowHung = TRUE; // IsHungAppWindow just after g_gameCap was taken
 Capture g_otherCap;
 Writer g_w;      // the watchdog's
 Writer g_dumpW;  // the dump helper's
 DumpJob g_dumpJob;
+int g_episodeDumpLost = 0; // the watchdog's: this episode's dump job lost a log write
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Output, CRT-free: wvsprintfA formats into the caller's buffer, and the log is opened and closed with each flush.
@@ -190,18 +239,18 @@ void BuildLogPath(wchar_t* out) {
         profile[n] = Vars.szProfile[n];
     profile[n] = L'\0';
     // The same file LogNoFormat appends to; a path too long for the buffer leaves it empty.
-    if (lstrlenW(Vars.szLogPath) + n + 24 >= MAX_PATH * 2) {
+    if (!g_logDir[0] || lstrlenW(g_logDir) + n + 24 >= MAX_PATH * 2) {
         out[0] = L'\0';
         return;
     }
-    wsprintfW(out, L"%sd2bs-%s-%04u%02u%02u.log", Vars.szLogPath, profile, t.wYear, t.wMonth, t.wDay);
+    wsprintfW(out, L"%sd2bs-%s-%04u%02u%02u.log", g_logDir, profile, t.wYear, t.wMonth, t.wDay);
 }
 
 // The NT form of an absolute DOS path, or false for a form this does not convert.
 bool NtPath(const wchar_t* dos, wchar_t* out, int cap) {
     const wchar_t* prefix;
     const wchar_t* rest;
-    if (dos[0] == L'\\' && dos[1] == L'\\' && dos[2] == L'?' && dos[3] == L'\\') {
+    if (dos[0] == L'\\' && dos[1] == L'\\' && (dos[2] == L'?' || dos[2] == L'.') && dos[3] == L'\\') {
         prefix = L"\\??\\";
         rest = dos + 4;
     } else if (dos[0] == L'\\' && dos[1] == L'\\') {
@@ -220,7 +269,7 @@ bool NtPath(const wchar_t* dos, wchar_t* out, int cap) {
 }
 
 // NtCreateFile when the path converts: CreateFileW builds its NT path on the process heap, which the stuck thread may
-// hold for good.
+// hold for good, so it is used only for a path NtPath can't convert, never as a retry of a failed NtCreateFile.
 HANDLE OpenLogAppend(Writer& w) {
     if (g_ntCreateFile && NtPath(w.path, w.ntPath, _countof(w.ntPath))) {
         NtString name;
@@ -234,6 +283,7 @@ HANDLE OpenLogAppend(Writer& w) {
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 3 /* FILE_OPEN_IF */,
                            0x20 /* FILE_SYNCHRONOUS_IO_NONALERT */ | 0x40 /* FILE_NON_DIRECTORY_FILE */, NULL, 0) >= 0)
             return h;
+        return INVALID_HANDLE_VALUE;
     }
     return CreateFileW(w.path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL,
                        NULL);
@@ -243,14 +293,17 @@ void Flush(Writer& w) {
     if (!w.len)
         return;
     BuildLogPath(w.path);
+    bool ok = false;
     if (w.path[0]) {
         HANDLE h = OpenLogAppend(w);
         if (h != INVALID_HANDLE_VALUE) {
-            DWORD written;
-            WriteFile(h, w.buf, (DWORD)w.len, &written, NULL);
+            DWORD written = 0;
+            ok = WriteFile(h, w.buf, (DWORD)w.len, &written, NULL) && written == (DWORD)w.len;
             CloseHandle(h);
         }
     }
+    if (!ok)
+        w.lost++;
     w.len = 0;
 }
 
@@ -279,10 +332,36 @@ void Line(Writer& w, bool prefixed, const char* fmt, ...) {
     w.len += n;
 }
 
+// UTF-8, as LogNoFormat writes the log (UnicodeToAnsi's default), encoded here rather than by an API so the text path
+// stays call-free. A character that doesn't fit whole is dropped with the rest; an unpaired surrogate becomes '?'.
 void Narrow(char* out, int cap, const wchar_t* in, int inLen) {
     int n = 0;
-    for (int i = 0; (inLen < 0 || i < inLen) && in[i] && n < cap - 1; i++)
-        out[n++] = in[i] < 0x80 ? (char)in[i] : '?';
+    for (int i = 0; (inLen < 0 || i < inLen) && in[i]; i++) {
+        unsigned int c = in[i];
+        if (c >= 0xD800 && c <= 0xDBFF && (inLen < 0 || i + 1 < inLen) && in[i + 1] >= 0xDC00 && in[i + 1] <= 0xDFFF) {
+            c = 0x10000 + ((c - 0xD800) << 10) + (in[i + 1] - 0xDC00);
+            i++;
+        } else if (c >= 0xD800 && c <= 0xDFFF)
+            c = '?';
+        int len = c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+        if (n + len > cap - 1)
+            break;
+        if (len == 1)
+            out[n++] = (char)c;
+        else if (len == 2) {
+            out[n++] = (char)(0xC0 | (c >> 6));
+            out[n++] = (char)(0x80 | (c & 0x3F));
+        } else if (len == 3) {
+            out[n++] = (char)(0xE0 | (c >> 12));
+            out[n++] = (char)(0x80 | ((c >> 6) & 0x3F));
+            out[n++] = (char)(0x80 | (c & 0x3F));
+        } else {
+            out[n++] = (char)(0xF0 | (c >> 18));
+            out[n++] = (char)(0x80 | ((c >> 12) & 0x3F));
+            out[n++] = (char)(0x80 | ((c >> 6) & 0x3F));
+            out[n++] = (char)(0x80 | (c & 0x3F));
+        }
+    }
     out[n] = '\0';
 }
 
@@ -315,8 +394,9 @@ void MappedName(DWORD base, char* out, int cap) {
     Narrow(out, cap, name, len - (int)(name - s->Buffer));
 }
 
-// Every image in the address space, found by walking it: the loader's own module list needs the loader lock. An image
-// ends where the kernel's regions of its allocation end, not at its header's SizeOfImage, which the module can rewrite.
+// The images in the address space (the first kMaxModules), found by walking it: the loader's own module list needs the
+// loader lock. An image ends where the kernel's regions of its allocation end, not at its header's SizeOfImage, which
+// the module can rewrite.
 void BuildModules(void) {
     g_modCount = 0;
     SYSTEM_INFO si;
@@ -365,11 +445,20 @@ void ModOff(char* out, DWORD address) {
         wsprintfA(out, "%s+0x%X", g_mods[i].name, address - g_mods[i].base);
 }
 
+// True when the byte before address is executable code: a pointer into a module's data is no return address, however its
+// bytes read.
+bool ExecutableBefore(DWORD address) {
+    MEMORY_BASIC_INFORMATION m;
+    const DWORD exec = PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+    return VirtualQuery((LPCVOID)(ULONG_PTR)(address - 1), &m, sizeof(m)) && m.State == MEM_COMMIT && (m.Protect & exec) &&
+           !(m.Protect & PAGE_GUARD);
+}
+
 // 1 for a direct call (target set), 2 for an indirect one, 0 when the bytes before address are no call: a return
 // address on the stack follows the call that pushed it.
 int LooksLikeCall(DWORD address, DWORD* target) {
     BYTE b[7];
-    if (address < 7 || !ReadMem(address - 7, b, sizeof(b)))
+    if (address < 7 || !ExecutableBefore(address) || !ReadMem(address - 7, b, sizeof(b)))
         return 0;
     if (b[2] == 0xE8) {
         *target = address + *(LONG*)&b[3];
@@ -390,16 +479,32 @@ int LooksLikeCall(DWORD address, DWORD* target) {
     return 0;
 }
 
+const ULONGLONG kCpuUnknown = ~0ULL;
+
+// The thread's kernel + user time in ms, or kCpuUnknown.
 ULONGLONG ThreadCpuMs(HANDLE h) {
     FILETIME created, exited, kernel, user;
     if (!h || !GetThreadTimes(h, &created, &exited, &kernel, &user))
-        return 0;
+        return kCpuUnknown;
     ULARGE_INTEGER k, u;
     k.LowPart = kernel.dwLowDateTime;
     k.HighPart = kernel.dwHighDateTime;
     u.LowPart = user.dwLowDateTime;
     u.HighPart = user.dwHighDateTime;
     return (k.QuadPart + u.QuadPart) / 10000;
+}
+
+// CPU used between two samples, or kCpuUnknown when either is.
+ULONGLONG CpuDelta(ULONGLONG from, ULONGLONG to) {
+    return from == kCpuUnknown || to == kCpuUnknown || to < from ? kCpuUnknown : to - from;
+}
+
+// CPU seconds as "12.3", "?" when unknown; whole seconds go through a DWORD (136 years).
+void SecsCpu(char* out, ULONGLONG ms) {
+    if (ms == kCpuUnknown)
+        lstrcpyA(out, "?");
+    else
+        wsprintfA(out, "%u.%u", (DWORD)(ms / 1000), (DWORD)((ms % 1000) / 100));
 }
 
 void ReadLocks(void) {
@@ -413,19 +518,40 @@ void ReadLocks(void) {
     }
 }
 
+// Two LockCount encodings: from Windows Server 2003 SP1 on, bit 0 clear = locked and waiters in the bits above it; on
+// 2000, XP and Server 2003 RTM, -1 = free and each Enter, the owner's recursive ones included, adds one.
 bool LockHeld(const LockState& st) {
-    return st.read && st.owner != 0 && !(st.lockCount & 1);
+    if (!st.read || st.owner == 0)
+        return false;
+    return g_oldLockCount ? st.lockCount >= 0 : !(st.lockCount & 1);
 }
 
 LONG LockWaiters(const LockState& st) {
-    return LockHeld(st) ? ((-1) - st.lockCount) >> 2 : 0;
+    if (!LockHeld(st))
+        return 0;
+    if (g_oldLockCount) {
+        LONG waiters = st.lockCount - (st.recursion - 1);
+        return waiters > 0 ? waiters : 0;
+    }
+    return ((-1) - st.lockCount) >> 2;
 }
 
-int FindLock(const char* name) {
-    for (int i = 0; i < g_lockCount; i++)
-        if (lstrcmpA(g_locks[i].name, name) == 0)
-            return i;
-    return -1;
+struct ThreadBasicInfo { // THREAD_BASIC_INFORMATION, x86
+    LONG exitStatus;
+    PVOID teb;
+    HANDLE process; // CLIENT_ID.UniqueProcess
+    HANDLE thread;
+    ULONG_PTR affinity;
+    LONG priority;
+    LONG basePriority;
+};
+
+// False when the owner can't be read too: a thread that isn't provably this process's is never suspended.
+bool ThreadInThisProcess(HANDLE h) {
+    ThreadBasicInfo tbi;
+    if (!g_ntQueryInformationThread || g_ntQueryInformationThread(h, 0 /* ThreadBasicInformation */, &tbi, sizeof(tbi), NULL) < 0)
+        return false;
+    return (DWORD)(ULONG_PTR)tbi.process == GetCurrentProcessId();
 }
 
 // "game", a registered name, or the thread's start address.
@@ -477,10 +603,15 @@ void CaptureThread(HANDLE h, Capture* c, BYTE* buf, DWORD cap) {
     c->prevSuspend = prev;
     __try {
         c->ctx.ContextFlags = CONTEXT_FULL;
-        if (GetThreadContext(h, &c->ctx)) { // also waits for the suspend to take effect
+        BOOL ctxOk = GetThreadContext(h, &c->ctx); // also waits for the suspend to take effect
+        c->ticksDone = g_ticksDone;                 // so this count is the one its registers belong to
+        if (ctxOk) {
             c->ctxOk = TRUE;
             MEMORY_BASIC_INFORMATION m;
-            if (VirtualQuery((LPCVOID)(ULONG_PTR)c->ctx.Esp, &m, sizeof(m)) && m.State == MEM_COMMIT) {
+            // Never a guard page: reading one would consume the thread's stack-growth guard, and its next growth would
+            // fault.
+            if (VirtualQuery((LPCVOID)(ULONG_PTR)c->ctx.Esp, &m, sizeof(m)) && m.State == MEM_COMMIT &&
+                !(m.Protect & (PAGE_GUARD | PAGE_NOACCESS))) {
                 DWORD top = (DWORD)(ULONG_PTR)m.BaseAddress + (DWORD)m.RegionSize;
                 DWORD n = top - c->ctx.Esp;
                 if (n > cap)
@@ -533,15 +664,14 @@ void Frames(Writer& w, const Capture& c, const BYTE* buf, int maxFrames) {
         frames++;
     }
     if (!frames)
-        Line(w, false, "no return addresses in the %u bytes copied", c.got);
+        Line(w, false, "no return addresses recognized in the %u bytes copied", c.got);
 }
 
 void ThreadBlock(Writer& w, int n, DWORD tid, HANDLE h, const Capture& c, const BYTE* buf, int maxFrames) {
     char label[112];
     Label(label, sizeof(label), tid);
-    ULONGLONG cpu = ThreadCpuMs(h);
     char cpuText[24];
-    Secs(cpuText, (DWORD)cpu);
+    SecsCpu(cpuText, ThreadCpuMs(h));
     if (!c.held) {
         Line(w, true, "Hang report %d: thread %u (%s) could not be held (error %u)", n, tid, label, c.err);
         return;
@@ -573,48 +703,79 @@ const char* StateText(LONG state) {
     }
 }
 
+// A completed tick past the stall's count: the episode's end, as the watchdog reads it. A tick still inside HangTick
+// does not count, as its thread may be stuck there.
+bool RanSince(LONG done, LONG stallTicks) {
+    return done - stallTicks > 0;
+}
+
+// A lock held by another thread whose address sits near the top of the game thread's stack: most likely the one it waits
+// on (EnterCriticalSection's argument), or -1.
+int LockOnGameStack(void) {
+    const Capture& g = g_gameCap;
+    if (!g.ctxOk)
+        return -1;
+    for (DWORD off = 0; off + 4 <= g.got && off < 512; off += 4) {
+        DWORD v = *(const DWORD*)(g_gameStack + off);
+        for (int i = 0; i < g_lockCount; i++)
+            if ((DWORD)(ULONG_PTR)g_locks[i].cs == v && LockHeld(g_lockStates[i]) && g_lockStates[i].owner != g_gameTid)
+                return i;
+    }
+    return -1;
+}
+
 // First match wins; each is a reading of the evidence, printed as one.
 void Diagnose(Writer& w, int n, ULONGLONG cpuMs, DWORD windowMs) {
     const Capture& g = g_gameCap;
     char label[112], busy[24], window[24];
-    Secs(busy, (DWORD)cpuMs);
+    SecsCpu(busy, cpuMs);
     Secs(window, windowMs);
-    if (g.held && g.prevSuspend > 0) {
-        Line(w, true, "Hang report %d: Diagnosis: the game thread is suspended by another program (suspend count %u)", n, g.prevSuspend);
+    // The hang ended between the episode's start and the capture: what was read is the recovered game, not the hang.
+    if (g.held && RanSince(g.ticksDone, g_episodeTicks)) {
+        Line(w, true, "Hang report %d: Diagnosis: none, the game thread ran again before it was read; its block below is from after the hang",
+             n);
         return;
     }
-    int game = FindLock("game");
+    if (!g_capWindowHung) {
+        Line(w, true, "Hang report %d: Diagnosis: none, the game window responded again before the game thread was read", n);
+        return;
+    }
+    if (g.held && g.prevSuspend > 0) {
+        Line(w, true, "Hang report %d: Diagnosis: the game thread was already suspended (suspend count %u)", n, g.prevSuspend);
+        return;
+    }
+    int onStack = LockOnGameStack();
+    if (onStack >= 0) {
+        Label(label, sizeof(label), g_lockStates[onStack].owner);
+        Line(w, true, "Hang report %d: Diagnosis: the game thread is probably waiting for the %s lock, held by thread %u (%s); %d waiting", n,
+             g_locks[onStack].name, g_lockStates[onStack].owner, label, LockWaiters(g_lockStates[onStack]));
+        return;
+    }
+    // Another thread can hold the game lock while the game thread has released it to wait on something else (a script
+    // event's reply), so without the stack evidence above this is an observation, not the cause.
+    int game = g_gameLock;
     if (game >= 0 && LockHeld(g_lockStates[game]) && g_lockStates[game].owner != g_gameTid) {
         Label(label, sizeof(label), g_lockStates[game].owner);
-        Line(w, true, "Hang report %d: Diagnosis: the game thread is waiting for the game lock, held by thread %u (%s); %d waiting", n,
-             g_lockStates[game].owner, label, LockWaiters(g_lockStates[game]));
+        Line(w, true, "Hang report %d: Diagnosis: the game lock is held by thread %u (%s), %d waiting", n, g_lockStates[game].owner, label,
+             LockWaiters(g_lockStates[game]));
         return;
     }
-    // A lock whose address sits near the top of the game thread's stack is most likely the one it waits on.
-    if (g.ctxOk) {
-        for (DWORD off = 0; off + 4 <= g.got && off < 512; off += 4) {
-            DWORD v = *(const DWORD*)(g_gameStack + off);
-            for (int i = 0; i < g_lockCount; i++) {
-                if ((DWORD)(ULONG_PTR)g_locks[i].cs != v || !LockHeld(g_lockStates[i]) || g_lockStates[i].owner == g_gameTid)
-                    continue;
-                Label(label, sizeof(label), g_lockStates[i].owner);
-                Line(w, true, "Hang report %d: Diagnosis: the game thread is probably waiting for the %s lock, held by thread %u (%s)", n,
-                     g_locks[i].name, g_lockStates[i].owner, label);
-                return;
-            }
-        }
-    }
-    int loader = FindLock("loader");
+    int loader = g_loaderLock;
     if (loader >= 0 && LockHeld(g_lockStates[loader]) && g_lockStates[loader].owner != g_gameTid) {
         Label(label, sizeof(label), g_lockStates[loader].owner);
         Line(w, true, "Hang report %d: Diagnosis: the loader lock is held by thread %u (%s)", n, g_lockStates[loader].owner, label);
         return;
     }
-    // Half, not all: a spinning thread on a machine with more games than cores gets only part of a core.
+    if (cpuMs == kCpuUnknown) {
+        Line(w, true, "Hang report %d: Diagnosis: unknown, the game thread's CPU time could not be read", n);
+        return;
+    }
+    // Half, not all: a spinning thread on a machine with more games than cores gets only part of a core. Below half, CPU
+    // time can't tell a wait from a thread starved of CPU, so the line says both.
     if (windowMs && cpuMs * 2 >= (ULONGLONG)windowMs)
         Line(w, true, "Hang report %d: Diagnosis: busy, the game thread used %s s of CPU in the last %s s", n, busy, window);
     else
-        Line(w, true, "Hang report %d: Diagnosis: blocked, the game thread used %s s of CPU in the last %s s", n, busy, window);
+        Line(w, true, "Hang report %d: Diagnosis: waiting or starved of CPU, the game thread used %s s of CPU in the last %s s", n, busy, window);
 }
 
 void LocksLine(Writer& w, int n) {
@@ -622,7 +783,7 @@ void LocksLine(Writer& w, int n) {
     int len = wsprintfA(text, "Hang report %d: locks:", n);
     for (int i = 0; i < g_lockCount && len < 900; i++) {
         const LockState& st = g_lockStates[i];
-        bool always = lstrcmpA(g_locks[i].name, "game") == 0 || lstrcmpA(g_locks[i].name, "loader") == 0;
+        bool always = i == g_gameLock || i == g_loaderLock;
         if (!LockHeld(st) && !always)
             continue;
         if (!st.read)
@@ -655,49 +816,146 @@ BOOL CALLBACK HangDumpCallback(PVOID fromSnapshot, PMINIDUMP_CALLBACK_INPUT inpu
             output->Status = S_FALSE;
         else if (input->CallbackType == ReadMemoryFailureCallback)
             output->Status = S_OK;
+        else if (input->CallbackType == CancelCallback) {
+            // A crash or halt report needs dbghelp, which this dump holds: it gives way.
+            output->CheckCancel = TRUE;
+            output->Cancel = g_quiesced ? TRUE : FALSE;
+        }
     }
     return TRUE;
 }
 
+// Each handle leaves the job just before its own release, and a fault in one release (a damaged snapshot) still lets the
+// others run: a release is never repeated, and none is skipped.
+// A release that faults or fails turns hang dumps off for the process: the snapshot it held may live on, and another
+// dump would add one more.
 void ReleaseDumpJob(DumpJob& job) {
-    if (job.snapshot) {
-        g_pssFree(GetCurrentProcess(), job.snapshot);
-        job.snapshot = NULL;
+    bool ok = true;
+    HANDLE h = job.marker;
+    job.marker = NULL;
+    __try {
+        if (h && g_pssMarkerFree(h) != ERROR_SUCCESS)
+            ok = false;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        ok = false;
     }
-    if (job.file) {
-        CloseHandle(job.file);
-        job.file = NULL;
+    h = job.snapshot;
+    job.snapshot = NULL;
+    __try {
+        if (h && g_pssFree(GetCurrentProcess(), h) != ERROR_SUCCESS)
+            ok = false;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        ok = false;
+    }
+    h = job.file;
+    job.file = NULL;
+    __try {
+        if (h && !CloseHandle(h))
+            ok = false;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        ok = false;
+    }
+    if (!ok)
+        InterlockedExchange(&g_dumpOff, 1);
+}
+
+// The game thread's registers from the snapshot itself: the report's own sample can be seconds older, and a game thread that
+// moved since (a busy loop reuses its stack without a tick) would pair that sample with newer stack memory.
+void SnapshotGameContext(DumpJob& job) {
+    job.hasCtx = FALSE;
+    if (!g_pssWalk || !g_pssMarkerCreate || g_pssMarkerCreate(NULL, &job.marker) != ERROR_SUCCESS) {
+        job.marker = NULL;
+        return;
+    }
+    PssThreadEntry entry;
+    while (g_pssWalk(job.snapshot, kPssWalkThreads, job.marker, &entry, sizeof(entry)) == ERROR_SUCCESS) {
+        if (entry.threadId != job.gameTid || !entry.contextRecord)
+            continue;
+        DWORD size = entry.sizeOfContextRecord < sizeof(CONTEXT) ? entry.sizeOfContextRecord : sizeof(CONTEXT);
+        ZeroMemory(&job.ctx, sizeof(job.ctx));
+        CopyMemory(&job.ctx, entry.contextRecord, size);
+        job.rec.ExceptionAddress = (PVOID)(ULONG_PTR)job.ctx.Eip;
+        job.hasCtx = TRUE;
+        break;
     }
 }
 
 // Snapshot only: a live in-process dump suspends threads and allocates, and a wedge there would freeze the game for
-// good. No timeout kill either: a stuck dump costs only this helper.
+// good. No timeout kill either: a stuck dump costs this helper, and dbghelp only while MiniDumpWriteDump runs (later
+// stack walks and crash dumps then wait out their bound and are skipped).
 void WriteHangDump(void) {
     DumpJob& job = g_dumpJob;
     Writer& w = g_dumpW;
     __try {
         DWORD started = GetTickCount();
-        PruneCrashFiles(L"hang-*.dmp", kHangDumpsKept - 1);
-        PruneCrashFiles(L"hang-*.dmp.partial", 0);
-        ULARGE_INTEGER freeBytes;
-        if (!GetDiskFreeSpaceExW(Vars.szLogPath, &freeBytes, NULL, NULL) || freeBytes.QuadPart < kDumpMinFreeBytes) {
-            Line(w, true, "Hang report %d: no dump, less than 2 GB free in the logs folder", job.episode);
+        // Whether the dump is still wanted, before anything is pruned for it.
+        if (MustStop()) {
+            Line(w, true, "Hang report %d: no dump, D2BS is shutting down or the game is crashing", job.episode);
+            return;
+        }
+        // A game that ran again, or whose window responds again, is no longer hung: a dump of it would use up the
+        // process's one dump.
+        if (RanSince(g_ticksDone, job.ticks)) {
+            Line(w, true, "Hang report %d: no dump, the game thread ran again before the snapshot", job.episode);
+            return;
+        }
+        if (!IsHungAppWindow(g_hwnd)) {
+            Line(w, true, "Hang report %d: no dump, the game window responds again", job.episode);
             return;
         }
         // In the job, not locals, so a fault inside dbghelp still releases them (HangDumpThread).
         job.snapshot = NULL;
+        job.marker = NULL;
         DWORD error = g_pssCapture(GetCurrentProcess(), kHangSnapshotFlags, CONTEXT_ALL, &job.snapshot);
         if (error != ERROR_SUCCESS) {
             job.snapshot = NULL;
             Line(w, true, "Hang report %d: no dump, the process snapshot failed (%u)", job.episode, error);
             return;
         }
+        // The same three, once the snapshot is held: it is the hang only if nothing changed up to here.
+        if (MustStop() || RanSince(g_ticksDone, job.ticks) || !IsHungAppWindow(g_hwnd)) {
+            ReleaseDumpJob(job);
+            Line(w, true, "Hang report %d: no dump, %s", job.episode,
+                 MustStop() ? "D2BS is shutting down or the game is crashing" : "the game recovered during or just after the snapshot");
+            return;
+        }
+        // Old dumps are pruned only once the snapshot passed every recovery check, so a recovered game never costs a kept one.
+        PruneCrashFiles(L"hang-*.dmp", kHangDumpsKept - 1);
+        PruneCrashFiles(L"hang-*.dmp.partial", 0);
+        ULARGE_INTEGER freeBytes;
+        if (!GetDiskFreeSpaceExW(Vars.szLogPath, &freeBytes, NULL, NULL)) {
+            error = GetLastError();
+            ReleaseDumpJob(job);
+            Line(w, true, "Hang report %d: no dump, the free space in the logs folder could not be read (%u)", job.episode, error);
+            return;
+        }
+        if (freeBytes.QuadPart < kDumpMinFreeBytes) {
+            ReleaseDumpJob(job);
+            Line(w, true, "Hang report %d: no dump, less than 2 GB free in the logs folder", job.episode);
+            return;
+        }
+        SnapshotGameContext(job);
         job.file = CreateFileW(job.partial, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         if (job.file == INVALID_HANDLE_VALUE) {
             error = GetLastError();
             job.file = NULL;
             ReleaseDumpJob(job);
             Line(w, true, "Hang report %d: no dump, the file could not be created (%u)", job.episode, error);
+            return;
+        }
+        // dbghelp only for the dump itself; bounded, as another walker may be the stuck one.
+        if (!DbgHelpLock(5000)) {
+            ReleaseDumpJob(job);
+            DeleteFileW(job.partial);
+            Line(w, true, "Hang report %d: no dump, a stack walk or another dump kept dbghelp busy for 5 s", job.episode);
+            return;
+        }
+        if (MustStop()) {
+            // A crash or halt began meanwhile: its own report gets dbghelp.
+            DbgHelpUnlock();
+            ReleaseDumpJob(job);
+            DeleteFileW(job.partial);
+            Line(w, true, "Hang report %d: no dump, D2BS is shutting down or the game is crashing", job.episode);
             return;
         }
         EXCEPTION_POINTERS pointers = {&job.rec, &job.ctx};
@@ -708,16 +966,23 @@ void WriteHangDump(void) {
         MINIDUMP_CALLBACK_INFORMATION callback = {HangDumpCallback, job.snapshot};
         BOOL written = MiniDumpWriteDump(job.snapshot, GetCurrentProcessId(), job.file, kHangDumpType, job.hasCtx ? &info : NULL, NULL, &callback);
         error = written ? 0 : GetLastError();
+        DbgHelpUnlock();
         ReleaseDumpJob(job);
-        char path[MAX_PATH];
+        char path[MAX_PATH * 3]; // UTF-8 can take 3 bytes per character
         Narrow(path, sizeof(path), job.path, -1);
+        bool cancelled = !written && error == (DWORD)HRESULT_FROM_WIN32(ERROR_CANCELLED);
         if (written && !MoveFileExW(job.partial, job.path, MOVEFILE_REPLACE_EXISTING)) {
             written = FALSE;
             error = GetLastError();
         }
         if (written) {
             InterlockedExchange(&g_dumpWritten, 1);
-            Line(w, true, "Hang report %d: dump %s written from a snapshot in %u ms", job.episode, path, GetTickCount() - started);
+            Line(w, true, "Hang report %d: dump %s written from a snapshot in %u ms%s", job.episode, path, GetTickCount() - started,
+                 job.hasCtx ? "" : "; it has no exception stream: select the game thread in the debugger");
+        } else if (cancelled) {
+            DeleteFileW(job.partial);
+            Line(w, true, "Hang report %d: dump %s cancelled after %u ms: D2BS is shutting down or the game is crashing", job.episode, path,
+                 GetTickCount() - started);
         } else {
             DeleteFileW(job.partial);
             Line(w, true, "Hang report %d: dump %s FAILED (0x%08X) after %u ms", job.episode, path, error, GetTickCount() - started);
@@ -739,19 +1004,24 @@ int DumpFault(EXCEPTION_POINTERS* p) {
 DWORD WINAPI HangDumpThread(LPVOID) {
     g_dumpTid = GetCurrentThreadId();
     HangNameThread(L"D2BS hang dump");
-    // Go first: when Go and Stop are both set, the posted job still runs and clears the busy flag the watchdog set.
+    // The first user32 call, while the game is healthy (see Arm): later ones only read the window's state.
+    IsHungAppWindow(g_hwnd);
+    // Go first: when Go and Stop are both set, the posted job is still taken (and skipped, as MustStop holds) and the
+    // busy flag the watchdog set is cleared.
     HANDLE events[2] = {g_hDumpGo, g_hStop};
     while (WaitForMultipleObjects(2, events, FALSE, INFINITE) == WAIT_OBJECT_0) {
-        // A stack walk on another thread may be using dbghelp; the wait is bounded, as that thread may be the stuck one.
-        if (!DbgHelpLock(5000)) {
-            g_dumpW.len = 0;
-            Line(g_dumpW, true, "Hang report %d: no dump, a stack walk kept dbghelp busy for 5 s", g_dumpJob.episode);
+        g_dumpW.len = 0;
+        g_dumpW.lost = 0;
+        if (MustStop()) {
+            // A crash or halt began after the job was posted.
+            Line(g_dumpW, true, "Hang report %d: no dump, D2BS is shutting down or the game is crashing", g_dumpJob.episode);
             Flush(g_dumpW);
         } else {
             __try {
                 WriteHangDump();
             } __except (DumpFault(GetExceptionInformation())) {
-                ReleaseDumpJob(g_dumpJob);
+                DbgHelpUnlock(); // a no-op unless the fault came inside MiniDumpWriteDump, which holds it
+                ReleaseDumpJob(g_dumpJob); // contains its own faults: nothing above this thread catches
                 DeleteFileW(g_dumpJob.partial);
                 InterlockedExchange(&g_dumpOff, 1); // a fault inside dbghelp would likely come again
                 g_dumpW.len = 0;
@@ -759,7 +1029,6 @@ DWORD WINAPI HangDumpThread(LPVOID) {
                      g_dumpJob.episode, g_dumpFaultCode, g_dumpFaultAddress);
                 Flush(g_dumpW);
             }
-            DbgHelpUnlock();
         }
         // Done before the flag is cleared, so the next claim never sees this job's Done.
         SetEvent(g_hDumpDone);
@@ -780,20 +1049,26 @@ void PacketLine(Writer& w, int n) {
              dir == 'R' ? "received" : "sent", opcode, tick);
 }
 
-// The packet log and the dump come after the text: they use the heap and the CRT, which the stuck thread may hold.
+// The packet log and the dump come after the text: they use the heap and the CRT, which the stuck thread may hold. The
+// packet log is written on the watchdog (the dump runs on its helper, and the wait for it is bounded): if the packet log
+// blocks for good, the report's text is on disk but its follow-ups and recovery line are lost.
 void PacketsAndDump(Writer& w, int n, DWORD stallMs) {
+    if (MustStop())
+        return;
     wchar_t stem[MAX_PATH], path[MAX_PATH];
     if (!CrashReportStem(stem, _countof(stem), L"hang-")) {
         Line(w, true, "Hang report %d: no packet log, the logs path is too long", n);
         return;
     }
-    char header[512], stall[24], narrowPath[MAX_PATH];
+    char header[512], stall[24], narrowPath[MAX_PATH * 3];
     Secs(stall, stallMs);
     char profile[96];
     Narrow(profile, sizeof(profile), Vars.szProfile, -1);
-    wsprintfA(header, "D2BS hang report %d: game thread %u not responding for %s s, profile %s, process %u", n, g_gameTid, stall, profile,
+    wsprintfA(header, "D2BS hang report %d: game thread %u, D2BS timer silent for %s s and the window not responding, profile %s, process %u", n, g_gameTid, stall, profile,
               GetCurrentProcessId());
     PruneCrashFiles(L"hang-*.packets.txt", kHangPacketLogsKept - 1);
+    if (MustStop())
+        return;
     wsprintfW(path, L"%s.packets.txt", stem);
     Narrow(narrowPath, sizeof(narrowPath), path, -1);
     if (WritePacketLog(path, header, false))
@@ -806,22 +1081,27 @@ void PacketsAndDump(Writer& w, int n, DWORD stallMs) {
         Line(w, true, "Hang report %d: no dump; set HaltDumps=true in d2bs.ini to write one", n);
         return;
     }
-    if (!g_pssCapture || !g_hDumpThread) {
+    if (!g_pssCapture) {
         Line(w, true, "Hang report %d: no dump, process snapshots need Windows 8.1 or later", n);
         return;
     }
-    if (g_dumpWritten) {
-        Line(w, true, "Hang report %d: no dump, one was already written for this process", n);
+    if (!g_hDumpThread) {
+        Line(w, true, "Hang report %d: no dump, the dump thread could not be started", n);
         return;
     }
-    if (g_dumpOff) {
-        Line(w, true, "Hang report %d: no dump, an earlier attempt stopped by exception", n);
-        return;
-    }
-    // The single job slot is claimed before the job is posted; no new dump starts once a crash or shutdown is under way
-    // (dbghelp itself is serialized by DbgHelpLock).
+    // The single job slot is claimed first: the helper sets its result flags before it frees the slot, so a claim that
+    // succeeds sees them. A job posted after a crash or shutdown began is skipped by the helper, and a running dump
+    // cancels itself (HangDumpCallback).
     if (InterlockedCompareExchange(&g_dumpBusy, 1, 0) != 0) {
         Line(w, true, "Hang report %d: no dump, the earlier one is still being written", n);
+        return;
+    }
+    if (g_dumpWritten || g_dumpOff) {
+        InterlockedExchange(&g_dumpBusy, 0);
+        if (g_dumpWritten)
+            Line(w, true, "Hang report %d: no dump, one was already written for this process", n);
+        else
+            Line(w, true, "Hang report %d: no dump, an earlier attempt failed by exception or in its cleanup", n);
         return;
     }
     if (MustStop()) {
@@ -834,28 +1114,35 @@ void PacketsAndDump(Writer& w, int n, DWORD stallMs) {
     wsprintfW(job.partial, L"%s.dmp.partial", stem);
     job.episode = n;
     job.gameTid = g_gameTid;
-    job.hasCtx = g_gameCap.held && g_gameCap.ctxOk;
-    job.ctx = g_gameCap.ctx;
+    job.hasCtx = FALSE; // set by the helper from the snapshot
+    job.ticks = g_episodeTicks;
     ZeroMemory(&job.rec, sizeof(job.rec));
     job.rec.ExceptionCode = kHangDumpCode;
-    job.rec.ExceptionAddress = (PVOID)(ULONG_PTR)g_gameCap.ctx.Eip;
     Narrow(narrowPath, sizeof(narrowPath), job.path, -1);
-    Line(w, true, "Hang report %d: writing dump %s%s", n, narrowPath, job.hasCtx ? "" : " (no game thread context; select its thread in the debugger)");
+    Line(w, true, "Hang report %d: writing dump %s", n, narrowPath);
     Flush(w);
     ResetEvent(g_hDumpDone);
     SetEvent(g_hDumpGo);
     HANDLE events[2] = {g_hStop, g_hDumpDone};
-    if (WaitForMultipleObjects(2, events, FALSE, kDumpWaitMs) == WAIT_TIMEOUT)
+    DWORD waited = WaitForMultipleObjects(2, events, FALSE, kDumpWaitMs);
+    if (waited == WAIT_TIMEOUT)
         Line(w, true, "Hang report %d: dump still being written after %u s; left to finish, the game is not stopped", n, kDumpWaitMs / 1000);
+    else if (waited == WAIT_OBJECT_0 + 1)
+        g_episodeDumpLost = g_dumpW.lost; // this job's own lines, set before Done
 }
 
-// Every episode gets the diagnosis, the locks, the game thread and the packet log; full adds every other thread and the
-// module table, the part worth capping in a process that stalls again and again.
-void Report(int n, DWORD stallMs, ULONGLONG cpu0, DWORD cpuWindowMs, bool full) {
+// Every episode gets the diagnosis, the locks, the game thread and the packet log; full adds the other threads and the
+// module table (both bounded: kMaxThreads, kTextBudgetMs, kMaxModules), the part worth capping in a process that stalls
+// again and again.
+void Report(int n, DWORD stallMs, ULONGLONG cpu0, DWORD cpuStart, bool full) {
     Writer& w = g_w;
     w.len = 0;
+    w.lost = 0;
+    g_episodeDumpLost = 0;
     DWORD started = GetTickCount();
     int threads = 1, gone = 0, notHeld = 0, skipped = 0;
+    if (MustStop())
+        return;
     __try {
         char stall[24];
         Secs(stall, stallMs);
@@ -865,18 +1152,26 @@ void Report(int n, DWORD stallMs, ULONGLONG cpu0, DWORD cpuWindowMs, bool full) 
              n, stall, g_gameTid, StateText(g_tickState), g_version, GetCurrentThreadId());
         Flush(w); // a kill from here on still leaves the header
 
+        if (MustStop())
+            return;
         CaptureThread(g_hGame, &g_gameCap, g_gameStack, sizeof(g_gameStack));
+        g_capWindowHung = IsHungAppWindow(g_hwnd);
+        if (!g_gameCap.held)
+            notHeld++;
         ULONGLONG cpu1 = ThreadCpuMs(g_hGame);
+        DWORD cpuWindow = GetTickCount() - cpuStart; // from cpu0's sample to cpu1's
         ReadLocks();
         BuildModules();
-        Diagnose(w, n, cpu1 - cpu0, cpuWindowMs + (GetTickCount() - started));
+        Diagnose(w, n, CpuDelta(cpu0, cpu1), cpuWindow);
         LocksLine(w, n);
         PacketLine(w, n);
         ThreadBlock(w, n, g_gameTid, g_hGame, g_gameCap, g_gameStack, kGameFrames);
         Flush(w);
 
         // The thread list is taken after the game thread's block is on disk: if toolhelp needs a lock the stuck thread
-        // holds, only the other threads are lost.
+        // holds, the rest of this report and its follow-ups are lost, the part already written is not.
+        if (MustStop())
+            return;
         int count = 0;
         HANDLE snap = full ? CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) : INVALID_HANDLE_VALUE;
         if (snap != INVALID_HANDLE_VALUE) {
@@ -885,8 +1180,13 @@ void Report(int n, DWORD stallMs, ULONGLONG cpu0, DWORD cpuWindowMs, bool full) 
             DWORD pid = GetCurrentProcessId();
             if (Thread32First(snap, &te)) {
                 do {
-                    if (te.th32OwnerProcessID == pid && count < (int)_countof(g_tids))
+                    DWORD id = te.th32ThreadID;
+                    if (te.th32OwnerProcessID != pid || id == g_gameTid || id == GetCurrentThreadId() || id == g_dumpTid)
+                        continue;
+                    if (count < (int)_countof(g_tids))
                         g_tids[count++] = te.th32ThreadID;
+                    else
+                        skipped++; // past the list's room: counted with the threads the limits leave out
                 } while (Thread32Next(snap, &te));
             }
             CloseHandle(snap);
@@ -914,6 +1214,13 @@ void Report(int n, DWORD stallMs, ULONGLONG cpu0, DWORD cpuWindowMs, bool full) 
                 gone++;
                 continue;
             }
+            // The id was this process's when the list was taken; it may have been reused since by another process's
+            // thread. The open handle pins it, so the owner read now holds.
+            if (!ThreadInThisProcess(h)) {
+                CloseHandle(h);
+                gone++;
+                continue;
+            }
             CaptureThread(h, &g_otherCap, g_otherStack, sizeof(g_otherStack));
             if (!g_otherCap.held)
                 notHeld++;
@@ -929,7 +1236,11 @@ void Report(int n, DWORD stallMs, ULONGLONG cpu0, DWORD cpuWindowMs, bool full) 
         Flush(w);
 
         PacketsAndDump(w, n, stallMs);
-        Line(w, true, "Hang report %d: written in %u ms, %d threads (%d gone, %d not held)", n, GetTickCount() - started, threads, gone, notHeld);
+        if (MustStop())
+            return; // stopped at a checkpoint: no summary for a report that did not finish
+        Line(w, true, "Hang report %d: written in %u ms; threads held: %d, not held: %d, not opened or no longer this process's: %d%s", n,
+             GetTickCount() - started, threads - notHeld, notHeld, gone,
+             w.lost || g_episodeDumpLost ? "; some of it could not be written to the log" : "");
         Flush(w);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         // Caught here, not in Fog's filter, which would turn the hang into a crash.
@@ -942,14 +1253,21 @@ void Report(int n, DWORD stallMs, ULONGLONG cpu0, DWORD cpuWindowMs, bool full) 
 
 // The game thread alone, for follow-ups.
 void ShortReport(int n, const char* what, DWORD stallMs, ULONGLONG cpuMs, DWORD windowMs) {
+    if (MustStop())
+        return;
     Writer& w = g_w;
     w.len = 0;
     __try {
         CaptureThread(g_hGame, &g_gameCap, g_gameStack, sizeof(g_gameStack));
+        g_capWindowHung = IsHungAppWindow(g_hwnd);
+        // Ran again, or its window responds, since the watchdog's check: no longer hung, and the watchdog's next poll
+        // writes the recovery or "responds again" line.
+        if (!g_capWindowHung || (g_gameCap.held && RanSince(g_gameCap.ticksDone, g_episodeTicks)))
+            return;
         BuildModules();
         char stall[24], cpu[24], window[24], eip[96];
         Secs(stall, stallMs);
-        Secs(cpu, (DWORD)cpuMs);
+        SecsCpu(cpu, cpuMs);
         Secs(window, windowMs);
         if (g_gameCap.ctxOk)
             ModOff(eip, g_gameCap.ctx.Eip);
@@ -967,25 +1285,22 @@ void ShortReport(int n, const char* what, DWORD stallMs, ULONGLONG cpuMs, DWORD 
     }
 }
 
-void AddLock(const char* name, CRITICAL_SECTION* cs) {
-    if (cs && g_lockCount < kMaxLocks) {
-        g_locks[g_lockCount].name = name;
-        g_locks[g_lockCount].cs = cs;
-        g_lockCount++;
-    }
+int AddLock(const char* name, CRITICAL_SECTION* cs) {
+    if (!cs || g_lockCount >= kMaxLocks)
+        return -1;
+    g_locks[g_lockCount].name = name;
+    g_locks[g_lockCount].cs = cs;
+    return g_lockCount++;
 }
 
-// While the game is healthy: the first user32 call converts this thread to a GUI thread, which can load modules under
-// the loader lock, and GetModuleHandle takes that lock too.
-bool Arm(void) {
-    g_hGame = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, g_gameTid);
-    if (!g_hGame) {
-        Log(L"Hang watch: off, the game thread could not be opened (%u)", GetLastError());
-        return false;
-    }
-    IsWindow(g_hwnd);
-    IsHungAppWindow(g_hwnd);
+typedef LONG(NTAPI* RtlGetVersionFn)(OSVERSIONINFOW* info);
 
+// At startup, from Startup inside DllMain: the loader lock is this thread's own there, so the module lookups can't
+// block, while on the watchdog they could wait on a stuck thread that holds it.
+void ResolveAtStart(void) {
+    DWORD dirLen = GetFullPathNameW(Vars.szLogPath, _countof(g_logDir), g_logDir, NULL);
+    if (!dirLen || dirLen >= _countof(g_logDir))
+        lstrcpynW(g_logDir, Vars.szLogPath, _countof(g_logDir));
     HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
     HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
     g_ntQueryVirtualMemory = (NtQueryVirtualMemoryFn)GetProcAddress(ntdll, "NtQueryVirtualMemory");
@@ -995,9 +1310,23 @@ bool Arm(void) {
     g_pssFree = (PssFreeSnapshotFn)GetProcAddress(kernel32, "PssFreeSnapshot");
     if (!g_pssFree)
         g_pssCapture = NULL;
+    g_pssMarkerCreate = (PssWalkMarkerCreateFn)GetProcAddress(kernel32, "PssWalkMarkerCreate");
+    g_pssMarkerFree = (PssWalkMarkerFreeFn)GetProcAddress(kernel32, "PssWalkMarkerFree");
+    g_pssWalk = (PssWalkSnapshotFn)GetProcAddress(kernel32, "PssWalkSnapshot");
+    if (!g_pssMarkerFree)
+        g_pssMarkerCreate = NULL;
     Narrow(g_version, sizeof(g_version), D2BS_VERSION, -1);
+    // RtlGetVersion, not GetVersion: a compatibility mode makes GetVersion report the emulated Windows.
+    // The new encoding came with Server 2003 SP1, which XP x64 (5.2 workstation) is built on.
+    RtlGetVersionFn rtlGetVersion = (RtlGetVersionFn)GetProcAddress(ntdll, "RtlGetVersion");
+    OSVERSIONINFOEXW os;
+    ZeroMemory(&os, sizeof(os));
+    os.dwOSVersionInfoSize = sizeof(os);
+    if (rtlGetVersion && rtlGetVersion((OSVERSIONINFOW*)&os) >= 0)
+        g_oldLockCount = os.dwMajorVersion < 5 || (os.dwMajorVersion == 5 && os.dwMinorVersion <= 1) ||
+                         (os.dwMajorVersion == 5 && os.dwMinorVersion == 2 && os.wServicePackMajor == 0 && os.wProductType != VER_NT_WORKSTATION);
 
-    AddLock("game", &Vars.cGameLoopSection);
+    g_gameLock = AddLock("game", &Vars.cGameLoopSection);
     AddLock("script engine", &ScriptEngine::lock);
     AddLock("script list", ScriptEngine::ListLockForReport());
     AddLock("event", &Vars.cEventSection);
@@ -1021,15 +1350,38 @@ bool Arm(void) {
     CRITICAL_SECTION* loader = *(CRITICAL_SECTION**)(ULONG_PTR)(__readfsdword(0x30) + 0xA0);
     MEMORY_BASIC_INFORMATION m;
     if (loader && VirtualQuery(loader, &m, sizeof(m)) && m.AllocationBase == (PVOID)ntdll)
-        AddLock("loader", loader);
+        g_loaderLock = AddLock("loader", loader);
+}
+
+// While the game is healthy: the first user32 call converts this thread to a GUI thread, which can load modules under
+// the loader lock. Its lines go through the watchdog's writer, not Log: the game may already be stuck holding the heap.
+bool Arm(void) {
+    g_hGame = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, g_gameTid);
+    if (!g_hGame) {
+        g_w.len = 0;
+        Line(g_w, true, "Hang watch: off, the game thread could not be opened (%u)", GetLastError());
+        Flush(g_w);
+        return false;
+    }
+    IsWindow(g_hwnd);
+    IsHungAppWindow(g_hwnd);
 
     if (Vars.bHaltDumps && g_pssCapture) {
         g_hDumpGo = CreateEventW(NULL, FALSE, FALSE, NULL);
         g_hDumpDone = CreateEventW(NULL, TRUE, FALSE, NULL);
         if (g_hDumpGo && g_hDumpDone)
             g_hDumpThread = CreateThread(NULL, 0, HangDumpThread, NULL, 0, NULL);
+        if (!g_hDumpThread) {
+            if (g_hDumpGo)
+                CloseHandle(g_hDumpGo);
+            if (g_hDumpDone)
+                CloseHandle(g_hDumpDone);
+            g_hDumpGo = g_hDumpDone = NULL;
+        }
     }
-    Log(L"Hang watch: on, game thread %u, reports after %u s without a message loop pass", g_gameTid, Vars.dwHangReportMs / 1000);
+    g_w.len = 0;
+    Line(g_w, true, "Hang watch: on, game thread %u, reports when D2BS's timer has not run for %u s and Windows marks the window not responding", g_gameTid, Vars.dwHangReportMs / 1000);
+    Flush(g_w);
     return true;
 }
 
@@ -1061,7 +1413,11 @@ DWORD WINAPI HangWatchThread(LPVOID) {
             stall = 0;
             continue;
         }
+        // In an open episode only a completed tick ends it, so the recovery line gets the resume time that tick stored;
+        // a first tick still between its count and that store leaves the stall, and its follow-ups, running.
         LONG ticks = g_ticks;
+        if (open && g_ticksDone - lastTicks <= 0)
+            ticks = lastTicks;
         if (ticks != lastTicks) {
             lastTicks = ticks;
             if (open) {
@@ -1084,6 +1440,7 @@ DWORD WINAPI HangWatchThread(LPVOID) {
         // The stall counts only time the watchdog itself ran: a debugger break, ProcDump or system sleep freezes it too.
         if (gap > kGapResetMs) {
             stall = 0;
+            nextCheck = threshold; // an open episode's next follow-up counts from the restart too
             continue;
         }
         if (!stall) {
@@ -1093,6 +1450,9 @@ DWORD WINAPI HangWatchThread(LPVOID) {
         stall += gap;
         if (!IsWindow(g_hwnd)) {
             InterlockedExchange(&g_off, 1); // the game window is gone: the game is exiting
+            g_w.len = 0;
+            Line(g_w, true, "Hang watch: off, the game window is gone");
+            Flush(g_w);
             continue;
         }
         if (open) {
@@ -1104,7 +1464,7 @@ DWORD WINAPI HangWatchThread(LPVOID) {
                 if (IsHungAppWindow(g_hwnd)) {
                     if (followUps < kFollowUpsMax) {
                         followUps++;
-                        ShortReport(episodes, "still not responding", now - openTickTime, ThreadCpuMs(g_hGame) - cpu0, now - cpuStart);
+                        ShortReport(episodes, "still not responding", now - openTickTime, CpuDelta(cpu0, ThreadCpuMs(g_hGame)), now - cpuStart);
                     }
                 } else {
                     // The window pumps again but D2BS's timer still does not run: the hang as Windows sees it is over.
@@ -1119,11 +1479,15 @@ DWORD WINAPI HangWatchThread(LPVOID) {
         }
         if (stall < threshold)
             continue;
-        // Only what Windows, and so D2Bot's Process.Responding, also sees as hung: a starved or replaced timer is not.
+        // Only what Windows marks hung, the closest local proxy for a bot manager's not-responding check (D2Bot#'s
+        // Process.Responding): a starved or replaced timer alone is not.
         if (IsHungAppWindow(g_hwnd)) {
             // The last tick's time, then the count: HangTick stores the count before the time, so a time read here that
             // belongs to a newer tick comes with a changed count.
+            // The episode's start is published before the count check, so HangTick measures a resume that comes right
+            // after the check against this episode; a value left by a failed check is replaced at the next open.
             DWORD lastTickTime = g_tickTime;
+            g_openTick = lastTickTime;
             MemoryBarrier();
             if (g_ticks != lastTicks)
                 continue;
@@ -1132,7 +1496,8 @@ DWORD WINAPI HangWatchThread(LPVOID) {
             followUps = 0;
             nextCheck = stall + threshold;
             openTickTime = lastTickTime;
-            Report(episodes, now - openTickTime, cpu0, now - cpuStart, episodes <= kFullReportsMax);
+            g_episodeTicks = lastTicks;
+            Report(episodes, now - openTickTime, cpu0, cpuStart, episodes <= kFullReportsMax);
             lastWake = GetTickCount();
         } else if (stall >= 3 * threshold && !timerLineDone) {
             timerLineDone = true;
@@ -1151,11 +1516,16 @@ DWORD WINAPI HangWatchThread(LPVOID) {
 void HangStart(void) {
     if (!Vars.dwHangReportMs)
         return;
+    ResolveAtStart();
     g_hStop = CreateEventW(NULL, TRUE, FALSE, NULL);
     if (!g_hStop)
         return;
     // Runs once DllMain returns; it arms once HangEngineStarted has run and the game thread has ticked.
     g_hWatch = CreateThread(NULL, 0, HangWatchThread, NULL, 0, &g_watchTid);
+    if (!g_hWatch) {
+        CloseHandle(g_hStop);
+        g_hStop = NULL;
+    }
 }
 
 void HangStop(HangStopMode mode) {
@@ -1169,23 +1539,32 @@ void HangStop(HangStopMode mode) {
         return;
     }
     // Under the loader lock the watchdog can't be joined (its thread exit needs that lock): it is signalled and given up
-    // to 1 s to leave D2BS code.
-    for (int i = 0; i < 100 && !g_exited; i++)
+    // to 1 s. Best effort only: a watchdog blocked on the heap or the loader lock outlives it, and g_exited is set a few
+    // instructions before the thread leaves D2BS code; a full stop before unload is the unload work D2BS still lacks.
+    DWORD started = GetTickCount();
+    while (!g_exited && GetTickCount() - started < 1000)
         Sleep(10);
 }
 
 void HangTick(HWND hwnd) {
+    if (!Vars.dwHangReportMs)
+        return;
     DWORD now = GetTickCount();
-    if (now - g_tickTime > 1000)
-        g_resumeTime = now;
+    DWORD previous = g_tickTime;
     g_tickState = ClientState();
     if (!g_hwnd) {
         g_gameTid = GetCurrentThreadId();
         MemoryBarrier();
         g_hwnd = hwnd;
     }
-    InterlockedIncrement(&g_ticks);
+    LONG tick = InterlockedIncrement(&g_ticks);
+    // After the count, a full barrier, as the watchdog publishes g_openTick before reading the count: either it sees this
+    // tick and opens no episode, or this sees the episode's start. Only the first resume inside the open episode is kept,
+    // as a later stall and resume while the report is still being written would stretch it.
+    if (now - previous > 1000 && g_resumeTime - g_openTick - 1 >= now - g_openTick)
+        g_resumeTime = now;
     g_tickTime = now; // after the count: see the episode open in HangWatchThread
+    InterlockedExchange(&g_ticksDone, tick);
 }
 
 void HangEngineStarted(void) {

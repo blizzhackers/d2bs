@@ -8,6 +8,10 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 ## [Unreleased]
 
+### Fixed
+
+- **NPC message packets for other unit types.** The game keeps running when an NPC message packet (`0x27`) for a unit type other than a monster or an object arrives during an NPC's speech or with no NPC open, for example a packet a script passes to `getPacket()`, and you can talk to the NPC again afterwards.
+
 ## [1.8.0-rc.1] - 2026-11-20
 
 ### Added

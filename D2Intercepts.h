@@ -27,6 +27,7 @@ void GameActChange_Intercept(void);
 void GameActChange2_Intercept(void);
 void EndNpcSpeech_Intercept();
 void FreeSpeechPanel_Intercept();
+void FreeNpcMessageList_Intercept();
 void GameLeave_Intercept(void);
 void ChannelInput_Intercept(void);
 void ChatPacketRecv_Interception();

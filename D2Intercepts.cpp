@@ -483,10 +483,11 @@ void __declspec(naked) GameActChange2_Intercept(void) {
 
 // An NPC's quest speech or gossip leaves the speech panel a callback that plays the NPC's next message from its message
 // list when the speech ends (0x4B1830 reads the list without a NULL check), and only the callback clears itself.
-// Closing the NPC mid-speech (0x4B3C20, which me.cancel() reaches) and leaving the game end the speech and set the list
-// to NULL without running it; a later speech that ends while it is still stored, an object's for one, runs it, and it
-// can read the missing list (access violation at 0x661406), in the same game or a later one. The callback goes with
-// the list here, as when its chain ends (0x4B6B6B).
+// Closing the NPC mid-speech (0x4B3C20, which me.cancel() reaches), leaving the game, and an S2C 0x27 packet whose unit
+// type is neither 1 (monster) nor 2 (object) (0x4A1707, which leaves the speech playing) set the list to NULL without
+// running it. The next speech to end while it is still stored, in the same game or a later one, runs it, and it can
+// read the missing list (access violation at 0x661406). The callback goes with the list here, as when its chain ends
+// (0x4B6B6B).
 static void ClearNpcSpeechCallback() {
     DWORD dwCallback = *p_D2CLIENT_SpeechDoneCallback;
     if (dwCallback != D2CLIENT_NpcQuestSpeechDone_I && dwCallback != D2CLIENT_NpcGossipSpeechDone_I)
@@ -508,6 +509,22 @@ void __declspec(naked) FreeSpeechPanel_Intercept() {
     __asm {
 		call D2CLIENT_FreeSpeechPanel_I
 		jmp ClearNpcSpeechCallback
+    }
+}
+
+// Takes the place of the stdcall free at 0x4A170D, which unlike the game's other frees of the list (0x4A068D, 0x4A1684,
+// 0x4A1749) has no NULL check: with no list open, the free itself faults at 0x6612A7. After it the game reads only esi
+// and ebp, and the packet dispatcher (0x45F8E9) discards the handler's eax.
+void __declspec(naked) FreeNpcMessageList_Intercept() {
+    __asm {
+		mov eax, [esp+4]
+		test eax, eax
+		jz no_list
+		push eax
+		call D2COMMON_FreeMessageList_I
+	no_list:
+		call ClearNpcSpeechCallback
+		ret 4
     }
 }
 

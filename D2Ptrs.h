@@ -367,6 +367,7 @@ enum {
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
     ASMPTR(D2COMMON, DisplayOverheadMsg_I, 0x2611A0)  // Updated 1.14d //006611A0-BASE
+    ASMPTR(D2COMMON, FreeMessageList_I, 0x2612A0)     // NEW 1.14d //006612A0-BASE stdcall, frees a message list, no NULL check
     ASMPTR(D2COMMON, GetLevelIdFromRoom_I, 0x21A1B0)  // Updated 1.14d //0061A1B0-BASE
     ASMPTR(D2COMMON, LvlSubPlaceLoop_I, 0x270774)     // NEW 1.14d //00670774-BASE
     ASMPTR(D2COMMON, LvlSubPlaceLoopDone_I, 0x270794) // NEW 1.14d //00670794-BASE

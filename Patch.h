@@ -13,8 +13,8 @@ static const BYTE StormStreamCheckOld[] = {0x83, 0x7E, 0x28, 0x00, 0x74, 0x38, 0
 static_assert(sizeof(StormStreamCheckOld) == 0x41A736 - 0x41A725, "StormStreamUpdate_Intercept returns to 0x41A736, the end of these bytes");
 static const CallSwap StormStreamCheck = {StormStreamCheckOld, (DWORD)StormStreamUpdate_Intercept};
 
-// The two calls that free an NPC's message list, see ClearNpcSpeechCallback: the NPC close's (0x4B3C20) and the game
-// exit's (0x456D80).
+// The NPC close's (0x4B3C20) and the game exit's (0x456D80) calls that free an NPC's message list, see
+// ClearNpcSpeechCallback.
 static const BYTE EndNpcSpeechCallOld[] = {0xE8, 0x69, 0xDA, 0xFE, 0xFF};    // call 0x4A1730
 static const BYTE FreeSpeechPanelCallOld[] = {0xE8, 0x72, 0x98, 0x04, 0x00}; // call 0x4A0680
 static const CallSwap EndNpcSpeechCall = {EndNpcSpeechCallOld, (DWORD)EndNpcSpeech_Intercept};

@@ -480,10 +480,11 @@ void __declspec(naked) GameActChange2_Intercept(void) {
 }
 
 // An NPC's quest speech or gossip leaves the speech panel a callback that plays the NPC's next message from its message
-// list when the speech ends (0x4B1830 reads the list without a NULL check), and only the callback clears itself. Closing
-// the NPC mid-speech (0x4B3C20, which me.cancel() reaches) and leaving the game end the speech and set the list to NULL
-// without running it, and the next speech to end, an object's for one, would run it with no list (access violation at
-// 0x661406), in the same game or a later one. The callback goes with the list here, as when its chain ends (0x4B6B6B).
+// list when the speech ends (0x4B1830 reads the list without a NULL check), and only the callback clears itself.
+// Closing the NPC mid-speech (0x4B3C20, which me.cancel() reaches) and leaving the game end the speech and set the list
+// to NULL without running it; a later speech that ends while it is still stored, an object's for one, runs it, and it
+// can read the missing list (access violation at 0x661406), in the same game or a later one. The callback goes with
+// the list here, as when its chain ends (0x4B6B6B).
 static void ClearNpcSpeechCallback() {
     DWORD dwCallback = *p_D2CLIENT_SpeechDoneCallback;
     if (dwCallback != D2CLIENT_NpcQuestSpeechDone_I && dwCallback != D2CLIENT_NpcGossipSpeechDone_I)
@@ -493,7 +494,7 @@ static void ClearNpcSpeechCallback() {
     *p_D2CLIENT_NpcChainActive = 0;
 }
 
-// Both take the place of a call (0x4B3CC2, 0x456E09) whose caller writes eax, ecx and edx before reading them.
+// Both take the place of a call (0x4B3CC2, 0x456E09) after which eax, ecx and edx are written before they are read.
 void __declspec(naked) EndNpcSpeech_Intercept() {
     __asm {
 		call D2CLIENT_EndNpcSpeech_I

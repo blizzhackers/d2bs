@@ -26,11 +26,14 @@ JSAPI_FUNC(my_getParty);
 // held, and drop the pointer before releasing it.
 RosterUnit* FindPartyUnit(const myParty* pParty);
 
-// Game-thread ends of the session Party objects carry, called with the game lock held. CloseGameSession() runs when a
-// game is left and always moves the session to a new value. SnapshotMenuSession() runs on every game-thread timer tick,
-// drawn frame or not, and records the session while the menu shows, so the next game's first getParty() can open one.
+// Game-thread ends of the session Party and Room objects carry, called with the game lock held. CloseGameSession() runs
+// when a game is left and always moves the session to a new value. SnapshotMenuSession() runs on every game-thread timer
+// tick, drawn frame or not, and records the session while the menu shows, so the next game's first getParty() or Room
+// can open one.
 void CloseGameSession(void);
 void SnapshotMenuSession(void);
+// Opens the current game's session if it isn't yet and returns whether one is open. Script threads, game lock held.
+bool OpenGameSession(void);
 
 enum party_tinyid { PARTY_AREA, PARTY_X, PARTY_Y, PARTY_GID, PARTY_LIFE, PARTY_NAME, PARTY_FLAG, PARTY_ID, PARTY_CLASSID, PARTY_LEVEL };
 

@@ -210,6 +210,7 @@ JSAPI_FUNC(room_getPresetUnits) {
             mypUnit->dwRoomY = pRoom2->dwPosY;
             mypUnit->dwType = pUnit->dwType;
             mypUnit->dwId = pUnit->dwTxtFileNo;
+            mypUnit->dwLevel = pRoom2->pLevel->dwLevelNo;
 
             // BuildObject attaches the private only when it succeeds.
             JSObject* jsUnit = BuildObject(cx, &presetunit_class, NULL, presetunit_props, mypUnit);
@@ -481,7 +482,7 @@ JSAPI_FUNC(room_getStat) {
             else if (nStat == 13)
                 JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwPosRoomX));
             else if (nStat == 14)
-                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwPosGameY));
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwPosRoomY));
             else if (nStat == 15)
                 JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwSizeRoomX));
             else if (nStat == 16)

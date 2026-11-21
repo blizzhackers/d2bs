@@ -193,6 +193,9 @@ JSAPI_FUNC(my_getPresetUnit) {
                     THROW_ERROR(cx, "Failed to create presetunit object");
                 }
                 JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(obj));
+                // The unit keeps copies of the preset's values, so the room loaded for the lookup unloads here too.
+                if (bAddedRoom)
+                    D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
                 delete cRoom;
                 return JS_TRUE;
             }

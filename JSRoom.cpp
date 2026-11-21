@@ -187,14 +187,20 @@ JSAPI_FUNC(room_getPresetUnits) {
         return JS_TRUE;
     }
 
+    JSObject* pReturnArray = JS_NewArrayObject(cx, 0, NULL);
+    if (!pReturnArray || !JS_AddRoot(cx, &pReturnArray)) {
+        delete cRoom;
+        return JS_FALSE;
+    }
+
     if (!pRoom2->pRoom1) {
         bAdded = TRUE;
         D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
     }
 
-    JSObject* pReturnArray = JS_NewArrayObject(cx, 0, NULL);
-    JS_AddRoot(cx, &pReturnArray);
-    for (PresetUnit* pUnit = pRoom2->pPreset; pUnit; pUnit = pUnit->pPresetNext) {
+    // An engine failure (out of memory) still unloads the room data and the root, then goes back to the engine as one.
+    JSBool bOk = JS_TRUE;
+    for (PresetUnit* pUnit = pRoom2->pPreset; pUnit && bOk; pUnit = pUnit->pPresetNext) {
         if ((pUnit->dwType == nType || nType == NULL) && (pUnit->dwTxtFileNo == nClass || nClass == NULL)) {
             myPresetUnit* mypUnit = new myPresetUnit;
 
@@ -205,16 +211,17 @@ JSAPI_FUNC(room_getPresetUnits) {
             mypUnit->dwType = pUnit->dwType;
             mypUnit->dwId = pUnit->dwTxtFileNo;
 
+            // BuildObject attaches the private only when it succeeds.
             JSObject* jsUnit = BuildObject(cx, &presetunit_class, NULL, presetunit_props, mypUnit);
             if (!jsUnit) {
-                delete cRoom;
-                JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-                return JS_TRUE;
+                delete mypUnit;
+                bOk = JS_FALSE;
+                break;
             }
 
             jsval a = OBJECT_TO_JSVAL(jsUnit);
             JS_BeginRequest(cx);
-            JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
+            bOk = JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
             JS_EndRequest(cx);
             dwArrayCount++;
         }
@@ -223,10 +230,11 @@ JSAPI_FUNC(room_getPresetUnits) {
     if (bAdded)
         D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
 
-    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pReturnArray));
+    if (bOk)
+        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pReturnArray));
     JS_RemoveRoot(cx, &pReturnArray);
     delete cRoom;
-    return JS_TRUE;
+    return bOk;
 }
 JSAPI_FUNC(room_getCollisionTypeArray) {
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
@@ -413,7 +421,7 @@ JSAPI_FUNC(room_getNearby) {
     JSObject* jsobj = JS_NewArrayObject(cx, NULL, NULL);
 
     if (!jsobj)
-        return JS_TRUE;
+        return JS_FALSE;
 
     AutoCriticalRoom cRoom;
     Room2* pRoom2 = FindLiveRoom(pSnap);
@@ -422,16 +430,18 @@ JSAPI_FUNC(room_getNearby) {
     for (DWORD i = 0; pRoom2 && i < pRoom2->dwRoomsNear; ++i) {
         if (!pRoom2->pRoom2Near[i])
             continue;
+        // FindLiveRoom found the room in an open session, which the room lock keeps open, so a NULL here is an engine
+        // failure (out of memory) and goes back to the engine as one.
         JSObject* jsroom = BuildRoomObject(cx, pRoom2->pRoom2Near[i]);
         if (!jsroom) {
             JS_EndRequest(cx);
-            return JS_TRUE;
+            return JS_FALSE;
         }
         jsval jsu = OBJECT_TO_JSVAL(jsroom);
 
         if (!JS_SetElement(cx, jsobj, dwCount++, &jsu)) {
             JS_EndRequest(cx);
-            return JS_TRUE;
+            return JS_FALSE;
         }
     }
     JS_EndRequest(cx);
@@ -462,45 +472,46 @@ JSAPI_FUNC(room_getStat) {
         D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
     }
 
-    if (!pRoom2->pRoom1) {
-        delete cRoom;
-        return JS_TRUE;
+    // A stat the room has no data for stays null, and room data added above is unloaded on every path.
+    if (Room1* pRoom1 = pRoom2->pRoom1) {
+        CollMap* pCol = pRoom1->Coll;
+        if (nStat == 0) // xStart
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom1->dwXStart));
+        else if (nStat == 1)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom1->dwYStart));
+        else if (nStat == 2)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom1->dwXSize));
+        else if (nStat == 3)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom1->dwYSize));
+        else if (nStat == 4)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->dwPosX));
+        else if (nStat == 5)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->dwPosY));
+        else if (nStat == 6)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->dwSizeX));
+        else if (nStat == 7)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->dwSizeY));
+        //	else if(nStat == 8)
+        //		*rval = INT_TO_JSVAL(pRoom2->pRoom1->dwYStart); // God knows??!!??!?!?!?!
+        else if (pCol) {
+            if (nStat == 9)
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwPosGameX));
+            else if (nStat == 10)
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwPosGameY));
+            else if (nStat == 11)
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwSizeGameX));
+            else if (nStat == 12)
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwSizeGameY));
+            else if (nStat == 13)
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwPosRoomX));
+            else if (nStat == 14)
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwPosGameY));
+            else if (nStat == 15)
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwSizeRoomX));
+            else if (nStat == 16)
+                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pCol->dwSizeRoomY));
+        }
     }
-
-    if (nStat == 0) // xStart
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->dwXStart));
-    else if (nStat == 1)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->dwYStart));
-    else if (nStat == 2)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->dwXSize));
-    else if (nStat == 3)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->dwYSize));
-    else if (nStat == 4)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->dwPosX));
-    else if (nStat == 5)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->dwPosY));
-    else if (nStat == 6)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->dwSizeX));
-    else if (nStat == 7)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->dwSizeY));
-    //	else if(nStat == 8)
-    //		*rval = INT_TO_JSVAL(pRoom2->pRoom1->dwYStart); // God knows??!!??!?!?!?!
-    else if (nStat == 9)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->Coll->dwPosGameX));
-    else if (nStat == 10)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->Coll->dwPosGameY));
-    else if (nStat == 11)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->Coll->dwSizeGameX));
-    else if (nStat == 12)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->Coll->dwSizeGameY));
-    else if (nStat == 13)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->Coll->dwPosRoomX));
-    else if (nStat == 14)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->Coll->dwPosGameY));
-    else if (nStat == 15)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->Coll->dwSizeRoomX));
-    else if (nStat == 16)
-        JS_SET_RVAL(cx, vp, INT_TO_JSVAL(pRoom2->pRoom1->Coll->dwSizeRoomY));
 
     if (bAdded)
         D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
@@ -610,7 +621,9 @@ JSAPI_FUNC(my_getRoom) {
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
             return JS_TRUE;
         } else if (levelId == 0) {
-            Room1* pRoom1 = D2COMMON_GetRoomFromUnit(D2CLIENT_GetPlayerUnit());
+            // WaitForGameReady ran before the lock was taken, so the player can be NULL by now.
+            UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+            Room1* pRoom1 = pPlayer ? D2COMMON_GetRoomFromUnit(pPlayer) : NULL;
 
             if (!pRoom1 || !pRoom1->pRoom2) {
                 delete cRoom;
@@ -668,8 +681,8 @@ JSAPI_FUNC(my_getRoom) {
                 bAdded = TRUE;
             }
 
-            CollMap* map = pRoom->pRoom1->Coll;
-            if (nX >= map->dwPosGameX && nY >= map->dwPosGameY && nX < (map->dwPosGameX + map->dwSizeGameX) && nY < (map->dwPosGameY + map->dwSizeGameY)) {
+            CollMap* map = pRoom->pRoom1 ? pRoom->pRoom1->Coll : NULL;
+            if (map && nX >= map->dwPosGameX && nY >= map->dwPosGameY && nX < (map->dwPosGameX + map->dwSizeGameX) && nY < (map->dwPosGameY + map->dwSizeGameY)) {
                 if (bAdded)
                     D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
 
@@ -694,7 +707,11 @@ JSAPI_FUNC(my_getRoom) {
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
         return JS_TRUE;
     } else {
-        JSObject* jsroom = BuildRoomObject(cx, D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2->pLevel->pRoom2First);
+        // WaitForGameReady ran before the lock was taken, so the player's room chain can be NULL by now.
+        UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+        Room1* pRoom1 = pPlayer && pPlayer->pPath ? pPlayer->pPath->pRoom1 : NULL;
+        Level* pLevel = pRoom1 && pRoom1->pRoom2 ? pRoom1->pRoom2->pLevel : NULL;
+        JSObject* jsroom = pLevel ? BuildRoomObject(cx, pLevel->pRoom2First) : NULL;
         delete cRoom;
         if (!jsroom)
             return JS_TRUE;

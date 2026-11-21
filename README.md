@@ -4714,7 +4714,7 @@ Get some property of the [Room](#classRoom).
 16 - sizeRoomY (coll)
 
 #### Returns
-The stat value.
+The stat value, or null for an unlisted stat or when the room's data for it isn't available.
 
 #### `public `[`Room`](#classRoom)` `[`getFirst`](#classRoom_1ad9a6e43e97d1f9368eeecc578dcd6e26)`()` 
 

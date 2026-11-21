@@ -87,7 +87,8 @@ public:
 	 *
 	 * 16 - sizeRoomY (coll)
 	 *
-	 * \return The stat value.
+	 * \return The stat value, or null for an unlisted stat or when the room's
+	 * data for it isn't available.
 	 */
 	int getStat(int nStat);
 

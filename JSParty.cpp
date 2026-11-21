@@ -14,11 +14,12 @@ void party_finalize(JSFreeOp* fop, JSObject* obj) {
     JS_SetPrivate(obj, NULL);
 }
 
-// The game session Party objects carry (Vars.dwGameSession); all three run with the game lock held. A game's first
-// getParty() opens it, so scripts already running when the game started get its roster at once, but only while the
-// value still equals the menu's snapshot and a player exists: GameLeave() moves the value on, so the game it closed never
-// reopens, and a player present after a menu snapshot belongs to the next game, which starts after the last roster's free.
-static bool OpenGameSession(void) {
+// The game session Party and Room objects carry (Vars.dwGameSession); all three run with the game lock held. A game's
+// first getParty() or Room opens it, so scripts already running when the game started get its roster at once, but only
+// while the value still equals the menu's snapshot and a player exists: GameLeave() moves the value on, so the game it
+// closed never reopens, and a player present after a menu snapshot belongs to the next game, which starts after the last
+// roster's free.
+bool OpenGameSession(void) {
     if (Vars.dwGameSession == Vars.dwMenuSession && D2CLIENT_GetPlayerUnit())
         Vars.dwGameSession++;
     return (Vars.dwGameSession & 1) != 0;

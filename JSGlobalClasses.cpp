@@ -67,7 +67,7 @@ JSClass sandbox_class = {"Sandbox", JSCLASS_HAS_PRIVATE,
 
 JSClass room_class = {
     "Room", JSCLASS_HAS_PRIVATE,
-    JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL, room_ctor)};
+    JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, room_finalize, room_ctor)};
 
 JSClass presetunit_class = {"PresetUnit", JSCLASS_HAS_PRIVATE,
                             JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub,

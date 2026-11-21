@@ -31,6 +31,8 @@ RosterUnit* FindPartyUnit(const myParty* pParty);
 // drawn frame or not, and records the session while the menu shows, so the next game's first getParty() can open one.
 void CloseGameSession(void);
 void SnapshotMenuSession(void);
+// Opens the current game's session if it isn't yet and returns whether one is open. Script threads, game lock held.
+bool OpenGameSession(void);
 
 enum party_tinyid { PARTY_AREA, PARTY_X, PARTY_Y, PARTY_GID, PARTY_LIFE, PARTY_NAME, PARTY_FLAG, PARTY_ID, PARTY_CLASSID, PARTY_LEVEL };
 

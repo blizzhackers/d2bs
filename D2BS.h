@@ -27,8 +27,9 @@
 
 #define PRIVATE_UNIT 1
 #define PRIVATE_ITEM 3
-// Bit 0 clear: natives that read any object's private data and test it against PRIVATE_UNIT turn a Party away.
+// Bit 0 clear: natives that read any object's private data and test it against PRIVATE_UNIT turn a Party or Room away.
 #define PRIVATE_PARTY 4
+#define PRIVATE_ROOM 6
 
 struct Private {
     DWORD dwPrivateType;
@@ -106,8 +107,9 @@ struct Variables {
 
     UINT_PTR uTimer;
     long SectionCount;
-    // Odd from a game's first getParty() until the game is left, even otherwise, and a new value for every game, so a
-    // Party object never finds a player in a later game. dwMenuSession is its value as the menu last showed it: a game
+    // Odd from a game's first getParty() or Room until the game is left, even otherwise, and a new value for every game,
+    // so a Party or Room object never finds its player or room in a later game. dwMenuSession is its value as the menu
+    // last showed it: a game
     // opens only while the two are equal. Both are read and written only with cGameLoopSection held (JSParty.cpp).
     DWORD dwGameSession;
     DWORD dwMenuSession;

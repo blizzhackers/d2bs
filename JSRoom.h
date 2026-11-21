@@ -6,6 +6,7 @@
 #include "js32.h"
 
 CLASS_CTOR(room);
+void room_finalize(JSFreeOp* fop, JSObject* obj);
 
 JSAPI_PROP(room_getProperty);
 

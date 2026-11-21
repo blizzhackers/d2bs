@@ -3,44 +3,143 @@
 #include "JSPresetUnit.h"
 #include "D2Structs.h"
 #include "D2Ptrs.h"
+#include "D2BS.h"
+#include "D2Helpers.h"
+#include "JSParty.h"
 
 EMPTY_CTOR(room)
 
-JSAPI_PROP(room_getProperty) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, obj);
+namespace {
+// A Room object keeps this copy instead of the game's Room2 pointer: the game frees a level's rooms on its own schedule (a
+// level once it is idle, which can be soon after it is built, and every level at an act change), while a script can hold
+// the object indefinitely. A room's level and position never change within a game, so they answer the properties and,
+// with the game session, find the live room again.
+struct RoomSnapshot {
+    DWORD dwPrivateType; // PRIVATE_ROOM, first so natives that read any private's type turn a Room away
+    DWORD dwSession;     // Vars.dwGameSession when built
+    DWORD dwLevelNo;
+    DWORD dwPosX;
+    DWORD dwPosY;
+    DWORD dwSizeX;
+    DWORD dwSizeY;
+    bool bHasNumber;
+    DWORD dwNumber;
+    DWORD dwStaffTombLevel;
+};
 
-    if (!pRoom2)
+// The caller holds the room lock and pRoom2 is live. Leaves the type and session alone.
+void FillSnapshot(RoomSnapshot* pSnap, Room2* pRoom2) {
+    Level* pLevel = pRoom2->pLevel;
+    pSnap->dwLevelNo = pLevel ? pLevel->dwLevelNo : 0;
+    pSnap->dwPosX = pRoom2->dwPosX;
+    pSnap->dwPosY = pRoom2->dwPosY;
+    pSnap->dwSizeX = pRoom2->dwSizeX;
+    pSnap->dwSizeY = pRoom2->dwSizeY;
+    pSnap->bHasNumber = pRoom2->dwPresetType != 2 || pRoom2->pType2Info;
+    pSnap->dwNumber = pRoom2->dwPresetType != 2 ? (DWORD)-1 : pRoom2->pType2Info ? pRoom2->pType2Info->dwRoomNumber : 0;
+    pSnap->dwStaffTombLevel = pLevel && pLevel->pMisc ? pLevel->pMisc->dwStaffTombLevel : 0;
+}
+
+RoomSnapshot* GetSnapshot(JSContext* cx, JSObject* obj) {
+    return obj ? (RoomSnapshot*)JS_GetInstancePrivate(cx, obj, &room_class, NULL) : NULL;
+}
+
+// The caller holds the room lock. Looks only in the game the room came from and the player's current act. An act change
+// frees the old act before the player's own pointer moves on, so that pointer is trusted only while it is the client's
+// loaded act. A level whose rooms the game freed is rebuilt, as getRoom(area) does, but only while the game is ready: a
+// player busy between steps can still walk a loaded level, as before.
+Level* FindRoomLevel(const RoomSnapshot* pSnap) {
+    if (!pSnap || !pSnap->dwLevelNo || !(pSnap->dwSession & 1) || pSnap->dwSession != Vars.dwGameSession)
+        return NULL;
+
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    Act* pAct = *p_D2CLIENT_CurrentAct;
+    if (!pPlayer || !pAct || pPlayer->pAct != pAct || !pAct->pMisc)
+        return NULL;
+
+    for (Level* pLevel = pAct->pMisc->pLevelFirst; pLevel; pLevel = pLevel->pNextLevel) {
+        if (pLevel->dwLevelNo != pSnap->dwLevelNo)
+            continue;
+        if (!pLevel->pRoom2First && GameReady())
+            D2COMMON_InitLevel(pLevel);
+        return pLevel->pRoom2First ? pLevel : NULL;
+    }
+    return NULL;
+}
+
+// The caller holds the room lock.
+Room2* FindLiveRoom(const RoomSnapshot* pSnap) {
+    Level* pLevel = FindRoomLevel(pSnap);
+    if (!pLevel)
+        return NULL;
+
+    for (Room2* pRoom2 = pLevel->pRoom2First; pRoom2; pRoom2 = pRoom2->pRoom2Next) {
+        if (pRoom2->dwPosX == pSnap->dwPosX && pRoom2->dwPosY == pSnap->dwPosY)
+            return pRoom2;
+    }
+    return NULL;
+}
+
+// The caller holds the room lock and pRoom2, if not NULL, is live. Builds nothing once the game has been left, as getParty
+// does: a Room carries an open session, so it can never match a room in the next game.
+JSObject* BuildRoomObject(JSContext* cx, Room2* pRoom2) {
+    if (!pRoom2 || !OpenGameSession())
+        return NULL;
+
+    RoomSnapshot* pSnap = new RoomSnapshot;
+    pSnap->dwPrivateType = PRIVATE_ROOM;
+    pSnap->dwSession = Vars.dwGameSession;
+    FillSnapshot(pSnap, pRoom2);
+
+    JSObject* jsroom = BuildObject(cx, &room_class, room_methods, room_props, pSnap);
+    if (!jsroom)
+        delete pSnap;
+    return jsroom;
+}
+} // namespace
+
+void room_finalize(JSFreeOp* fop, JSObject* obj) {
+    RoomSnapshot* pSnap = (RoomSnapshot*)JS_GetPrivate(obj);
+
+    if (pSnap) {
+        JS_SetPrivate(obj, NULL);
+        delete pSnap;
+    }
+}
+
+JSAPI_PROP(room_getProperty) {
+    RoomSnapshot* pSnap = GetSnapshot(cx, obj);
+
+    if (!pSnap)
         return JS_TRUE;
     jsval ID;
     JS_IdToValue(cx, id, &ID);
     switch (JSVAL_TO_INT(ID)) {
     case ROOM_NUM:
-        if (pRoom2->dwPresetType != 2)
-            vp.setInt32(-1);
-        else if (pRoom2->pType2Info)
-            vp.setInt32(pRoom2->pType2Info->dwRoomNumber);
+        if (pSnap->bHasNumber)
+            vp.setInt32(pSnap->dwNumber);
         break;
     case ROOM_XPOS:
-        vp.setInt32(pRoom2->dwPosX);
+        vp.setInt32(pSnap->dwPosX);
         break;
     case ROOM_YPOS:
-        vp.setInt32(pRoom2->dwPosY);
+        vp.setInt32(pSnap->dwPosY);
         break;
     case ROOM_XSIZE:
-        vp.setInt32(pRoom2->dwSizeX * 5);
+        vp.setInt32(pSnap->dwSizeX * 5);
         break;
     case ROOM_YSIZE:
-        vp.setInt32(pRoom2->dwSizeY * 5);
+        vp.setInt32(pSnap->dwSizeY * 5);
         break;
     case ROOM_AREA:
     case ROOM_LEVEL:
-        if (pRoom2->pLevel)
-            vp.setInt32(pRoom2->pLevel->dwLevelNo);
+        if (pSnap->dwLevelNo)
+            vp.setInt32(pSnap->dwLevelNo);
         break;
 
     case ROOM_CORRECTTOMB:
-        if (pRoom2->pLevel && pRoom2->pLevel->pMisc && pRoom2->pLevel->pMisc->dwStaffTombLevel)
-            vp.setInt32(pRoom2->pLevel->pMisc->dwStaffTombLevel);
+        if (pSnap->dwStaffTombLevel)
+            vp.setInt32(pSnap->dwStaffTombLevel);
         break;
 
     default:
@@ -51,29 +150,24 @@ JSAPI_PROP(room_getProperty) {
 }
 
 JSAPI_FUNC(room_getNext) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
-    if (!pRoom2) {
-        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    if (!pSnap)
         return JS_TRUE;
-    }
 
-    pRoom2 = pRoom2->pRoom2Next;
+    AutoCriticalRoom cRoom;
+    Room2* pRoom2 = FindLiveRoom(pSnap);
+    if (!pRoom2 || !pRoom2->pRoom2Next)
+        return JS_TRUE;
 
-    if (!pRoom2) {
-        JSObject* obj = JS_THIS_OBJECT(cx, vp);
-        //		JS_ClearScope(cx, obj);
-        if (JS_ValueToObject(cx, JSVAL_NULL, &obj))
-            JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-    } else {
-        JS_SetPrivate(cx, JS_THIS_OBJECT(cx, vp), pRoom2);
-        JS_SET_RVAL(cx, vp, JSVAL_TRUE);
-    }
-
+    FillSnapshot(pSnap, pRoom2->pRoom2Next);
+    JS_SET_RVAL(cx, vp, JSVAL_TRUE);
     return JS_TRUE;
 }
 
 JSAPI_FUNC(room_getPresetUnits) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
 
     DWORD nType = NULL;
     DWORD nClass = NULL;
@@ -87,7 +181,8 @@ JSAPI_FUNC(room_getPresetUnits) {
     DWORD dwArrayCount = NULL;
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    if (!pRoom2 || !GameReady()) {
+    Room2* pRoom2 = GameReady() ? FindLiveRoom(pSnap) : NULL;
+    if (!pRoom2) {
         delete cRoom;
         return JS_TRUE;
     }
@@ -134,13 +229,15 @@ JSAPI_FUNC(room_getPresetUnits) {
     return JS_TRUE;
 }
 JSAPI_FUNC(room_getCollisionTypeArray) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
 
     bool bAdded = FALSE;
     CollMap* pCol = NULL;
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    if (!pRoom2 || !GameReady()) {
+    Room2* pRoom2 = GameReady() ? FindLiveRoom(pSnap) : NULL;
+    if (!pRoom2) {
         delete cRoom;
         return JS_TRUE;
     }
@@ -216,13 +313,15 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
     return JS_TRUE;
 }
 JSAPI_FUNC(room_getCollision) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
 
     bool bAdded = FALSE;
     CollMap* pCol = NULL;
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    if (!pRoom2 || !GameReady()) {
+    Room2* pRoom2 = GameReady() ? FindLiveRoom(pSnap) : NULL;
+    if (!pRoom2) {
         delete cRoom;
         return JS_TRUE;
     }
@@ -309,21 +408,28 @@ JSAPI_FUNC(room_getCollision) {
 }
 
 JSAPI_FUNC(room_getNearby) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
     JSObject* jsobj = JS_NewArrayObject(cx, NULL, NULL);
 
     if (!jsobj)
         return JS_TRUE;
+
+    AutoCriticalRoom cRoom;
+    Room2* pRoom2 = FindLiveRoom(pSnap);
+    DWORD dwCount = 0;
     JS_BeginRequest(cx);
-    for (DWORD i = 0; i < pRoom2->dwRoomsNear; ++i) {
-        JSObject* jsroom = BuildObject(cx, &room_class, room_methods, room_props, pRoom2->pRoom2Near[i]);
+    for (DWORD i = 0; pRoom2 && i < pRoom2->dwRoomsNear; ++i) {
+        if (!pRoom2->pRoom2Near[i])
+            continue;
+        JSObject* jsroom = BuildRoomObject(cx, pRoom2->pRoom2Near[i]);
         if (!jsroom) {
             JS_EndRequest(cx);
             return JS_TRUE;
         }
         jsval jsu = OBJECT_TO_JSVAL(jsroom);
 
-        if (!JS_SetElement(cx, jsobj, i, &jsu)) {
+        if (!JS_SetElement(cx, jsobj, dwCount++, &jsu)) {
             JS_EndRequest(cx);
             return JS_TRUE;
         }
@@ -335,7 +441,7 @@ JSAPI_FUNC(room_getNearby) {
 
 // Don't know whether it works or not
 JSAPI_FUNC(room_getStat) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
 
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     if (argc < 1 || !JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
@@ -346,7 +452,8 @@ JSAPI_FUNC(room_getStat) {
     bool bAdded = false;
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    if (!pRoom2 || !GameReady()) {
+    Room2* pRoom2 = GameReady() ? FindLiveRoom(pSnap) : NULL;
+    if (!pRoom2) {
         delete cRoom;
         return JS_TRUE;
     }
@@ -403,11 +510,16 @@ JSAPI_FUNC(room_getStat) {
 
 JSAPI_FUNC(room_getFirst) {
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
-    if (!pRoom2 || !pRoom2->pLevel || !pRoom2->pLevel->pRoom2First)
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    if (!pSnap)
         return JS_TRUE;
 
-    JSObject* jsroom = BuildObject(cx, &room_class, room_methods, room_props, pRoom2->pLevel->pRoom2First);
+    AutoCriticalRoom cRoom;
+    Level* pLevel = FindRoomLevel(pSnap);
+    if (!pLevel)
+        return JS_TRUE;
+
+    JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
     if (!jsroom)
         return JS_TRUE;
 
@@ -417,8 +529,9 @@ JSAPI_FUNC(room_getFirst) {
 }
 
 JSAPI_FUNC(room_unitInRoom) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
-    if (!pRoom2 || argc < 1 || !JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[0]))
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    if (!pSnap || argc < 1 || !JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[0]))
         return JS_TRUE;
 
     myUnit* pmyUnit = (myUnit*)JS_GetPrivate(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[0]));
@@ -426,6 +539,7 @@ JSAPI_FUNC(room_unitInRoom) {
     if (!pmyUnit || (pmyUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
 
+    AutoCriticalRoom cRoom;
     UnitAny* pUnit = D2CLIENT_FindUnit(pmyUnit->dwUnitId, pmyUnit->dwType);
 
     if (!pUnit)
@@ -433,23 +547,29 @@ JSAPI_FUNC(room_unitInRoom) {
 
     Room1* pRoom1 = D2COMMON_GetRoomFromUnit(pUnit);
 
-    if (!pRoom1 || !pRoom1->pRoom2)
+    if (!pRoom1 || !pRoom1->pRoom2 || !pRoom1->pRoom2->pLevel)
         return JS_TRUE;
 
-    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(!!(pRoom1->pRoom2 == pRoom2)));
+    // Compared by game, level and position: the game can reuse a freed room's address for another room.
+    Room2* pUnitRoom = pRoom1->pRoom2;
+    JS_SET_RVAL(cx, vp,
+                BOOLEAN_TO_JSVAL(pSnap->dwSession == Vars.dwGameSession && pUnitRoom->pLevel->dwLevelNo == pSnap->dwLevelNo && pUnitRoom->dwPosX == pSnap->dwPosX &&
+                                 pUnitRoom->dwPosY == pSnap->dwPosY));
 
     return JS_TRUE;
 }
 
 JSAPI_FUNC(room_reveal) {
-    Room2* pRoom2 = (Room2*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
 
     BOOL bDrawPresets = false;
     if (argc == 1 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[0]))
         bDrawPresets = !!JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[0]);
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    if (!pRoom2 || !GameReady()) {
+    Room2* pRoom2 = GameReady() ? FindLiveRoom(pSnap) : NULL;
+    if (!pRoom2) {
         delete cRoom;
         return JS_TRUE;
     }
@@ -481,7 +601,7 @@ JSAPI_FUNC(my_getRoom) {
                 return JS_TRUE;
             }
 
-            JSObject* jsroom = BuildObject(cx, &room_class, room_methods, room_props, pLevel->pRoom2First);
+            JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
             if (!jsroom) {
                 delete cRoom;
                 return JS_TRUE;
@@ -497,7 +617,7 @@ JSAPI_FUNC(my_getRoom) {
                 return JS_TRUE;
             }
 
-            JSObject* jsroom = BuildObject(cx, &room_class, room_methods, room_props, pRoom1->pRoom2);
+            JSObject* jsroom = BuildRoomObject(cx, pRoom1->pRoom2);
             delete cRoom;
             if (!jsroom)
                 return JS_TRUE;
@@ -553,7 +673,7 @@ JSAPI_FUNC(my_getRoom) {
                 if (bAdded)
                     D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
 
-                JSObject* jsroom = BuildObject(cx, &room_class, room_methods, room_props, pRoom);
+                JSObject* jsroom = BuildRoomObject(cx, pRoom);
                 delete cRoom;
                 if (!jsroom)
                     return JS_TRUE;
@@ -566,7 +686,7 @@ JSAPI_FUNC(my_getRoom) {
                 D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
         }
 
-        JSObject* jsroom = BuildObject(cx, &room_class, room_methods, room_props, pLevel->pRoom2First);
+        JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
         delete cRoom;
         if (!jsroom)
             return JS_TRUE;
@@ -574,7 +694,7 @@ JSAPI_FUNC(my_getRoom) {
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
         return JS_TRUE;
     } else {
-        JSObject* jsroom = BuildObject(cx, &room_class, room_methods, room_props, D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2->pLevel->pRoom2First);
+        JSObject* jsroom = BuildRoomObject(cx, D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2->pLevel->pRoom2First);
         delete cRoom;
         if (!jsroom)
             return JS_TRUE;

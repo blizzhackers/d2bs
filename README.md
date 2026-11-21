@@ -4564,6 +4564,8 @@ Represents a "Room" in the game.
 
 A [Room](#classRoom) is a rectangular piece of the map data. It has pointers to many lists, such as a list of [PresetUnit](#classPresetUnit) s.
 
+A [Room](#classRoom) keeps its area, position and size, so its properties keep their values while a script holds it, until getNext() moves it to the next room. Its methods find the game's current copy of the room on every call, so they work whenever the player is in the room's act, in the game the room came from. In another act or a later game, getNext() returns false, getNearby() returns an empty array, getStat() returns null, unitInRoom() returns false and the other methods return undefined.
+
 ## Summary
 
  Members                        | Descriptions                                

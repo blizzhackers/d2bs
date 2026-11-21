@@ -138,6 +138,8 @@ enum {
     VARPTR(D2CLIENT, ScreenSizeX, DWORD, 0x31146C) // Updated 1.14d //0071146C-BASE
     VARPTR(D2CLIENT, ScreenSizeY, DWORD, 0x311470) // Updated 1.14d //00711470-BASE
 
+    VARPTR(D2CLIENT, CurrentAct, Act*, 0x3A0634) // NEW 1.14d //007A0634-BASE loaded act, set only by act load 0x44E149 and game exit 0x44C8AE
+
     VARPTR(D2CLIENT, CursorHoverX, DWORD, 0x321E4C) // Updated 1.14d //00721E4C-BASE
     VARPTR(D2CLIENT, CursorHoverY, DWORD, 0x321E50) // Updated 1.14d //00721E50-BASE
 

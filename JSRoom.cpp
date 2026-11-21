@@ -257,14 +257,11 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
     }
 
     JSObject* jsobjy = JS_NewUint16Array(cx, (pRoom2->dwSizeX * 5) * (pRoom2->dwSizeY * 5));
-    JS_AddRoot(cx, &jsobjy);
-
-    if (!jsobjy) {
-        JS_RemoveRoot(cx, &jsobjy);
+    if (!jsobjy || !JS_AddRoot(cx, &jsobjy)) {
         if (bAdded)
             D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
         delete cRoom;
-        return JS_TRUE;
+        return JS_FALSE;
     }
 
     if (pRoom2->pRoom1)
@@ -288,24 +285,15 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
 
     int nCurrentArrayY = NULL;
 
+    // An engine failure (out of memory) still unloads the room data and the root, then goes back to the engine as one.
+    JSBool bOk = JS_TRUE;
     WORD* p = pCol->pMapStart;
     JS_BeginRequest(cx);
-    for (int j = y; j < nLimitY; j++) {
-
+    for (int j = y; j < nLimitY && bOk; j++) {
         int nCurrentArrayX = 0;
-        for (int i = x; i < nLimitX; i++) {
+        for (int i = x; i < nLimitX && bOk; i++) {
             jsval nNode = INT_TO_JSVAL(*p);
-
-            if (!JS_SetElement(cx, jsobjy, nCurrentArrayY * nCx + nCurrentArrayX, &nNode)) {
-                if (bAdded)
-                    D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY,
-                                            D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
-                JS_RemoveRoot(cx, &jsobjy);
-                JS_EndRequest(cx);
-                delete cRoom;
-                return JS_TRUE;
-            }
-
+            bOk = JS_SetElement(cx, jsobjy, nCurrentArrayY * nCx + nCurrentArrayX, &nNode);
             nCurrentArrayX++;
             p++;
         }
@@ -315,11 +303,12 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
     if (bAdded)
         D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
 
-    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsobjy));
+    if (bOk)
+        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsobjy));
     JS_RemoveRoot(cx, &jsobjy);
     JS_EndRequest(cx);
     delete cRoom;
-    return JS_TRUE;
+    return bOk;
 }
 JSAPI_FUNC(room_getCollision) {
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
@@ -336,11 +325,9 @@ JSAPI_FUNC(room_getCollision) {
     }
 
     JSObject* jsobjy = JS_NewArrayObject(cx, NULL, NULL);
-    JS_AddRoot(cx, &jsobjy);
-    if (!jsobjy) {
-        JS_RemoveRoot(cx, &jsobjy);
+    if (!jsobjy || !JS_AddRoot(cx, &jsobjy)) {
         delete cRoom;
-        return JS_TRUE;
+        return JS_FALSE;
     }
 
     if (!pRoom2->pRoom1) {
@@ -369,51 +356,40 @@ JSAPI_FUNC(room_getCollision) {
 
     int nCurrentArrayY = NULL;
 
+    // An engine failure (out of memory) still unloads the room data and the root, then goes back to the engine as one.
+    JSBool bOk = JS_TRUE;
     WORD* p = pCol->pMapStart;
     JS_BeginRequest(cx);
-    for (int j = y; j < nLimitY; j++) {
+    for (int j = y; j < nLimitY && bOk; j++) {
         JSObject* jsobjx = JS_NewArrayObject(cx, NULL, NULL);
+        if (!jsobjx) {
+            bOk = JS_FALSE;
+            break;
+        }
 
         int nCurrentArrayX = 0;
-        for (int i = x; i < nLimitX; i++) {
+        for (int i = x; i < nLimitX && bOk; i++) {
             jsval nNode = INT_TO_JSVAL(*p);
-
-            if (!JS_SetElement(cx, jsobjx, nCurrentArrayX, &nNode)) {
-                if (bAdded)
-                    D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY,
-                                            D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
-                JS_RemoveRoot(cx, &jsobjy);
-                JS_EndRequest(cx);
-                delete cRoom;
-                return JS_TRUE;
-            }
-
+            bOk = JS_SetElement(cx, jsobjx, nCurrentArrayX, &nNode);
             nCurrentArrayX++;
             p++;
         }
 
         jsval jsu = OBJECT_TO_JSVAL(jsobjx);
-
-        if (!JS_SetElement(cx, jsobjy, nCurrentArrayY, &jsu)) {
-            if (bAdded)
-                D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY,
-                                        D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
-            JS_RemoveRoot(cx, &jsobjy);
-            JS_EndRequest(cx);
-            delete cRoom;
-            return JS_TRUE;
-        }
+        if (bOk)
+            bOk = JS_SetElement(cx, jsobjy, nCurrentArrayY, &jsu);
         nCurrentArrayY++;
     }
 
     if (bAdded)
         D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
 
-    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsobjy));
+    if (bOk)
+        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsobjy));
     JS_RemoveRoot(cx, &jsobjy);
     JS_EndRequest(cx);
     delete cRoom;
-    return JS_TRUE;
+    return bOk;
 }
 
 JSAPI_FUNC(room_getNearby) {
@@ -531,12 +507,13 @@ JSAPI_FUNC(room_getFirst) {
     if (!pLevel)
         return JS_TRUE;
 
+    // FindRoomLevel found the level in an open session, which the room lock keeps open, so a NULL here is an engine
+    // failure (out of memory) and goes back to the engine as one.
     JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
     if (!jsroom)
-        return JS_TRUE;
+        return JS_FALSE;
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
-
     return JS_TRUE;
 }
 
@@ -597,7 +574,14 @@ JSAPI_FUNC(my_getRoom) {
     if (!WaitForGameReady())
         THROW_ERROR(cx, "Get Room Game not ready");
 
+    // A game being left has closed its session while its player and rooms still exist, and finds no room. In an open
+    // session, which the room lock keeps open, a NULL BuildRoomObject below is an engine failure (out of memory) and goes
+    // back to the engine as one.
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
+    if (!OpenGameSession()) {
+        delete cRoom;
+        return JS_TRUE;
+    }
 
     if (argc == 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0])) {
         uint32 levelId;
@@ -614,11 +598,10 @@ JSAPI_FUNC(my_getRoom) {
             }
 
             JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
-            if (!jsroom) {
-                delete cRoom;
-                return JS_TRUE;
-            }
             delete cRoom;
+            if (!jsroom)
+                return JS_FALSE;
+
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
             return JS_TRUE;
         } else if (levelId == 0) {
@@ -634,7 +617,7 @@ JSAPI_FUNC(my_getRoom) {
             JSObject* jsroom = BuildRoomObject(cx, pRoom1->pRoom2);
             delete cRoom;
             if (!jsroom)
-                return JS_TRUE;
+                return JS_FALSE;
 
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
             return JS_TRUE;
@@ -690,7 +673,7 @@ JSAPI_FUNC(my_getRoom) {
                 JSObject* jsroom = BuildRoomObject(cx, pRoom);
                 delete cRoom;
                 if (!jsroom)
-                    return JS_TRUE;
+                    return JS_FALSE;
 
                 JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
                 return JS_TRUE;
@@ -703,7 +686,7 @@ JSAPI_FUNC(my_getRoom) {
         JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
         delete cRoom;
         if (!jsroom)
-            return JS_TRUE;
+            return JS_FALSE;
 
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
         return JS_TRUE;
@@ -712,10 +695,15 @@ JSAPI_FUNC(my_getRoom) {
         UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
         Room1* pRoom1 = pPlayer && pPlayer->pPath ? pPlayer->pPath->pRoom1 : NULL;
         Level* pLevel = pRoom1 && pRoom1->pRoom2 ? pRoom1->pRoom2->pLevel : NULL;
-        JSObject* jsroom = pLevel ? BuildRoomObject(cx, pLevel->pRoom2First) : NULL;
+        if (!pLevel || !pLevel->pRoom2First) {
+            delete cRoom;
+            return JS_TRUE;
+        }
+
+        JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
         delete cRoom;
         if (!jsroom)
-            return JS_TRUE;
+            return JS_FALSE;
 
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
         return JS_TRUE;

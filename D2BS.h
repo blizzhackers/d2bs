@@ -109,8 +109,8 @@ struct Variables {
     long SectionCount;
     // Odd from a game's first getParty() or Room until the game is left, even otherwise, and a new value for every game,
     // so a Party or Room object never finds its player or room in a later game. dwMenuSession is its value as the menu
-    // last showed it: a game
-    // opens only while the two are equal. Both are read and written only with cGameLoopSection held (JSParty.cpp).
+    // last showed it: a game opens only while the two are equal. Both are read and written only with cGameLoopSection
+    // held (JSParty.cpp, JSRoom.cpp).
     DWORD dwGameSession;
     DWORD dwMenuSession;
 

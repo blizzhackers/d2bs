@@ -4707,7 +4707,7 @@ Get some property of the [Room](#classRoom).
 
 13 - posRoomX (coll)
 
-14 - posGameY (coll)
+14 - posRoomY (coll)
 
 15 - sizeRoomX (coll)
 

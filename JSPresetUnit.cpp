@@ -82,9 +82,15 @@ JSAPI_FUNC(my_getPresetUnits) {
     DWORD dwArrayCount = NULL;
 
     JSObject* pReturnArray = JS_NewArrayObject(cx, 0, NULL);
+    if (!pReturnArray || !JS_AddRoot(cx, &pReturnArray)) {
+        delete cRoom;
+        return JS_FALSE;
+    }
+
+    // An engine failure (out of memory) still unloads the room data and the root, then goes back to the engine as one.
+    JSBool bOk = JS_TRUE;
     JS_BeginRequest(cx);
-    JS_AddRoot(cx, &pReturnArray);
-    for (Room2* pRoom = pLevel->pRoom2First; pRoom; pRoom = pRoom->pRoom2Next) {
+    for (Room2* pRoom = pLevel->pRoom2First; pRoom && bOk; pRoom = pRoom->pRoom2Next) {
         bAddedRoom = FALSE;
 
         if (!pRoom->pPreset) {
@@ -92,7 +98,7 @@ JSAPI_FUNC(my_getPresetUnits) {
             bAddedRoom = TRUE;
         }
 
-        for (PresetUnit* pUnit = pRoom->pPreset; pUnit; pUnit = pUnit->pPresetNext) {
+        for (PresetUnit* pUnit = pRoom->pPreset; pUnit && bOk; pUnit = pUnit->pPresetNext) {
             // Does it fit?
             if ((nType == NULL || pUnit->dwType == nType) && (nClassId == NULL || pUnit->dwTxtFileNo == nClassId)) {
                 myPresetUnit* mypUnit = new myPresetUnit;
@@ -105,16 +111,16 @@ JSAPI_FUNC(my_getPresetUnits) {
                 mypUnit->dwId = pUnit->dwTxtFileNo;
                 mypUnit->dwLevel = levelId;
 
+                // BuildObject attaches the private only when it succeeds.
                 JSObject* unit = BuildObject(cx, &presetunit_class, NULL, presetunit_props, mypUnit);
                 if (!unit) {
                     delete mypUnit;
-                    JS_EndRequest(cx);
-                    delete cRoom;
-                    THROW_ERROR(cx, "Failed to build object?");
+                    bOk = JS_FALSE;
+                    break;
                 }
 
                 jsval a = OBJECT_TO_JSVAL(unit);
-                JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
+                bOk = JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
 
                 dwArrayCount++;
             }
@@ -125,12 +131,13 @@ JSAPI_FUNC(my_getPresetUnits) {
             bAddedRoom = FALSE;
         }
     }
-    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pReturnArray));
+    if (bOk)
+        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pReturnArray));
 
     JS_RemoveRoot(cx, &pReturnArray);
     JS_EndRequest(cx);
     delete cRoom;
-    return JS_TRUE;
+    return bOk;
 }
 
 JSAPI_FUNC(my_getPresetUnit) {
@@ -186,11 +193,15 @@ JSAPI_FUNC(my_getPresetUnit) {
                 mypUnit->dwId = pUnit->dwTxtFileNo;
                 mypUnit->dwLevel = levelId;
 
+                // BuildObject attaches the private only when it succeeds. An engine failure (out of memory) still
+                // unloads the room data, then goes back to the engine as one.
                 JSObject* obj = BuildObject(cx, &presetunit_class, NULL, presetunit_props, mypUnit);
                 if (!obj) {
-                    delete cRoom;
                     delete mypUnit;
-                    THROW_ERROR(cx, "Failed to create presetunit object");
+                    if (bAddedRoom)
+                        D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+                    delete cRoom;
+                    return JS_FALSE;
                 }
                 JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(obj));
                 delete cRoom;

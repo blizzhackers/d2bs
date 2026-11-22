@@ -1,6 +1,7 @@
 #include "Room.h"
 #include "CriticalSections.h"
 #include "D2Ptrs.h"
+#include "D2Helpers.h"
 
 BOOL RevealRoom(Room2* pRoom2, BOOL revealPresets) {
     bool bAdded = false;
@@ -16,7 +17,7 @@ BOOL RevealRoom(Room2* pRoom2, BOOL revealPresets) {
     UnitAny* player = D2CLIENT_GetPlayerUnit();
     // Check if we have Room1(Needed in order to reveal)
     if (!(pRoom2 && pRoom2->pLevel && pRoom2->pRoom1)) {
-        D2COMMON_AddRoomData(pRoom2->pLevel->pMisc->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, NULL);
+        LoadRoomData(pRoom2->pLevel->pMisc->pAct, pRoom2, NULL);
         bAdded = true;
     }
     if (!(pRoom2 && pRoom2->pRoom1)) { // second check added to see if we DID indeed init the room!

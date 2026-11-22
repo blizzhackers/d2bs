@@ -4,6 +4,7 @@
 #include <cmath>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "D2Helpers.h"
 #include "Constants.h"
@@ -196,6 +197,48 @@ Level* GetLevel(DWORD dwLevelNo) {
     // this crashes pretty much every time it's called
     // pLevel = D2COMMON_GetLevel(D2CLIENT_GetPlayerUnit()->pAct->pMisc, dwLevelNo);
     return pLevel;
+}
+
+static bool SamePresetUnit(const PresetUnit* a, const PresetUnit* b) {
+    return a->dwType == b->dwType && a->dwTxtFileNo == b->dwTxtFileNo && a->dwPosX == b->dwPosX && a->dwPosY == b->dwPosY && a->_1 == b->_1;
+}
+
+void LoadRoomData(Act* pAct, Room2* pRoom2, Room1* pNear) {
+    PresetUnit* pSurvivor = pRoom2->pPreset;
+    D2COMMON_AddRoomData(pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, pNear);
+    if (!pSurvivor || pRoom2->pPreset == pSurvivor)
+        return;
+
+    // Every room build derives presets from the room's tiles and placed sub-maps again and only prepends them, so on a
+    // list that survived the last unload the nodes in front of the old head repeat surviving ones. Any other shape is
+    // left alone.
+    PresetUnit* pUnit = pRoom2->pPreset;
+    while (pUnit && pUnit != pSurvivor)
+        pUnit = pUnit->pPresetNext;
+    if (!pUnit)
+        return;
+
+    std::vector<PresetUnit*> survivors;
+    for (pUnit = pSurvivor; pUnit; pUnit = pUnit->pPresetNext)
+        survivors.push_back(pUnit);
+    std::vector<bool> matched(survivors.size(), false);
+
+    // Each new node cancels at most one surviving equal, so presets that are genuinely new (a first build) all stay.
+    void* pMemPool = pRoom2->pLevel->pMisc->pMemPool;
+    PresetUnit** ppLink = &pRoom2->pPreset;
+    while (*ppLink != pSurvivor) {
+        PresetUnit* pNew = *ppLink;
+        size_t i = 0;
+        while (i < survivors.size() && (matched[i] || !SamePresetUnit(pNew, survivors[i])))
+            i++;
+        if (i == survivors.size()) {
+            ppLink = &pNew->pPresetNext;
+            continue;
+        }
+        matched[i] = true;
+        *ppLink = pNew->pPresetNext;
+        D2COMMON_FreePresetUnit(pMemPool, pNew);
+    }
 }
 
 // TODO: make this use SIZE for clarity

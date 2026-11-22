@@ -255,7 +255,7 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
 
     if (!pRoom2->pRoom1) {
         bAdded = TRUE;
-        D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+        LoadRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
     }
 
     JSObject* jsobjy = JS_NewUint16Array(cx, (pRoom2->dwSizeX * 5) * (pRoom2->dwSizeY * 5));
@@ -334,7 +334,7 @@ JSAPI_FUNC(room_getCollision) {
 
     if (!pRoom2->pRoom1) {
         bAdded = TRUE;
-        D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+        LoadRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
     }
 
     if (pRoom2->pRoom1)
@@ -448,7 +448,7 @@ JSAPI_FUNC(room_getStat) {
     }
     if (!pRoom2->pRoom1) {
         bAdded = true;
-        D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+        LoadRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
     }
 
     // A stat the room has no data for stays null, and room data added above is unloaded on every path.
@@ -669,7 +669,7 @@ JSAPI_FUNC(my_getRoom) {
         for (Room2* pRoom = pLevel->pRoom2First; pRoom; pRoom = pRoom->pRoom2Next) {
             bool bAdded = FALSE;
             if (!pRoom->pRoom1) {
-                D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+                LoadRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
                 bAdded = TRUE;
             }
 

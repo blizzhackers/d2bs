@@ -341,6 +341,8 @@ enum {
 
     FUNCPTR(D2COMMON, AddRoomData, void __stdcall, (Act * ptAct, int LevelId, int Xpos, int Ypos, Room1* pRoom), 0x21A070)    // Updated 1.14d //0061A070-BASE
     FUNCPTR(D2COMMON, RemoveRoomData, void __stdcall, (Act * ptAct, int LevelId, int Xpos, int Ypos, Room1* pRoom), 0x21A0C0) // Updated 1.14d //0061A0C0-BASE
+    // The room free's own per-preset free (0x66C100 calls it on each node): frees the preset and its path data.
+    FUNCPTR(D2COMMON, FreePresetUnit, void __fastcall, (void* pMemPool, PresetUnit* pPresetUnit), 0x2675D0) // 1.14d //006675D0-BASE
 
     FUNCPTR(D2COMMON, GetQuestFlag, int __stdcall, (void* QuestInfo, DWORD dwAct, DWORD dwQuest), 0x25C310) // Updated 1.14d //0065C310-BASE
 

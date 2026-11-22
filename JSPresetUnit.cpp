@@ -6,6 +6,24 @@
 
 EMPTY_CTOR(presetunit)
 
+namespace {
+// Reads the area, type or class id argument. undefined and null give 0 (any type or class); other values convert to a
+// whole number the way `>>> 0` does ("" and false give 0 too), except that NaN ("obj", {}) gives a value no preset has.
+// A failed conversion (a valueOf that throws) leaves its exception pending and returns false.
+JSBool PresetArg(JSContext* cx, jsval v, uint32* pOut) {
+    *pOut = 0;
+    if (JSVAL_IS_VOID(v) || JSVAL_IS_NULL(v))
+        return JS_TRUE;
+    double d = 0;
+    JS_BeginRequest(cx);
+    JSBool bOk = JS_ValueToNumber(cx, v, &d);
+    JS_EndRequest(cx);
+    if (bOk)
+        *pOut = MOZ_DOUBLE_IS_NaN(d) ? (uint32)-1 : JS_DoubleToUint32(d);
+    return bOk;
+}
+} // namespace
+
 void presetunit_finalize(JSFreeOp* fop, JSObject* obj) {
     myPresetUnit* pUnit = (myPresetUnit*)JS_GetPrivate(obj);
 
@@ -59,10 +77,18 @@ JSAPI_FUNC(my_getPresetUnits) {
         return JS_TRUE;
     }
 
+    // The area, type and class id convert before the game lock is taken: a conversion can run script code (valueOf), and
+    // script code run under the lock stalls the game thread.
     uint32 levelId;
-    JS_BeginRequest(cx);
-    JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
-    JS_EndRequest(cx);
+    uint32 nClassId = NULL;
+    uint32 nType = NULL;
+    if (!PresetArg(cx, JS_ARGV(cx, vp)[0], &levelId))
+        return JS_FALSE;
+    if (argc >= 2 && !PresetArg(cx, JS_ARGV(cx, vp)[1], &nType))
+        return JS_FALSE;
+    if (argc >= 3 && !PresetArg(cx, JS_ARGV(cx, vp)[2], &nClassId))
+        return JS_FALSE;
+
     // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
     // only while it holds this lock. An act change frees the old act before the player's own pointer moves on, and the
     // game thread can release the lock in between while it waits for a packet listener, so that pointer is trusted only
@@ -75,14 +101,6 @@ JSAPI_FUNC(my_getPresetUnits) {
         delete cRoom;
         THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
     }
-
-    uint nClassId = NULL;
-    uint nType = NULL;
-
-    if (argc >= 2)
-        nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc >= 3)
-        nClassId = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
 
     bool bAddedRoom = FALSE;
     DWORD dwArrayCount = NULL;
@@ -157,10 +175,18 @@ JSAPI_FUNC(my_getPresetUnit) {
         return JS_TRUE;
     }
 
+    // The area, type and class id convert before the game lock is taken: a conversion can run script code (valueOf), and
+    // script code run under the lock stalls the game thread.
     uint32 levelId;
-    JS_BeginRequest(cx);
-    JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
-    JS_EndRequest(cx);
+    uint32 nClassId = NULL;
+    uint32 nType = NULL;
+    if (!PresetArg(cx, JS_ARGV(cx, vp)[0], &levelId))
+        return JS_FALSE;
+    if (argc >= 2 && !PresetArg(cx, JS_ARGV(cx, vp)[1], &nType))
+        return JS_FALSE;
+    if (argc >= 3 && !PresetArg(cx, JS_ARGV(cx, vp)[2], &nClassId))
+        return JS_FALSE;
+
     // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
     // only while it holds this lock. An act change frees the old act before the player's own pointer moves on, and the
     // game thread can release the lock in between while it waits for a packet listener, so that pointer is trusted only
@@ -173,14 +199,6 @@ JSAPI_FUNC(my_getPresetUnit) {
         delete cRoom;
         THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
     }
-
-    DWORD nClassId = NULL;
-    DWORD nType = NULL;
-
-    if (argc >= 2)
-        nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc >= 3)
-        nClassId = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
 
     bool bAddedRoom = FALSE;
 

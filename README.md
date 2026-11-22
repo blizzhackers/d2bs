@@ -522,9 +522,9 @@ Get the first [PresetUnit](#classPresetUnit) of the given type and class id.
 #### Parameters
 * `levelId` The area id of the level to look for a [PresetUnit](#classPresetUnit) in.
 
-* `nType` The type of the [PresetUnit](#classPresetUnit). See getUnit for type codes.
+* `nType` The type of the [PresetUnit](#classPresetUnit). See getUnit for type codes. 0 or omitted matches any type, and a value that converts to NaN matches none.
 
-* `nClassId` The class id to find. See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=986](http://forums.d2botnet.org/viewtopic.php?f=18&t=986) and [http://forums.d2botnet.org/viewtopic.php?f=18&t=985](http://forums.d2botnet.org/viewtopic.php?f=18&t=985) .
+* `nClassId` The class id to find. See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=986](http://forums.d2botnet.org/viewtopic.php?f=18&t=986) and [http://forums.d2botnet.org/viewtopic.php?f=18&t=985](http://forums.d2botnet.org/viewtopic.php?f=18&t=985) . 0 or omitted matches any class id, and a value that converts to NaN matches none.
 
 #### Returns
 The first [PresetUnit](#classPresetUnit) found of type nType and class ID nClassId.
@@ -536,9 +536,9 @@ Get an array of [PresetUnit](#classPresetUnit) s of the given type and class id.
 #### Parameters
 * `levelId` The area id of the level to look for [PresetUnit](#classPresetUnit) s in.
 
-* `nType` The type of the [PresetUnit](#classPresetUnit). See getUnit for type codes.
+* `nType` The type of the [PresetUnit](#classPresetUnit). See getUnit for type codes. 0 or omitted matches any type, and a value that converts to NaN matches none.
 
-* `nClassId` The class id to find. See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=986](http://forums.d2botnet.org/viewtopic.php?f=18&t=986) and [http://forums.d2botnet.org/viewtopic.php?f=18&t=985](http://forums.d2botnet.org/viewtopic.php?f=18&t=985) .
+* `nClassId` The class id to find. See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=986](http://forums.d2botnet.org/viewtopic.php?f=18&t=986) and [http://forums.d2botnet.org/viewtopic.php?f=18&t=985](http://forums.d2botnet.org/viewtopic.php?f=18&t=985) . 0 or omitted matches any class id, and a value that converts to NaN matches none.
 
 #### Returns
 An array of [PresetUnit](#classPresetUnit) s found of type nType and class ID nClassId.

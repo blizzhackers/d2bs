@@ -218,9 +218,11 @@ JSAPI_FUNC(file_open) {
 
     JSObject* res = BuildObject(cx, &file_class, file_methods, file_props, fdata);
     if (!res) {
-        if (lockFile)
+        // As file_close does: the stream lock taken above is released before the close, or it stays held.
+        if (lockFile) {
+            _unlock_file(fptr);
             fclose(fptr);
-        else
+        } else
             _fclose_nolock(fptr);
         free(fdata->path);
         delete fdata;

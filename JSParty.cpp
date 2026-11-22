@@ -219,7 +219,7 @@ JSAPI_FUNC(my_getParty) {
     // BuildObject attaches the private only when it succeeds.
     if (!jsUnit) {
         delete pParty;
-        return JS_TRUE;
+        return JS_FALSE;
     }
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsUnit));

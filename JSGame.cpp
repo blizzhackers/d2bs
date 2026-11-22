@@ -194,6 +194,11 @@ JSAPI_FUNC(my_getDialogLines) {
             js_selectable = BOOLEAN_TO_JSVAL(pTdi->dialogLines[i].bMaybeSelectable);
 
             line = BuildObject(cx, &dialogLine_class, 0, 0, 0, 0);
+            if (!line) {
+                JS_RemoveObjectRoot(cx, &pReturnArray);
+                delete cRoom;
+                return JS_FALSE;
+            }
             JS_SetProperty(cx, line, "text", &js_text);
             JS_SetProperty(cx, line, "selectable", &js_selectable);
 
@@ -322,6 +327,12 @@ JSAPI_FUNC(my_getPath) {
         jsval jx = INT_TO_JSVAL(list[i].first), jy = INT_TO_JSVAL(list[i].second);
 
         JSObject* point = BuildObject(cx);
+        // The map was cleaned up (and its lock released) right after the search, so only the local data is freed here.
+        if (!point) {
+            delete[] vec;
+            delete reducer;
+            return JS_FALSE;
+        }
         JS_SetProperty(cx, point, "x", &jx);
         JS_SetProperty(cx, point, "y", &jy);
 
@@ -1367,9 +1378,9 @@ JSAPI_FUNC(my_getMouseCoords) {
 
     if (nReturn) {
         pObj = BuildObject(cx, NULL);
-        JS_AddRoot(cx, &pObj);
         if (!pObj)
             THROW_ERROR(cx, "Could not build object");
+        JS_AddRoot(cx, &pObj);
         if (JS_SetProperty(cx, pObj, "x", &jsX) == JS_FALSE)
             THROW_ERROR(cx, "Could not set x property");
         if (JS_SetProperty(cx, pObj, "y", &jsY) == JS_FALSE)
@@ -1443,7 +1454,7 @@ JSAPI_FUNC(my_getInteractedNPC) {
         return JS_TRUE;
     }
 
-    myUnit* pmyUnit = new myUnit; // leaked?
+    myUnit* pmyUnit = new myUnit;
     if (!pmyUnit)
         return JS_TRUE;
 
@@ -1456,8 +1467,11 @@ JSAPI_FUNC(my_getInteractedNPC) {
     strcpy_s(pmyUnit->szName, sizeof(pmyUnit->szName), szName);
 
     JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
-    if (!jsunit)
-        return JS_TRUE;
+    // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+    if (!jsunit) {
+        delete pmyUnit;
+        return JS_FALSE;
+    }
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
     return JS_TRUE;

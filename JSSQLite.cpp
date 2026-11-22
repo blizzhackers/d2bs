@@ -202,7 +202,6 @@ JSAPI_FUNC(sqlite_query) {
     dbstmt->canGet = false;
     dbstmt->assoc_db = dbobj;
     dbstmt->current_row = NULL;
-    dbobj->stmts.insert(dbstmt);
 
     JSObject* row = BuildObject(cx, &sqlite_stmt, sqlite_stmt_methods, sqlite_stmt_props, dbstmt);
     if (!row) {
@@ -211,6 +210,8 @@ JSAPI_FUNC(sqlite_query) {
         JS_free(cx, sql);
         THROW_ERROR(cx, "Could not create the sqlite row object");
     }
+    // The database closes every statement in its list, so a statement joins it only once its object exists.
+    dbobj->stmts.insert(dbstmt);
     JS_free(cx, sql);
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(row));
     return JS_TRUE;
@@ -263,6 +264,10 @@ JSAPI_PROP(sqlite_getProperty) {
         for (StmtList::iterator it = dbobj->stmts.begin(); it != dbobj->stmts.end(); it++, i++) {
             if ((*it)->open) {
                 JSObject* stmt = BuildObject(cx, &sqlite_stmt, sqlite_stmt_methods, sqlite_stmt_props, *it);
+                if (!stmt) {
+                    JS_EndRequest(cx);
+                    return JS_FALSE;
+                }
                 jsval tmp = OBJECT_TO_JSVAL(stmt);
                 JS_SetElement(cx, stmts, i, &tmp);
             }

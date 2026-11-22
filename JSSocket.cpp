@@ -112,6 +112,7 @@ JSAPI_FUNC(socket_open) {
     if (!res) {
         closesocket(Sdata->socket);
         WSACleanup();
+        delete Sdata;
         THROW_ERROR(cx, "Failed to define the socket object");
     }
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(res));

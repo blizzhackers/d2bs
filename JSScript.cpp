@@ -196,6 +196,12 @@ JSAPI_FUNC(my_getScripts) {
 
     for (ScriptMap::iterator it = ScriptEngine::scripts.begin(); it != ScriptEngine::scripts.end(); it++) {
         JSObject* res = BuildObject(cx, &script_class, script_methods, script_props, it->second);
+        if (!res) {
+            ScriptEngine::UnLockScriptList("getScripts");
+            JS_RemoveRoot(cx, &pReturnArray);
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         jsval a = OBJECT_TO_JSVAL(res);
         JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
         dwArrayCount++;

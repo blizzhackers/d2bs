@@ -53,6 +53,9 @@ JSAPI_PROP(area_getProperty) {
                 JSObject* pExit = BuildObject(cx, &exit_class, NULL, exit_props, exit);
                 if (!pExit) {
                     delete exit;
+                    // A partial list is not kept, so the next read builds the exits again.
+                    JS_RemoveRoot(cx, &pArea->ExitArray);
+                    pArea->ExitArray = NULL;
                     JS_EndRequest(cx);
                     THROW_ERROR(cx, "Failed to create exit object!");
                 }

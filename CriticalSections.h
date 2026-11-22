@@ -26,6 +26,10 @@ class CriticalRoom {
             LeaveCriticalSection(&Vars.cGameLoopSection);
         }
     }
+
+    bool IsEntered() const {
+        return bEnteredCriticalSection;
+    }
 };
 
 class AutoCriticalRoom {

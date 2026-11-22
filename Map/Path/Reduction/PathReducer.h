@@ -10,6 +10,9 @@ class PathReducer {
   public:
     PathReducer() {
     }
+    // getPath deletes reducers through this base, so each subclass destructor must run.
+    virtual ~PathReducer() {
+    }
     PathReducer(const PathReducer&);
     PathReducer& operator=(const PathReducer&);
     virtual void Reduce(PointList const& in, PointList& out, bool abs) = 0;

@@ -20,7 +20,8 @@ class JSPathReducer : public PathReducer {
   public:
     JSPathReducer(const JSPathReducer&);
     JSPathReducer& operator=(const JSPathReducer&);
-    JSPathReducer(ActMap* m, JSContext* cx, JSObject* obj, jsval _reject, jsval _reduce, jsval _mutate) : reject(_reject), reduce(_reduce), mutate(_mutate) {
+    JSPathReducer(ActMap* m, JSContext* _cx, JSObject* _obj, jsval _reject, jsval _reduce, jsval _mutate)
+        : cx(_cx), obj(_obj), reject(_reject), reduce(_reduce), mutate(_mutate) {
         JS_AddRoot(cx, &reject);
         JS_AddRoot(cx, &reduce);
         JS_AddRoot(cx, &mutate);

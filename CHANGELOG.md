@@ -19,6 +19,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 - **Sturdier room lookups.** The game keeps running when a room has no collision data: `Room.getStat()` returns `null` for its collision stats (9-16), and `getRoom()` passes over it when searching by position. `getRoom()` and `getRoom(0)` return `undefined` when the player's room isn't available. `Room.getStat()` and `Room.getPresetUnits()` unload every room they load for the lookup, and a script that runs out of memory during `getRoom()`, `getPresetUnit()`, `getPresetUnits()` or a `Room` method stops at that call, as it would anywhere else.
 - **Accurate room details.** Preset units from `Room.getPresetUnits()` report their area in `level`, as those from `getPresetUnits()` do, and `Room.getStat(14)` returns the collision data's `posRoomY`, the y counterpart of `getStat(13)`.
 - **Checked preset and room arguments.** `getPresetUnit()` and `getPresetUnits()` read their type and class id as whole numbers, converted the way `>>> 0` converts them, so `"2"` and `2.5` filter like `2`, `undefined`, `null`, `0`, `""` and `false` match any type or class, and a value that converts to `NaN`, such as `"obj"`, matches nothing. When converting an argument throws (a `valueOf()` that throws), the error reaches the script, for these and for `getRoom(x, y)` and `getRoom(area, x, y)`.
+- **Lean teleport paths.** A teleport `getPath()` call (reduction type 1) frees the memory it uses for the search, so a bot can plan teleport paths all game long.
 
 ## [1.8.0-rc.1] - 2026-11-20
 

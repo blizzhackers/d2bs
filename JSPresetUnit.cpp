@@ -77,8 +77,8 @@ JSAPI_FUNC(my_getPresetUnits) {
         return JS_TRUE;
     }
 
-    // Every argument converts before the level is looked up: a conversion can run script code (valueOf), which must not
-    // run while this native holds a level pointer.
+    // The area, type and class id convert before the level is looked up: a conversion can run script code (valueOf),
+    // which must not run while this native holds a level pointer.
     uint32 levelId;
     uint32 nClassId = NULL;
     uint32 nType = NULL;
@@ -167,8 +167,8 @@ JSAPI_FUNC(my_getPresetUnit) {
         return JS_TRUE;
     }
 
-    // Every argument converts before the level is looked up: a conversion can run script code (valueOf), which must not
-    // run while this native holds a level pointer.
+    // The area, type and class id convert before the level is looked up: a conversion can run script code (valueOf),
+    // which must not run while this native holds a level pointer.
     uint32 levelId;
     uint32 nClassId = NULL;
     uint32 nType = NULL;

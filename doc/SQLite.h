@@ -47,7 +47,7 @@ public:
 	 */
 	String path;
 
-	/** Get all the statements that have been queried.
+	/** Get the statements from query() that haven't been closed with close() or by closing the database.
 	 */
 	DBStatement[] statements;
 

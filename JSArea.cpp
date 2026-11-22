@@ -17,8 +17,9 @@ void area_finalize(JSFreeOp* fop, JSObject* obj) {
 }
 
 JSAPI_PROP(area_getProperty) {
-    myArea* pArea = (myArea*)JS_GetPrivate(cx, obj);
-    ;
+    // Class-checked: a getter reached through an object that inherits from an area gets that object as obj, and
+    // the exits cache below reads and writes obj's reserved slot.
+    myArea* pArea = (myArea*)JS_GetInstancePrivate(cx, obj, &area_class, NULL);
     if (!pArea)
         return JS_FALSE;
 
@@ -31,9 +32,10 @@ JSAPI_PROP(area_getProperty) {
     switch (JSVAL_TO_INT(ID)) {
     case AUNIT_EXITS: {
         JS_BeginRequest(cx);
-        if (pArea->ExitArray == NULL) {
-            pArea->ExitArray = JS_NewArrayObject(cx, 0, NULL);
-            JS_AddRoot(cx, &pArea->ExitArray);
+        // Cached in the area's reserved slot, so the GC keeps the list exactly as long as the area object.
+        jsval exitList = JS_GetReservedSlot(obj, 0);
+        if (JSVAL_IS_VOID(exitList)) {
+            JS::RootedObject exitArray(cx, JS_NewArrayObject(cx, 0, NULL));
 
             ActMap* map = ActMap::GetMap(pLevel);
 
@@ -54,18 +56,17 @@ JSAPI_PROP(area_getProperty) {
                 if (!pExit) {
                     delete exit;
                     // A partial list is not kept, so the next read builds the exits again.
-                    JS_RemoveRoot(cx, &pArea->ExitArray);
-                    pArea->ExitArray = NULL;
                     JS_EndRequest(cx);
                     THROW_ERROR(cx, "Failed to create exit object!");
                 }
                 jsval a = OBJECT_TO_JSVAL(pExit);
-                JS_SetElement(cx, pArea->ExitArray, i, &a);
+                JS_SetElement(cx, exitArray, i, &a);
             }
+            exitList = OBJECT_TO_JSVAL(exitArray);
+            if (exitArray)
+                JS_SetReservedSlot(obj, 0, exitList);
         }
-        vp.set(OBJECT_TO_JSVAL(pArea->ExitArray));
-        if (pArea->ExitArray)
-            JS_RemoveRoot(cx, &pArea->ExitArray);
+        vp.set(exitList);
     }
         JS_EndRequest(cx);
         break;
@@ -129,7 +130,6 @@ JSAPI_FUNC(my_getArea) {
     }
 
     pArea->AreaId = nArea;
-    pArea->ExitArray = NULL;
 
     JSObject* unit = BuildObject(cx, &area_class, NULL, area_props, pArea);
     if (!unit) {

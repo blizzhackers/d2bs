@@ -23,7 +23,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 - **Lean teleport paths.** A teleport `getPath()` call (reduction type 1) releases its teleport search data when it returns, so a bot can plan teleport paths all game long.
 - **Safe database statements.** A script can read an `SQLite` database's `statements` alongside the statements `query()` returned, and close any of them in any order. Stepping a statement whose database is closed, with `next()`, `go()` or `skip()`, throws "The statement is closed".
 - **Unhurried `getRoom()` arguments.** `getRoom()` reads its area and coordinates before it takes the game lock, so a `valueOf()` that takes its time, for example one that calls `delay()`, holds up only its own script, and one that throws reaches the script whether or not the area is found.
-- **Areas across act changes.** The game keeps running when a script reads an `Area` from `getArea()` while the player changes acts.
+- **Areas across act changes.** The game keeps running when a script reads an `Area` it already holds while the player changes acts.
 
 ## [1.8.0-rc.1] - 2026-11-20
 

@@ -582,8 +582,8 @@ JSAPI_FUNC(my_getRoom) {
     bool bByArea = argc == 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]);
     bool bByPoint = argc == 2 || argc == 3;
     uint32 levelId = 0;
-    uint32 nX = NULL;
-    uint32 nY = NULL;
+    uint32 nX = 0;
+    uint32 nY = 0;
     JSBool bConverted = JS_TRUE;
     JS_BeginRequest(cx);
     if (bByArea)

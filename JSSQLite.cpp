@@ -36,7 +36,7 @@ struct SqliteDB {
 };
 
 // Every statement object holds one reference (db.statements builds more objects for the same statement), and the
-// last release deletes it. assoc_db is non-NULL exactly while the statement is in that database's stmts list.
+// last release deletes it. A listed statement's assoc_db is its database; unlisting it or closing the database NULLs it.
 struct DBStmt {
     sqlite3_stmt* stmt;
     bool open, canGet;

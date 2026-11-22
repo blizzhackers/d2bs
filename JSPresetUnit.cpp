@@ -77,8 +77,8 @@ JSAPI_FUNC(my_getPresetUnits) {
         return JS_TRUE;
     }
 
-    // The area, type and class id convert before the level is looked up: a conversion can run script code (valueOf),
-    // which must not run while this native holds a level pointer.
+    // The area, type and class id convert before the game lock is taken: a conversion can run script code (valueOf), and
+    // script code run under the lock stalls the game thread.
     uint32 levelId;
     uint32 nClassId = NULL;
     uint32 nType = NULL;
@@ -175,8 +175,8 @@ JSAPI_FUNC(my_getPresetUnit) {
         return JS_TRUE;
     }
 
-    // The area, type and class id convert before the level is looked up: a conversion can run script code (valueOf),
-    // which must not run while this native holds a level pointer.
+    // The area, type and class id convert before the game lock is taken: a conversion can run script code (valueOf), and
+    // script code run under the lock stalls the game thread.
     uint32 levelId;
     uint32 nClassId = NULL;
     uint32 nType = NULL;

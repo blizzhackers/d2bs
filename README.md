@@ -4800,7 +4800,7 @@ Class for dealing with an [SQLite](#classSQLite) database.
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
 `public String `[`path`](#classSQLite_1a5d99c8c883289592018dfd5ee94ea3ce) | Get the path used to open the database.
-`public `[`DBStatement`](#classDBStatement)` `[`statements`](#classSQLite_1a30a088d06c85fa846e13dd87b1ac7ad7) | Get all the statements that have been queried.
+`public `[`DBStatement`](#classDBStatement)` `[`statements`](#classSQLite_1a30a088d06c85fa846e13dd87b1ac7ad7) | Get the statements from query() that haven't been closed with close() or by closing the database.
 `public bool `[`isOpen`](#classSQLite_1a82dd45ef884604bf40f70a16c9f6fbc6) | Whether or not the database is open.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`lastRowId`](#classSQLite_1aff1af94823aa7b2de96f65993686feed) | Get the row id of the last inserted row.
 `public double `[`changes`](#classSQLite_1a8eaeea285b896935182fdd334b605c72) | Get the number of rows modified/inserted/deleted by the last statement.
@@ -4818,7 +4818,7 @@ Get the path used to open the database.
 
 #### `public `[`DBStatement`](#classDBStatement)` `[`statements`](#classSQLite_1a30a088d06c85fa846e13dd87b1ac7ad7) 
 
-Get all the statements that have been queried.
+Get the statements from query() that haven't been closed with close() or by closing the database.
 
 #### `public bool `[`isOpen`](#classSQLite_1a82dd45ef884604bf40f70a16c9f6fbc6) 
 

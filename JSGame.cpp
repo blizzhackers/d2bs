@@ -321,29 +321,27 @@ JSAPI_FUNC(my_getPath) {
 
     int count = list.size();
 
-    //	JS_EnterLocalRootScope(cx);
-
-    jsval* vec = new jsval[count];
+    // The points stay rooted until the array holds them: building a later point can run the GC.
+    JS::AutoValueVector vec(cx);
+    if (!vec.resize(count)) {
+        delete reducer;
+        return JS_FALSE;
+    }
     for (int i = 0; i < count; i++) {
         jsval jx = INT_TO_JSVAL(list[i].first), jy = INT_TO_JSVAL(list[i].second);
 
         JSObject* point = BuildObject(cx);
         if (!point) {
-            delete[] vec;
             delete reducer;
             return JS_FALSE;
         }
+        vec[i] = OBJECT_TO_JSVAL(point);
         JS_SetProperty(cx, point, "x", &jx);
         JS_SetProperty(cx, point, "y", &jy);
-
-        vec[i] = OBJECT_TO_JSVAL(point);
     }
 
-    JSObject* arr = JS_NewArrayObject(cx, count, vec);
-    delete[] vec;
+    JSObject* arr = JS_NewArrayObject(cx, count, vec.begin());
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
-
-    //	JS_LeaveLocalRootScope(cx);
 
     delete reducer;
     return JS_TRUE;

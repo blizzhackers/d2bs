@@ -8,36 +8,6 @@
 #include "D2Helpers.h"
 namespace Mapping {
 
-ActMapList ActMap::cache = ActMapList();
-DWORD ActMap::previousLevelNo = 0;
-
-ActMap* ActMap::GetMap(Level* level) {
-    ActMap* map = NULL;
-    /*if (previousLevelNo != level->dwLevelNo)
-    {*/
-    if (previousLevelNo != 0) {
-        cache[0]->CleanUp();
-        delete cache[0];
-    }
-    previousLevelNo = level->dwLevelNo;
-    map = new ActMap(level);
-    cache[0] = map;
-    /*}
-    else
-    {
-            map = cache[0];
-    }*/
-    return map;
-}
-
-void ActMap::ClearCache(void) {
-    ActMapList::iterator end = cache.end();
-    for (ActMapList::iterator it = cache.begin(); it != end; it++)
-        delete it->second;
-    cache.clear();
-    ActMap::previousLevelNo = 0;
-}
-
 ActMap::ActMap(const Level* level) {
     lock = new CRITICAL_SECTION;
     InitializeCriticalSection(lock);
@@ -186,6 +156,9 @@ WORD ActMap::getCollFromRoom(Room2* room, const Point& pt) const {
 }
 
 void ActMap::CleanUp(void) const {
+    // The room lists are shared by every map, so only a map that holds the game lock may unload or clear them.
+    if (!actCrit->IsEntered())
+        return;
     for (RoomList::iterator it = RoomsAdded.begin(); it != RoomsAdded.end(); it++)
         RemoveRoomData(*it);
     RoomsAdded.clear();

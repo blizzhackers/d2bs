@@ -35,11 +35,11 @@ JSAPI_PROP(area_getProperty) {
             pArea->ExitArray = JS_NewArrayObject(cx, 0, NULL);
             JS_AddRoot(cx, &pArea->ExitArray);
 
-            ActMap* map = ActMap::GetMap(pLevel);
-
             ExitArray exits;
-            map->GetExits(exits);
-            map->CleanUp();
+            {
+                ScopedActMap map(pLevel);
+                map->GetExits(exits);
+            }
             int count = exits.size();
             for (int i = 0; i < count; i++) {
                 myExit* exit = new myExit;

@@ -693,7 +693,6 @@ void GameLeave(void) {
     }
     Vars.bQuitting = false;
     ScriptEngine::ForEachScript(StopIngameScript, NULL, 0);
-    ActMap::ClearCache();
 
     //	EnterCriticalSection(&Vars.cGameLoopSection);
 }

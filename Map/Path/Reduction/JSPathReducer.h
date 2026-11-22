@@ -36,19 +36,20 @@ class JSPathReducer : public PathReducer {
         // create the initial array to pass to the js function
         int count = in.size();
 
-        //	JS_EnterLocalRootScope(cx);
-
-        jsval* vec = new jsval[count];
+        // The points stay rooted through the callbacks: building a later point can run the GC, and a callback may
+        // empty the array it is passed.
+        JS::AutoValueVector vec(cx);
+        if (!vec.resize(count))
+            return;
         for (int i = 0; i < count; i++) {
             jsval x = INT_TO_JSVAL(in[i].first), y = INT_TO_JSVAL(in[i].second);
 
             JSObject* pt = BuildObject(cx);
+            vec[i] = OBJECT_TO_JSVAL(pt);
             JS_SetProperty(cx, pt, "x", &x);
             JS_SetProperty(cx, pt, "y", &y);
-
-            vec[i] = OBJECT_TO_JSVAL(pt);
         }
-        JSObject* arr = JS_NewArrayObject(cx, count, vec);
+        JSObject* arr = JS_NewArrayObject(cx, count, vec.begin());
 
         jsval argv[] = {JSVAL_NULL, JSVAL_ZERO, OBJECT_TO_JSVAL(arr)};
         for (int i = 0; i < count; i++) {
@@ -59,9 +60,6 @@ class JSPathReducer : public PathReducer {
             if (!!JSVAL_TO_BOOLEAN(rval))
                 out.push_back(in[i]);
         }
-
-        //		JS_LeaveLocalRootScope(cx);
-        delete[] vec;
     }
     bool Reject(Point const& pt, bool abs) {
         jsval rval = JSVAL_FALSE;

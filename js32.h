@@ -231,13 +231,12 @@ template <typename T> inline JSBool __fastcall JS_ArrayToVector(JSContext* cx, J
 template <typename T> inline JSObject* __fastcall JS_VectorToArray(JSContext* cx, std::vector<T>& vec) {
     Converter<T> converter;
     size_t len = vec.size();
-    jsval* jsarr = new jsval[len];
-
-    auto end = vec.end();
-    int i = 0;
-    for (auto it = vec.begin(); it != end; it++, i++)
+    // Rooted while it is filled: converting a later element can run the GC.
+    JS::AutoValueVector jsarr(cx);
+    if (!jsarr.resize(len))
+        return NULL;
+    for (size_t i = 0; i < len; i++)
         jsarr[i] = converter(cx, vec[i]);
 
-    JSObject* arr = JS_NewArrayObject(cx, len, jsarr);
-    return arr;
+    return JS_NewArrayObject(cx, len, jsarr.begin());
 }

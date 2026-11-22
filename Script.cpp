@@ -180,25 +180,20 @@ void Script::Run(void) {
     jsval main = INT_TO_JSVAL(1), dummy = INT_TO_JSVAL(1);
     JS_BeginRequest(GetContext());
 
-    // args passed from load
-    jsval* argvalue = new jsval[argc];
-    for (uint i = 0; i < argc; i++)
+    // The arguments passed from load() are rooted before the first is read: reading a later one can run the GC.
+    JS::AutoValueVector argvalue(context);
+    bool haveArgs = argvalue.resize(argc);
+    for (uint i = 0; haveArgs && i < argc; i++)
         argv[i]->read(context, &argvalue[i]);
-
-    for (uint j = 0; j < argc; j++)
-        JS_AddValueRoot(context, &argvalue[j]);
 
     JS_AddValueRoot(GetContext(), &main);
     JS_AddValueRoot(GetContext(), &dummy);
-    if (JS_ExecuteScript(GetContext(), globalObject, script, &dummy) != JS_FALSE && JS_GetProperty(GetContext(), globalObject, "main", &main) != JS_FALSE &&
-        JSVAL_IS_FUNCTION(GetContext(), main)) {
-        JS_CallFunctionValue(GetContext(), globalObject, main, this->argc, argvalue, &dummy);
+    if (haveArgs && JS_ExecuteScript(GetContext(), globalObject, script, &dummy) != JS_FALSE &&
+        JS_GetProperty(GetContext(), globalObject, "main", &main) != JS_FALSE && JSVAL_IS_FUNCTION(GetContext(), main)) {
+        JS_CallFunctionValue(GetContext(), globalObject, main, this->argc, argvalue.begin(), &dummy);
     }
     JS_RemoveValueRoot(GetContext(), &main);
     JS_RemoveValueRoot(GetContext(), &dummy);
-    for (uint j = 0; j < argc; j++)
-        JS_RemoveValueRoot(GetContext(), &argvalue[j]);
-    delete[] argvalue;
 
     /*for(uint i = 0; i < argc; i++)  //crashes spidermonkey cleans itself up?
     {

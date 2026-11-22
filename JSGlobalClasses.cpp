@@ -102,7 +102,7 @@ JSClass control_class = {"Control", JSCLASS_HAS_PRIVATE,
                                       control_finalize, control_ctor)};
 
 JSClass area_class = {
-    "Area", JSCLASS_HAS_PRIVATE,
+    "Area", JSCLASS_HAS_PRIVATE | JSCLASS_HAS_RESERVED_SLOTS(1),
     JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, area_finalize, area_ctor)};
 
 JSClass unit_class = {

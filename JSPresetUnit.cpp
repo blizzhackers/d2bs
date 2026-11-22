@@ -89,12 +89,18 @@ JSAPI_FUNC(my_getPresetUnits) {
     if (argc >= 3 && !PresetArg(cx, JS_ARGV(cx, vp)[2], &nClassId))
         return JS_FALSE;
 
-    Level* pLevel = GetLevel(levelId);
-
-    if (!pLevel)
-        THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
-
+    // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
+    // only while it holds this lock. An act change frees the old act before the player's own pointer moves on, and the
+    // game thread can release the lock in between while it waits for a packet listener, so that pointer is trusted only
+    // while it is the loaded act.
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    Level* pLevel = pPlayer && *p_D2CLIENT_CurrentAct && pPlayer->pAct == *p_D2CLIENT_CurrentAct ? GetLevel(levelId) : NULL;
+
+    if (!pLevel) {
+        delete cRoom;
+        THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
+    }
 
     bool bAddedRoom = FALSE;
     DWORD dwArrayCount = NULL;
@@ -111,7 +117,9 @@ JSAPI_FUNC(my_getPresetUnits) {
     for (Room2* pRoom = pLevel->pRoom2First; pRoom && bOk; pRoom = pRoom->pRoom2Next) {
         bAddedRoom = FALSE;
 
-        if (!pRoom->pPreset) {
+        // A room's preset list outlives its room data, and loading the data again appends another copy of some presets,
+        // so a room is loaded only when it has neither (measured on the rig: the list grew on every reload).
+        if (!pRoom->pPreset && !pRoom->pRoom1) {
             D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
             bAddedRoom = TRUE;
         }
@@ -179,12 +187,18 @@ JSAPI_FUNC(my_getPresetUnit) {
     if (argc >= 3 && !PresetArg(cx, JS_ARGV(cx, vp)[2], &nClassId))
         return JS_FALSE;
 
-    Level* pLevel = GetLevel(levelId);
-
-    if (!pLevel)
-        THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
-
+    // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
+    // only while it holds this lock. An act change frees the old act before the player's own pointer moves on, and the
+    // game thread can release the lock in between while it waits for a packet listener, so that pointer is trusted only
+    // while it is the loaded act.
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    Level* pLevel = pPlayer && *p_D2CLIENT_CurrentAct && pPlayer->pAct == *p_D2CLIENT_CurrentAct ? GetLevel(levelId) : NULL;
+
+    if (!pLevel) {
+        delete cRoom;
+        THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
+    }
 
     bool bAddedRoom = FALSE;
 
@@ -192,7 +206,8 @@ JSAPI_FUNC(my_getPresetUnit) {
 
         bAddedRoom = FALSE;
 
-        if (!pRoom->pRoom1) {
+        // Loaded only when it has neither its preset list nor its room data: see my_getPresetUnits.
+        if (!pRoom->pPreset && !pRoom->pRoom1) {
             D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
             bAddedRoom = TRUE;
         }

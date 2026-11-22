@@ -626,10 +626,15 @@ JSAPI_FUNC(my_getRoom) {
     {
         Level* pLevel = NULL;
 
-        uint32 levelId;
+        // A failed conversion (a valueOf that throws) leaves its exception pending, so it goes back to the engine.
+        uint32 levelId = 0;
         JS_BeginRequest(cx);
-        JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
+        JSBool bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
         JS_EndRequest(cx);
+        if (!bConverted) {
+            delete cRoom;
+            return JS_FALSE;
+        }
         if (argc == 3)
             pLevel = GetLevel(levelId);
         else if (D2CLIENT_GetPlayerUnit() && D2CLIENT_GetPlayerUnit()->pPath && D2CLIENT_GetPlayerUnit()->pPath->pRoom1 &&
@@ -644,14 +649,15 @@ JSAPI_FUNC(my_getRoom) {
         uint32 nX = NULL;
         uint32 nY = NULL;
         JS_BeginRequest(cx);
-        if (argc == 2) {
-            JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &nX);
-            JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nY);
-        } else if (argc == 3) {
-            JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nX);
-            JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[2], &nY);
-        }
+        if (argc == 2)
+            bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &nX) && JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nY);
+        else
+            bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nX) && JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[2], &nY);
         JS_EndRequest(cx);
+        if (!bConverted) {
+            delete cRoom;
+            return JS_FALSE;
+        }
         if (!nX || !nY) {
             delete cRoom;
             return JS_TRUE;

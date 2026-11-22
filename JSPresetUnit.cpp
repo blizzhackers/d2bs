@@ -6,6 +6,24 @@
 
 EMPTY_CTOR(presetunit)
 
+namespace {
+// Reads the area, type or class id argument. undefined and null give 0 (any type or class); other values convert as
+// JavaScript numbers ("" and false give 0 too), and one that converts to NaN ("obj", {}) gives a value no preset has.
+// A failed conversion (a valueOf that throws) leaves its exception pending and returns false.
+JSBool PresetArg(JSContext* cx, jsval v, uint32* pOut) {
+    *pOut = 0;
+    if (JSVAL_IS_VOID(v) || JSVAL_IS_NULL(v))
+        return JS_TRUE;
+    double d = 0;
+    JS_BeginRequest(cx);
+    JSBool bOk = JS_ValueToNumber(cx, v, &d);
+    JS_EndRequest(cx);
+    if (bOk)
+        *pOut = d != d ? (uint32)-1 : JS_DoubleToUint32(d);
+    return bOk;
+}
+} // namespace
+
 void presetunit_finalize(JSFreeOp* fop, JSObject* obj) {
     myPresetUnit* pUnit = (myPresetUnit*)JS_GetPrivate(obj);
 
@@ -59,22 +77,22 @@ JSAPI_FUNC(my_getPresetUnits) {
         return JS_TRUE;
     }
 
+    // Every argument converts before the level is looked up: a conversion can run script code (valueOf), which must not
+    // run while this native holds a level pointer.
     uint32 levelId;
-    JS_BeginRequest(cx);
-    JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
-    JS_EndRequest(cx);
+    uint32 nClassId = NULL;
+    uint32 nType = NULL;
+    if (!PresetArg(cx, JS_ARGV(cx, vp)[0], &levelId))
+        return JS_FALSE;
+    if (argc >= 2 && !PresetArg(cx, JS_ARGV(cx, vp)[1], &nType))
+        return JS_FALSE;
+    if (argc >= 3 && !PresetArg(cx, JS_ARGV(cx, vp)[2], &nClassId))
+        return JS_FALSE;
+
     Level* pLevel = GetLevel(levelId);
 
     if (!pLevel)
         THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
-
-    uint nClassId = NULL;
-    uint nType = NULL;
-
-    if (argc >= 2)
-        nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc >= 3)
-        nClassId = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
 
@@ -149,22 +167,22 @@ JSAPI_FUNC(my_getPresetUnit) {
         return JS_TRUE;
     }
 
+    // Every argument converts before the level is looked up: a conversion can run script code (valueOf), which must not
+    // run while this native holds a level pointer.
     uint32 levelId;
-    JS_BeginRequest(cx);
-    JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
-    JS_EndRequest(cx);
+    uint32 nClassId = NULL;
+    uint32 nType = NULL;
+    if (!PresetArg(cx, JS_ARGV(cx, vp)[0], &levelId))
+        return JS_FALSE;
+    if (argc >= 2 && !PresetArg(cx, JS_ARGV(cx, vp)[1], &nType))
+        return JS_FALSE;
+    if (argc >= 3 && !PresetArg(cx, JS_ARGV(cx, vp)[2], &nClassId))
+        return JS_FALSE;
+
     Level* pLevel = GetLevel(levelId);
 
     if (!pLevel)
         THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
-
-    DWORD nClassId = NULL;
-    DWORD nType = NULL;
-
-    if (argc >= 2)
-        nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc >= 3)
-        nClassId = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
 

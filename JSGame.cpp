@@ -1454,7 +1454,7 @@ JSAPI_FUNC(my_getInteractedNPC) {
         return JS_TRUE;
     }
 
-    myUnit* pmyUnit = new myUnit; // leaked?
+    myUnit* pmyUnit = new myUnit;
     if (!pmyUnit)
         return JS_TRUE;
 

@@ -621,7 +621,7 @@ JSAPI_FUNC(unit_getUnit) {
         return JS_TRUE;
     }
 
-    myUnit* pmyUnit = new myUnit; // leaked?
+    myUnit* pmyUnit = new myUnit;
 
     if (!pmyUnit) {
         JS_free(cx, szName);
@@ -1901,7 +1901,7 @@ JSAPI_FUNC(unit_getItem) {
     if (!pItem)
         return JS_TRUE;
 
-    invUnit* pmyItem = new invUnit; // leaked?
+    invUnit* pmyItem = new invUnit;
 
     if (!pmyItem)
         return JS_TRUE;

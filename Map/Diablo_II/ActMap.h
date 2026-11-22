@@ -29,7 +29,6 @@ struct Exit {
 class ActMap;
 
 typedef std::vector<Exit> ExitArray;
-typedef std::map<DWORD, ActMap*> ActMapList;
 typedef std::list<Room2*> RoomList;
 typedef std::list<Level*> LevelList;
 typedef std::set<Point> PointSet;
@@ -66,8 +65,7 @@ class ActMap : public Map {
     };
 
   private:
-    static DWORD previousLevelNo;
-    static ActMapList cache;
+    friend class ScopedActMap;
 
     Act* act;
     const Level* level;
@@ -108,8 +106,6 @@ class ActMap : public Map {
     void CleanUp(void) const;
     void AllowCritSpace(void) const;
     CriticalRoom* actCrit;
-    static ActMap* GetMap(Level* level);
-    static void ClearCache(void);
     void Dump(const char* file, const PointList& points) const;
     void DumpLevel(const char* file) const;
 
@@ -159,5 +155,30 @@ class ActMap : public Map {
     bool PathHasLineOfSight(const PointList& points, bool abs = true) const;
 
     std::set<Point> PathingPointList;
+};
+
+// A map holds the game lock from construction until CleanUp, so each call owns its map through this holder, which
+// cleans it up and deletes it on every return, on the thread that built it.
+class ScopedActMap {
+  private:
+    ActMap* map;
+
+    ScopedActMap(const ScopedActMap&);
+    ScopedActMap& operator=(const ScopedActMap&);
+
+  public:
+    explicit ScopedActMap(const Level* level) : map(new ActMap(level)) {
+    }
+    ~ScopedActMap() {
+        map->CleanUp();
+        delete map;
+    }
+
+    ActMap* get() const {
+        return map;
+    }
+    ActMap* operator->() const {
+        return map;
+    }
 };
 } // namespace Mapping

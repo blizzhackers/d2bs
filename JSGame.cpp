@@ -274,23 +274,23 @@ JSAPI_FUNC(my_getPath) {
     if (!level)
         return JS_FALSE;
 
-    ActMap* map = ActMap::GetMap(level);
+    ScopedActMap map(level);
 
     Point start(x, y), end(dx, dy);
 
     PathReducer* reducer = NULL;
     switch (reductionType) {
     case 0:
-        reducer = new WalkPathReducer(map, DiagonalShortcut, radius);
+        reducer = new WalkPathReducer(map.get(), DiagonalShortcut, radius);
         break;
     case 1:
-        reducer = new TeleportPathReducer(map, DiagonalShortcut, radius);
+        reducer = new TeleportPathReducer(map.get(), DiagonalShortcut, radius);
         break;
     case 2:
-        reducer = new NoPathReducer(map);
+        reducer = new NoPathReducer(map.get());
         break;
     case 3:
-        reducer = new JSPathReducer(map, cx, JS_THIS_OBJECT(cx, vp), JS_ARGV(cx, vp)[7], JS_ARGV(cx, vp)[8], JS_ARGV(cx, vp)[9]);
+        reducer = new JSPathReducer(map.get(), cx, JS_THIS_OBJECT(cx, vp), JS_ARGV(cx, vp)[7], JS_ARGV(cx, vp)[8], JS_ARGV(cx, vp)[9]);
         break;
     default:
         THROW_ERROR(cx, "Invalid path reducer value!");
@@ -299,14 +299,15 @@ JSAPI_FUNC(my_getPath) {
 
     PointList list;
 #if defined(_TIME)
-    AStarPath<TimedAlloc<Node, std::allocator<Node>>> path(map, reducer);
+    AStarPath<TimedAlloc<Node, std::allocator<Node>>> path(map.get(), reducer);
 #else
-    AStarPath<> path(map, reducer);
+    AStarPath<> path(map.get(), reducer);
 #endif
 
     // box18jsrefcount depth = JS_SuspendRequest(cx);
 
     path.GetPath(start, end, list, true);
+    // The game lock is released before the points are built: BuildObject can run the GC, which the game must not wait on.
     map->CleanUp();
     // box18JS_ResumeRequest(cx, depth);
 #if defined(_TIME)
@@ -327,7 +328,6 @@ JSAPI_FUNC(my_getPath) {
         jsval jx = INT_TO_JSVAL(list[i].first), jy = INT_TO_JSVAL(list[i].second);
 
         JSObject* point = BuildObject(cx);
-        // The map was cleaned up (and its lock released) right after the search, so only the local data is freed here.
         if (!point) {
             delete[] vec;
             delete reducer;
@@ -346,7 +346,6 @@ JSAPI_FUNC(my_getPath) {
     //	JS_LeaveLocalRootScope(cx);
 
     delete reducer;
-    map->CleanUp();
     return JS_TRUE;
 }
 
@@ -369,7 +368,7 @@ JSAPI_FUNC(my_getCollision) {
         THROW_ERROR(cx, "Level Not loaded");
     }
 
-    ActMap* map = ActMap::GetMap(level);
+    ScopedActMap map(level);
     // if(!map->IsValidPoint(point))  //return avoid instead and make it not lvl depenant
     //	{ map->CleanUp(); THROW_ERROR(cx, "Invalid point!");}
 
@@ -378,7 +377,6 @@ JSAPI_FUNC(my_getCollision) {
     rval = JS_NumberValue(map->GetMapData(point, true));
     JS_EndRequest(cx);
     JS_SET_RVAL(cx, vp, rval);
-    map->CleanUp();
 
     return JS_TRUE;
 }

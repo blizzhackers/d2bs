@@ -375,7 +375,8 @@ struct ActMisc {
     DWORD dwStaffTombLevel; // 0x94
     DWORD _2[245];          // 0x98
     Act* pAct;              // 0x46C
-    DWORD _3[3];            // 0x470
+    DWORD _3[2];            // 0x470
+    void* pMemPool;         // 0x478
     Level* pLevelFirst;     // 0x47C
 };
 

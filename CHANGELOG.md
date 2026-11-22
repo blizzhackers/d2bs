@@ -22,6 +22,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 - **Pathing from several scripts at once.** Several scripts can call `getPath()` and `getCollision()` and read `area.exits` at the same time, each with its own search, and the game carries on after `getPath()` throws for an unknown reduction type.
 - **Lean teleport paths.** A teleport `getPath()` call (reduction type 1) releases its teleport search data when it returns, so a bot can plan teleport paths all game long.
 - **Safe database statements.** A script can read an `SQLite` database's `statements` alongside the statements `query()` returned, and close any of them in any order. Stepping a statement whose database is closed, with `next()`, `go()` or `skip()`, throws "The statement is closed".
+- **Steady preset lists while pathing.** `getPath()`, `getCollision()`, `area.exits`, `getRoom(area, x, y)`, `Room.getCollision()`, `Room.getCollisionA()`, `Room.getStat()`, `Room.reveal()` and `revealLevel()` no longer add copies of a room's preset units each time they load it again, so a bot can path through distant areas all game without `getPresetUnits()` results gaining repeats.
 
 ## [1.8.0-rc.1] - 2026-11-20
 

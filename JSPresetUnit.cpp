@@ -7,8 +7,8 @@
 EMPTY_CTOR(presetunit)
 
 namespace {
-// Reads the area, type or class id argument. undefined and null give 0 (any type or class); other values convert as
-// JavaScript numbers ("" and false give 0 too), and one that converts to NaN ("obj", {}) gives a value no preset has.
+// Reads the area, type or class id argument. undefined and null give 0 (any type or class); other values convert to a
+// whole number the way `>>> 0` does ("" and false give 0 too), except that NaN ("obj", {}) gives a value no preset has.
 // A failed conversion (a valueOf that throws) leaves its exception pending and returns false.
 JSBool PresetArg(JSContext* cx, jsval v, uint32* pOut) {
     *pOut = 0;
@@ -19,7 +19,7 @@ JSBool PresetArg(JSContext* cx, jsval v, uint32* pOut) {
     JSBool bOk = JS_ValueToNumber(cx, v, &d);
     JS_EndRequest(cx);
     if (bOk)
-        *pOut = d != d ? (uint32)-1 : JS_DoubleToUint32(d);
+        *pOut = MOZ_DOUBLE_IS_NaN(d) ? (uint32)-1 : JS_DoubleToUint32(d);
     return bOk;
 }
 } // namespace

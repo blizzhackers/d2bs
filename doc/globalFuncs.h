@@ -391,11 +391,13 @@ Party getParty(Unit player);
  *
  * \param levelId The area id of the level to look for a PresetUnit in.
  *
- * \param nType The type of the PresetUnit. See getUnit for type codes.
+ * \param nType The type of the PresetUnit. See getUnit for type codes. 0 or omitted matches any type, and a value that
+ * converts to NaN matches none.
  *
  * \param nClassId The class id to find. See:
  * http://forums.d2botnet.org/viewtopic.php?f=18&t=986 and
- * http://forums.d2botnet.org/viewtopic.php?f=18&t=985 .
+ * http://forums.d2botnet.org/viewtopic.php?f=18&t=985 . 0 or omitted matches any class id, and a value that converts
+ * to NaN matches none.
  *
  * \return The first PresetUnit found of type nType and class ID nClassId.
  */
@@ -407,11 +409,13 @@ PresetUnit getPresetUnit(uint32_t levelId, int nType = 0, int nClassId = 0);
  *
  * \param levelId The area id of the level to look for PresetUnit s in.
  *
- * \param nType The type of the PresetUnit. See getUnit for type codes.
+ * \param nType The type of the PresetUnit. See getUnit for type codes. 0 or omitted matches any type, and a value that
+ * converts to NaN matches none.
  *
  * \param nClassId The class id to find. See:
  * http://forums.d2botnet.org/viewtopic.php?f=18&t=986 and
- * http://forums.d2botnet.org/viewtopic.php?f=18&t=985 .
+ * http://forums.d2botnet.org/viewtopic.php?f=18&t=985 . 0 or omitted matches any class id, and a value that converts
+ * to NaN matches none.
  *
  * \return An array of PresetUnit s found of type nType and class ID nClassId.
  */

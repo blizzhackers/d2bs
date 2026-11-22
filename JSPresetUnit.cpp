@@ -63,10 +63,17 @@ JSAPI_FUNC(my_getPresetUnits) {
     JS_BeginRequest(cx);
     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
     JS_EndRequest(cx);
-    Level* pLevel = GetLevel(levelId);
+    // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
+    // only while it holds this lock. An act change frees the old act before the player's own pointer moves on, and
+    // gamepacket listeners hand the lock over in between, so that pointer is trusted only while it is the loaded act.
+    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    Level* pLevel = pPlayer && *p_D2CLIENT_CurrentAct && pPlayer->pAct == *p_D2CLIENT_CurrentAct ? GetLevel(levelId) : NULL;
 
-    if (!pLevel)
+    if (!pLevel) {
+        delete cRoom;
         THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
+    }
 
     uint nClassId = NULL;
     uint nType = NULL;
@@ -75,8 +82,6 @@ JSAPI_FUNC(my_getPresetUnits) {
         nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
     if (argc >= 3)
         nClassId = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
 
     bool bAddedRoom = FALSE;
     DWORD dwArrayCount = NULL;
@@ -153,10 +158,17 @@ JSAPI_FUNC(my_getPresetUnit) {
     JS_BeginRequest(cx);
     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
     JS_EndRequest(cx);
-    Level* pLevel = GetLevel(levelId);
+    // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
+    // only while it holds this lock. An act change frees the old act before the player's own pointer moves on, and
+    // gamepacket listeners hand the lock over in between, so that pointer is trusted only while it is the loaded act.
+    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    Level* pLevel = pPlayer && *p_D2CLIENT_CurrentAct && pPlayer->pAct == *p_D2CLIENT_CurrentAct ? GetLevel(levelId) : NULL;
 
-    if (!pLevel)
+    if (!pLevel) {
+        delete cRoom;
         THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
+    }
 
     DWORD nClassId = NULL;
     DWORD nType = NULL;
@@ -165,8 +177,6 @@ JSAPI_FUNC(my_getPresetUnit) {
         nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
     if (argc >= 3)
         nClassId = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
 
     bool bAddedRoom = FALSE;
 

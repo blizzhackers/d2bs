@@ -20,6 +20,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 - **Accurate room details.** Preset units from `Room.getPresetUnits()` report their area in `level`, as those from `getPresetUnits()` do, and `Room.getStat(14)` returns the collision data's `posRoomY`, the y counterpart of `getStat(13)`.
 - **Checked preset and room arguments.** `getPresetUnit()` and `getPresetUnits()` read their type and class id as whole numbers, converted the way `>>> 0` converts them, so `"2"` and `2.5` filter like `2`, `undefined`, `null`, `0`, `""` and `false` match any type or class, and a value that converts to `NaN`, such as `"obj"`, matches nothing. When converting an argument throws (a `valueOf()` that throws), the error reaches the script, for these and for `getRoom(x, y)` and `getRoom(area, x, y)`.
 - **Pathing from several scripts at once.** Several scripts can call `getPath()` and `getCollision()` and read `area.exits` at the same time, each with its own search, and the game carries on after `getPath()` throws for an unknown reduction type.
+- **Lean teleport paths.** A teleport `getPath()` call (reduction type 1) releases its teleport search data when it returns, so a bot can plan teleport paths all game long.
 
 ## [1.8.0-rc.1] - 2026-11-20
 

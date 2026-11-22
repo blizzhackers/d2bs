@@ -11,10 +11,12 @@ JSObject* BuildObject(JSContext* cx, JSClass* classp, JSFunctionSpec* funcs, JSP
     JSObject* obj = JS_NewObject(cx, classp, proto, parent);
 
     if (obj) {
-        // add root to avoid newborn root problem
-        JS_AddObjectRoot(cx, &obj);
-        // if(JS_AddRoot(&obj) == JS_FALSE)
-        // return NULL;
+        // Rooted while its functions and properties are defined. A failed registration is an engine failure (out of
+        // memory) like the others here: the object is dropped, with no root to remove.
+        if (!JS_AddObjectRoot(cx, &obj)) {
+            JS_EndRequest(cx);
+            return NULL;
+        }
         if (obj && funcs && !JS_DefineFunctions(cx, obj, funcs))
             obj = NULL;
         if (obj && props && !JS_DefineProperties(cx, obj, props))

@@ -59,8 +59,9 @@ JSAPI_PROP(area_getProperty) {
                     JS_EndRequest(cx);
                     THROW_ERROR(cx, "Failed to create exit object!");
                 }
-                jsval a = OBJECT_TO_JSVAL(pExit);
-                JS_SetElement(cx, exitArray, i, &a);
+                // Defined, not set: an inherited index setter would run script code mid-build, which could read
+                // exits again and cache a second list.
+                JS_DefineElement(cx, exitArray, i, OBJECT_TO_JSVAL(pExit), NULL, NULL, JSPROP_ENUMERATE);
             }
             exitList = OBJECT_TO_JSVAL(exitArray);
             if (exitArray)

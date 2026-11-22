@@ -176,10 +176,18 @@ Level* GetLevel(DWORD dwLevelNo) {
     // On the stack, so every return gives the game lock back: a held lock freezes the game thread.
     AutoCriticalRoom cRoom;
 
+    // An act change frees the old act before the player's own pointer moves on, and the game thread can hand this lock to
+    // a packet listener in between, so the player's act is walked only while it is the loaded act. This is checked before
+    // GameReady(), which follows the player's room chain into that act.
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    Act* pAct = *p_D2CLIENT_CurrentAct;
+    if (!pPlayer || !pAct || pPlayer->pAct != pAct || !pAct->pMisc)
+        return nullptr;
+
     if (!GameReady())
         return nullptr;
 
-    Level* pLevel = D2CLIENT_GetPlayerUnit()->pAct->pMisc->pLevelFirst;
+    Level* pLevel = pAct->pMisc->pLevelFirst;
 
     while (pLevel) {
         if (pLevel->dwLevelNo == dwLevelNo) {

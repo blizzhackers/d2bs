@@ -576,6 +576,27 @@ JSAPI_FUNC(my_getRoom) {
     if (!WaitForGameReady())
         THROW_ERROR(cx, "Get Room Game not ready");
 
+    // Every argument converts before the game lock is taken: a conversion can run script code (valueOf), and script code
+    // run under the lock stalls the game thread. A failed conversion (a valueOf that throws) leaves its exception pending,
+    // so it goes back to the engine.
+    bool bByArea = argc == 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]);
+    bool bByPoint = argc == 2 || argc == 3;
+    uint32 levelId = 0;
+    uint32 nX = NULL;
+    uint32 nY = NULL;
+    JSBool bConverted = JS_TRUE;
+    JS_BeginRequest(cx);
+    if (bByArea)
+        bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
+    else if (argc == 2)
+        bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &nX) && JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nY);
+    else if (argc == 3)
+        bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId) && JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nX) &&
+                     JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[2], &nY);
+    JS_EndRequest(cx);
+    if (!bConverted)
+        return JS_FALSE;
+
     // A game being left has closed its session while its player and rooms still exist, and finds no room. In an open
     // session, which the room lock keeps open, a NULL BuildRoomObject below is an engine failure (out of memory) and goes
     // back to the engine as one.
@@ -585,11 +606,7 @@ JSAPI_FUNC(my_getRoom) {
         return JS_TRUE;
     }
 
-    if (argc == 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0])) {
-        uint32 levelId;
-        JS_BeginRequest(cx);
-        JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
-        JS_EndRequest(cx);
+    if (bByArea) {
         if (levelId != 0) // 1 Parameter, AreaId
         {
             Level* pLevel = GetLevel(levelId);
@@ -624,19 +641,9 @@ JSAPI_FUNC(my_getRoom) {
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
             return JS_TRUE;
         }
-    } else if (argc == 3 || argc == 2) // area ,x and y
-    {
+    } else if (bByPoint) {
         Level* pLevel = NULL;
 
-        // A failed conversion (a valueOf that throws) leaves its exception pending, so it goes back to the engine.
-        uint32 levelId = 0;
-        JS_BeginRequest(cx);
-        JSBool bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &levelId);
-        JS_EndRequest(cx);
-        if (!bConverted) {
-            delete cRoom;
-            return JS_FALSE;
-        }
         if (argc == 3)
             pLevel = GetLevel(levelId);
         else if (D2CLIENT_GetPlayerUnit() && D2CLIENT_GetPlayerUnit()->pPath && D2CLIENT_GetPlayerUnit()->pPath->pRoom1 &&
@@ -648,18 +655,6 @@ JSAPI_FUNC(my_getRoom) {
             return JS_TRUE;
         }
 
-        uint32 nX = NULL;
-        uint32 nY = NULL;
-        JS_BeginRequest(cx);
-        if (argc == 2)
-            bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &nX) && JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nY);
-        else
-            bConverted = JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nX) && JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[2], &nY);
-        JS_EndRequest(cx);
-        if (!bConverted) {
-            delete cRoom;
-            return JS_FALSE;
-        }
         if (!nX || !nY) {
             delete cRoom;
             return JS_TRUE;

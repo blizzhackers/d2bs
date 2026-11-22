@@ -327,10 +327,10 @@ JSAPI_FUNC(my_getPath) {
         jsval jx = INT_TO_JSVAL(list[i].first), jy = INT_TO_JSVAL(list[i].second);
 
         JSObject* point = BuildObject(cx);
+        // The map was cleaned up (and its lock released) right after the search, so only the local data is freed here.
         if (!point) {
             delete[] vec;
             delete reducer;
-            map->CleanUp();
             return JS_FALSE;
         }
         JS_SetProperty(cx, point, "x", &jx);

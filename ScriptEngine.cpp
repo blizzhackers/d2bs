@@ -368,7 +368,7 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
         JSObject* globalObject = JS_NewGlobalObject(cx, &global_obj, NULL);
         JS_SetGCParameter(JS_GetRuntime(cx), JSGC_MODE, 2);
 
-        // Every engine failure below ends the request begun above before it goes back to the engine.
+        // The failure returns below end the request begun above before they go back to the engine.
         if (JS_InitStandardClasses(cx, globalObject) == JS_FALSE || JS_DefineFunctions(cx, globalObject, global_funcs) == JS_FALSE) {
             JS_EndRequest(cx);
             return JS_FALSE;

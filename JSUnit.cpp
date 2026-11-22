@@ -1064,7 +1064,7 @@ bool InsertStatsToGenericObject(UnitAny* pUnit, StatList* pStatList, JSContext* 
     return true;
 }
 
-// False only when building a skill entry's object fails (an engine failure); any other failure skips the stat.
+// False only when building a skill entry's object fails (an engine failure); the other early exits skip the stat.
 bool InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
     if (pStat[nStat].wSubIndex > 0x200) {
         // subindex is the skill id and level
@@ -1672,7 +1672,7 @@ JSAPI_FUNC(unit_getParent) {
         }
     } else if (pUnit->dwType == UNIT_ITEM) {
         if (pUnit->pItemData && pUnit->pItemData->pOwnerInventory && pUnit->pItemData->pOwnerInventory->pOwner) {
-            myUnit* pmyUnit = new myUnit; // leaks
+            myUnit* pmyUnit = new myUnit;
 
             if (!pmyUnit)
                 return JS_TRUE;

@@ -17,8 +17,8 @@ void area_finalize(JSFreeOp* fop, JSObject* obj) {
 }
 
 JSAPI_PROP(area_getProperty) {
-    // Class-checked: a getter reached through an object that inherits from an area gets that object as obj, and
-    // the exits cache below reads and writes obj's reserved slot.
+    // Class-checked: a getter reached through an object that inherits from an area gets that object as obj, which
+    // has no area private to read and no exits slot to cache in.
     myArea* pArea = (myArea*)JS_GetInstancePrivate(cx, obj, &area_class, NULL);
     if (!pArea)
         return JS_FALSE;
@@ -59,8 +59,8 @@ JSAPI_PROP(area_getProperty) {
                     JS_EndRequest(cx);
                     THROW_ERROR(cx, "Failed to create exit object!");
                 }
-                // Defined, not set: an inherited index setter would run script code mid-build, which could read
-                // exits again and cache a second list.
+                // Defined, not set: an inherited index setter would take the exit instead of the array and run
+                // script code mid-build, which could read exits again and cache a second list.
                 JS_DefineElement(cx, exitArray, i, OBJECT_TO_JSVAL(pExit), NULL, NULL, JSPROP_ENUMERATE);
             }
             exitList = OBJECT_TO_JSVAL(exitArray);

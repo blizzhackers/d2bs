@@ -15,6 +15,7 @@
 */
 
 #include <set>
+#include <vector>
 
 #include "JSSQLite.h"
 #include "D2BS.h"
@@ -34,11 +35,14 @@ struct SqliteDB {
     StmtList stmts;
 };
 
+// Every statement object holds one reference (db.statements builds more objects for the same statement), and the
+// last release deletes it. assoc_db is non-NULL exactly while the statement is in that database's stmts list.
 struct DBStmt {
     sqlite3_stmt* stmt;
     bool open, canGet;
     SqliteDB* assoc_db;
     JSObject* current_row;
+    int refs;
 };
 
 void close_db_stmt(DBStmt* stmt);
@@ -46,8 +50,10 @@ bool clean_sqlite_db(SqliteDB* db);
 
 bool clean_sqlite_db(SqliteDB* db) {
     if (db && db->open) {
+        // Statement objects can outlive their database object, so each statement leaves it closed and detached.
         for (StmtList::iterator it = db->stmts.begin(); it != db->stmts.end(); it++) {
             close_db_stmt(*it);
+            (*it)->assoc_db = NULL;
         }
         db->stmts.clear();
         if (SQLITE_OK != sqlite3_close(db->db))
@@ -62,6 +68,25 @@ void close_db_stmt(DBStmt* stmt) {
         stmt->stmt = NULL;
         stmt->open = false;
     }
+}
+
+static void unlist_db_stmt(DBStmt* stmt) {
+    if (stmt->assoc_db) {
+        stmt->assoc_db->stmts.erase(stmt);
+        stmt->assoc_db = NULL;
+    }
+}
+
+static void release_db_stmt(DBStmt* stmt) {
+    if (--stmt->refs > 0)
+        return;
+    close_db_stmt(stmt);
+    unlist_db_stmt(stmt);
+    delete stmt;
+}
+
+static const char* db_stmt_errmsg(DBStmt* stmt) {
+    return stmt->assoc_db ? sqlite3_errmsg(stmt->assoc_db->db) : "The statement is closed";
 }
 
 JSAPI_FUNC(my_sqlite_version) {
@@ -202,6 +227,7 @@ JSAPI_FUNC(sqlite_query) {
     dbstmt->canGet = false;
     dbstmt->assoc_db = dbobj;
     dbstmt->current_row = NULL;
+    dbstmt->refs = 1;
 
     JSObject* row = BuildObject(cx, &sqlite_stmt, sqlite_stmt_methods, sqlite_stmt_props, dbstmt);
     if (!row) {
@@ -257,22 +283,32 @@ JSAPI_PROP(sqlite_getProperty) {
         vp.setInt32(sqlite3_last_insert_rowid(dbobj->db));
         break;
     case SQLITE_STMTS: {
+        // Pinned from a copy of the list: building an object can run the GC, whose statement finalizers release and
+        // unlist statements.
+        std::vector<DBStmt*> list(dbobj->stmts.begin(), dbobj->stmts.end());
+        for (size_t i = 0; i < list.size(); i++)
+            list[i]->refs++;
+        JSBool ok = JS_TRUE;
         JS_BeginRequest(cx);
-        JSObject* stmts = JS_NewArrayObject(cx, dbobj->stmts.size(), NULL);
+        JSObject* stmts = JS_NewArrayObject(cx, list.size(), NULL);
         vp.set(OBJECT_TO_JSVAL(stmts));
-        int i = 0;
-        for (StmtList::iterator it = dbobj->stmts.begin(); it != dbobj->stmts.end(); it++, i++) {
-            if ((*it)->open) {
-                JSObject* stmt = BuildObject(cx, &sqlite_stmt, sqlite_stmt_methods, sqlite_stmt_props, *it);
+        for (size_t i = 0; i < list.size(); i++) {
+            if (list[i]->open) {
+                JSObject* stmt = BuildObject(cx, &sqlite_stmt, sqlite_stmt_methods, sqlite_stmt_props, list[i]);
                 if (!stmt) {
-                    JS_EndRequest(cx);
-                    return JS_FALSE;
+                    ok = JS_FALSE;
+                    break;
                 }
+                list[i]->refs++;
                 jsval tmp = OBJECT_TO_JSVAL(stmt);
                 JS_SetElement(cx, stmts, i, &tmp);
             }
         }
+        for (size_t i = 0; i < list.size(); i++)
+            release_db_stmt(list[i]);
         JS_EndRequest(cx);
+        if (!ok)
+            return JS_FALSE;
     } break;
     case SQLITE_CHANGES:
         vp.setDouble(sqlite3_changes(dbobj->db));
@@ -444,7 +480,7 @@ JSAPI_FUNC(sqlite_stmt_execute) {
     int res = sqlite3_step(stmtobj->stmt);
 
     if (SQLITE_ROW != res && SQLITE_DONE != res)
-        THROW_ERROR(cx, sqlite3_errmsg(stmtobj->assoc_db->db));
+        THROW_ERROR(cx, db_stmt_errmsg(stmtobj));
     close_db_stmt(stmtobj);
     JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL((SQLITE_DONE == res)));
     return JS_TRUE;
@@ -502,7 +538,7 @@ JSAPI_FUNC(sqlite_stmt_next) {
     int res = sqlite3_step(stmtobj->stmt);
 
     if (SQLITE_ROW != res && SQLITE_DONE != res)
-        THROW_ERROR(cx, sqlite3_errmsg(stmtobj->assoc_db->db));
+        THROW_ERROR(cx, db_stmt_errmsg(stmtobj));
 
     stmtobj->canGet = !!(SQLITE_ROW == res);
     if (stmtobj->current_row) {
@@ -527,7 +563,7 @@ JSAPI_FUNC(sqlite_stmt_skip) {
                 i = 0;
                 continue;
             }
-            THROW_ERROR(cx, sqlite3_errmsg(stmtobj->assoc_db->db));
+            THROW_ERROR(cx, db_stmt_errmsg(stmtobj));
         }
         stmtobj->canGet = true;
     }
@@ -537,7 +573,7 @@ JSAPI_FUNC(sqlite_stmt_skip) {
 JSAPI_FUNC(sqlite_stmt_reset) {
     DBStmt* stmtobj = (DBStmt*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &sqlite_stmt, NULL);
     if (SQLITE_OK != sqlite3_reset(stmtobj->stmt))
-        THROW_ERROR(cx, sqlite3_errmsg(stmtobj->assoc_db->db));
+        THROW_ERROR(cx, db_stmt_errmsg(stmtobj));
     stmtobj->canGet = false;
     JS_SET_RVAL(cx, vp, JSVAL_TRUE);
     return JS_TRUE;
@@ -546,17 +582,18 @@ JSAPI_FUNC(sqlite_stmt_reset) {
 JSAPI_FUNC(sqlite_stmt_close) {
     JSObject* obj = JS_THIS_OBJECT(cx, vp);
     DBStmt* stmtobj = (DBStmt*)JS_GetInstancePrivate(cx, obj, &sqlite_stmt, NULL);
-    if (stmtobj->current_row)
+    if (stmtobj->current_row) {
         JS_RemoveRoot(cx, &stmtobj->current_row);
+        stmtobj->current_row = NULL;
+    }
+    // Other objects for this statement from db.statements stay usable and see it closed.
     close_db_stmt(stmtobj);
-    delete stmtobj;
-
+    stmtobj->canGet = false;
+    unlist_db_stmt(stmtobj);
     JS_SetPrivate(cx, obj, NULL);
-    JS_SET_RVAL(cx, vp, JSVAL_TRUE);
-    //	JS_ClearScope(cx, obj);
-    if (JS_ValueToObject(cx, JSVAL_NULL, &obj) == JS_FALSE)
-        return JS_TRUE;
+    release_db_stmt(stmtobj);
 
+    JS_SET_RVAL(cx, vp, JSVAL_TRUE);
     return JS_TRUE;
 }
 
@@ -582,13 +619,6 @@ JSAPI_PROP(sqlite_stmt_getProperty) {
 void sqlite_stmt_finalize(JSFreeOp* fop, JSObject* obj) {
     DBStmt* stmtobj = (DBStmt*)JS_GetPrivate(obj);
     JS_SetPrivate(obj, NULL);
-    if (stmtobj) {
-        if (stmtobj->stmt && stmtobj->open) {
-            stmtobj->assoc_db->stmts.erase(stmtobj);
-            // if(stmtobj->current_row)
-            //	JS_RemoveRoot( &stmtobj->current_row);
-            close_db_stmt(stmtobj);
-        }
-        delete stmtobj;
-    }
+    if (stmtobj)
+        release_db_stmt(stmtobj);
 }

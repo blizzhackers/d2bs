@@ -193,7 +193,9 @@ JSAPI_FUNC(room_getPresetUnits) {
         return JS_FALSE;
     }
 
-    if (!pRoom2->pRoom1) {
+    // A room's preset list outlives its room data, and loading the data again appends another copy of some presets, so
+    // the room is loaded only when it has neither.
+    if (!pRoom2->pPreset && !pRoom2->pRoom1) {
         bAdded = TRUE;
         D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
     }

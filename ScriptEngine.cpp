@@ -526,25 +526,22 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
     }
     if (strcmp(evtName, "gameevent") == 0) {
         if (!clearList) {
-            jsval* argv = new jsval[5];
             JS_BeginRequest(cx);
-            argv[0] = JS_NumberValue(*(BYTE*)evt->arg1);
-            argv[1] = JS_NumberValue(*(DWORD*)evt->arg2);
-            argv[2] = JS_NumberValue(*(DWORD*)evt->arg3);
-            argv[3] = (STRING_TO_JSVAL(JS_NewStringCopyZ(cx, (char*)evt->arg4)));
-            argv[4] = (STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, (wchar_t*)evt->arg5)));
+            // Rooted before the strings are made: making the second can run the GC.
+            JS::AutoValueVector argv(cx);
+            if (argv.resize(5)) {
+                argv[0] = JS_NumberValue(*(BYTE*)evt->arg1);
+                argv[1] = JS_NumberValue(*(DWORD*)evt->arg2);
+                argv[2] = JS_NumberValue(*(DWORD*)evt->arg3);
+                argv[3] = (STRING_TO_JSVAL(JS_NewStringCopyZ(cx, (char*)evt->arg4)));
+                argv[4] = (STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, (wchar_t*)evt->arg5)));
 
-            for (int j = 0; j < 5; j++)
-                JS_AddValueRoot(cx, &argv[j]);
-
-            jsval rval;
-            for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 5, argv, &rval);
+                jsval rval;
+                for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
+                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 5, argv.begin(), &rval);
+                }
             }
             JS_EndRequest(cx);
-            for (int j = 0; j < 5; j++)
-                JS_RemoveValueRoot(cx, &argv[j]);
-            delete[] argv;
         }
         delete evt->arg1;
         delete evt->arg2;
@@ -584,23 +581,20 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         strcmp(evtName, "chatinputblocker") == 0 || strcmp(evtName, "whispermsgblocker") == 0) {
         bool block = false;
         if (!clearList) {
-            jsval* argv = new jsval[2];
             JS_BeginRequest(cx);
-            argv[0] = (STRING_TO_JSVAL(JS_NewStringCopyZ(cx, (char*)evt->arg1)));
-            argv[1] = (STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, (wchar_t*)evt->arg2)));
+            // Rooted before the strings are made: making the second can run the GC.
+            JS::AutoValueVector argv(cx);
+            if (argv.resize(2)) {
+                argv[0] = (STRING_TO_JSVAL(JS_NewStringCopyZ(cx, (char*)evt->arg1)));
+                argv[1] = (STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, (wchar_t*)evt->arg2)));
 
-            for (int j = 0; j < 2; j++)
-                JS_AddValueRoot(cx, &argv[j]);
-
-            jsval rval;
-            for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv, &rval);
-                block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
+                jsval rval;
+                for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
+                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv.begin(), &rval);
+                    block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
+                }
             }
             JS_EndRequest(cx);
-            for (int j = 0; j < 2; j++)
-                JS_RemoveValueRoot(cx, &argv[j]);
-            delete[] argv;
         }
         if (strcmp(evtName, "chatmsgblocker") == 0 || strcmp(evtName, "chatinputblocker") == 0 || strcmp(evtName, "whispermsgblocker") == 0) {
             CompleteBlocker(evt, block);
@@ -759,22 +753,18 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         if (!clearList) {
             DWORD* argc = (DWORD*)evt->arg1;
             JS_BeginRequest(cx);
-            jsval* argv = new jsval[*argc];
-            for (uint i = 0; i < *argc; i++)
-                evt->argv[i]->read(cx, &argv[i]);
+            // Rooted before the first is read: reading a later one can run the GC.
+            JS::AutoValueVector argv(cx);
+            if (argv.resize(*argc)) {
+                for (uint i = 0; i < *argc; i++)
+                    evt->argv[i]->read(cx, &argv[i]);
 
-            for (uint j = 0; j < *argc; j++)
-                JS_AddValueRoot(cx, &argv[j]);
-
-            jsval rval;
-            for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), *argc, argv, &rval);
+                jsval rval;
+                for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
+                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), *argc, argv.begin(), &rval);
+                }
             }
             JS_EndRequest(cx);
-
-            for (uint j = 0; j < *argc; j++)
-                JS_RemoveValueRoot(cx, &argv[j]);
-            delete[] argv;
         }
         for (uint i = 0; i < evt->argc; i++) {
             evt->argv[i]->clear();

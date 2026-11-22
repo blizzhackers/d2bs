@@ -10,7 +10,7 @@ Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listin
 
 ### Fixed
 
-- **Steady preset lists.** Calling `getPresetUnits()`, `getPresetUnit()` or `Room.getPresetUnits()` again no longer adds extra copies of a room's presets, and these calls leave rooms that are already loaded alone.
+- **Steady preset lists.** `getPresetUnits()`, `getPresetUnit()` and `Room.getPresetUnits()` keep a room's preset list as it is however often they are called, and leave rooms that are already loaded as they are.
 - **Tidy preset lookups.** `getPresetUnit()` unloads the room data it loads to find a unit, as `getPresetUnits()` does, so each lookup in a distant area releases the rooms it loaded.
 - **NPC message packets for other unit types.** The game keeps running when an NPC message packet (`0x27`) for a unit type other than a monster or an object arrives during an NPC's speech or with no NPC open, for example a packet a script passes to `getPacket()`, and you can talk to the NPC again afterwards.
 - **Rooms a script keeps.** A `Room` from `getRoom()`, `getNearby()` or `getFirst()` is safe to use for as long as a script holds it, even after the game unloads its area or the player changes acts or games. Its `x`, `y`, `xsize`, `ysize`, `area`, `level`, `number` and `correcttomb` keep their values until `getNext()` moves it to the next room. Its methods find the room again wherever `getRoom()` could, in the room's own game and act, and when they can't, `getNext()` returns `false`, `getNearby()` an empty array, `getStat()` `null` and the other methods `undefined`, while `unitInRoom()` returns `false` for a unit in another room, act or game.

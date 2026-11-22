@@ -58,6 +58,11 @@ JSAPI_FUNC(my_openDir) {
     } else {
         DirData* d = new DirData(name);
         JSObject* jsdir = BuildObject(cx, &folder_class, dir_methods, dir_props, d);
+        // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+        if (!jsdir) {
+            delete d;
+            return JS_FALSE;
+        }
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsdir));
     }
 
@@ -187,6 +192,10 @@ JSAPI_FUNC(dir_create) {
     } else {
         DirData* d = new DirData(name);
         JSObject* jsdir = BuildObject(cx, &folder_class, dir_methods, dir_props, d);
+        if (!jsdir) {
+            delete d;
+            return JS_FALSE;
+        }
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsdir));
     }
     return JS_TRUE;

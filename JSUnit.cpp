@@ -638,8 +638,11 @@ JSAPI_FUNC(unit_getUnit) {
 
     JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
 
-    if (!jsunit)
-        return JS_TRUE;
+    // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+    if (!jsunit) {
+        delete pmyUnit;
+        return JS_FALSE;
+    }
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
 
@@ -924,8 +927,8 @@ JSAPI_FUNC(unit_interact) {
     return JS_TRUE;
 }
 
-void InsertStatsToGenericObject(UnitAny* pUnit, StatList* pStatList, JSContext* pJSContext, JSObject* pGenericObject);
-void InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray);
+bool InsertStatsToGenericObject(UnitAny* pUnit, StatList* pStatList, JSContext* pJSContext, JSObject* pGenericObject);
+bool InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray);
 
 JSAPI_FUNC(unit_getStat) {
     if (!WaitForGameReady())
@@ -1012,8 +1015,9 @@ JSAPI_FUNC(unit_getStat) {
         JSObject* pArray = JS_NewArrayObject(cx, 0, NULL);
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pArray));
 
-        InsertStatsToGenericObject(pUnit, pUnit->pStats, cx, pArray);
-        InsertStatsToGenericObject(pUnit, D2COMMON_GetStatList(pUnit, NULL, 0x40), cx, pArray);
+        if (!InsertStatsToGenericObject(pUnit, pUnit->pStats, cx, pArray) ||
+            !InsertStatsToGenericObject(pUnit, D2COMMON_GetStatList(pUnit, NULL, 0x40), cx, pArray))
+            return JS_FALSE;
         // InsertStatsToGenericObject(pUnit, pUnit->pStats->pNext, cx, pArray);  // only check the current unit stats!
         //	InsertStatsToGenericObject(pUnit, pUnit->pStats->pSetList, cx, pArray);
     } else {
@@ -1037,27 +1041,31 @@ JSAPI_FUNC(unit_getStat) {
     return JS_TRUE;
 }
 
-void InsertStatsToGenericObject(UnitAny* pUnit, StatList* pStatList, JSContext* cx, JSObject* pArray) {
+bool InsertStatsToGenericObject(UnitAny* pUnit, StatList* pStatList, JSContext* cx, JSObject* pArray) {
     Stat* pStat = NULL;
     if (!pStatList)
-        return;
+        return true;
     if ((pStatList->dwUnitId == pUnit->dwUnitId && pStatList->dwUnitType == pUnit->dwType) || pStatList->pUnit == pUnit) {
         pStat = pStatList->StatVec.pStats;
 
         for (int nStat = 0; nStat < pStatList->StatVec.wCount; nStat++) {
-            InsertStatsNow(pStat, nStat, cx, pArray);
+            if (!InsertStatsNow(pStat, nStat, cx, pArray))
+                return false;
         }
     }
     if ((pStatList->dwFlags >> 24 & 0x80)) {
         pStat = pStatList->SetStatVec.pStats;
 
         for (int nStat = 0; nStat < pStatList->SetStatVec.wCount; nStat++) {
-            InsertStatsNow(pStat, nStat, cx, pArray);
+            if (!InsertStatsNow(pStat, nStat, cx, pArray))
+                return false;
         }
     }
+    return true;
 }
 
-void InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
+// False only when building a skill entry's object fails (an engine failure); any other failure skips the stat.
+bool InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
     if (pStat[nStat].wSubIndex > 0x200) {
         // subindex is the skill id and level
         int skill = pStat[nStat].wSubIndex >> 6, level = pStat[nStat].wSubIndex & 0x3F, charges = 0, maxcharges = 0;
@@ -1066,18 +1074,20 @@ void InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
             maxcharges = pStat[nStat].dwStatValue >> 8;
         }
         JSObject* val = BuildObject(cx, NULL);
+        if (!val)
+            return false;
         jsval jsskill = INT_TO_JSVAL(skill), jslevel = INT_TO_JSVAL(level), jscharges = INT_TO_JSVAL(charges), jsmaxcharges = INT_TO_JSVAL(maxcharges);
         // val is an anonymous object that holds properties
         if (!JS_SetProperty(cx, val, "skill", &jsskill) || !JS_SetProperty(cx, val, "level", &jslevel))
-            return;
+            return true;
         if (maxcharges > 0) {
             if (!JS_SetProperty(cx, val, "charges", &jscharges) || !JS_SetProperty(cx, val, "maxcharges", &jsmaxcharges))
-                return;
+                return true;
         }
         // find where we should put it
         jsval index = JSVAL_VOID, obj = OBJECT_TO_JSVAL(val);
         if (!JS_GetElement(cx, pArray, pStat[nStat].wStatIndex, &index))
-            return;
+            return true;
         if (index != JSVAL_VOID) {
             // modify the existing object by stuffing it into an array
             if (!JS_IsArrayObject(cx, JSVAL_TO_OBJECT(index))) {
@@ -1096,7 +1106,7 @@ void InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
                 JSObject* arr = JSVAL_TO_OBJECT(index);
                 jsuint len = 0;
                 if (!JS_GetArrayLength(cx, arr, &len))
-                    return;
+                    return true;
                 len++;
                 JS_BeginRequest(cx);
                 JS_SetElement(cx, arr, len, &obj);
@@ -1115,14 +1125,14 @@ void InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
 
         jsval index = JSVAL_VOID, val = INT_TO_JSVAL(value);
         if (!JS_GetElement(cx, pArray, pStat[nStat].wStatIndex, &index))
-            return;
+            return true;
         if (index == JSVAL_VOID) {
             // the array index doesn't exist, make it
             index = OBJECT_TO_JSVAL(JS_NewArrayObject(cx, 0, NULL));
             JS_BeginRequest(cx);
             if (!JS_SetElement(cx, pArray, pStat[nStat].wStatIndex, &index)) {
                 JS_EndRequest(cx);
-                return;
+                return true;
             }
             JS_EndRequest(cx);
         }
@@ -1131,6 +1141,7 @@ void InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
         JS_SetElement(cx, JSVAL_TO_OBJECT(index), pStat[nStat].wSubIndex, &val);
         JS_EndRequest(cx);
     }
+    return true;
 }
 
 JSAPI_FUNC(unit_getState) {
@@ -1369,6 +1380,7 @@ JSAPI_FUNC(unit_getItems) {
 
         JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
         if (!jsunit) {
+            delete pmyUnit;
             JS_EndRequest(cx);
             JS_RemoveRoot(cx, &pReturnArray);
             THROW_ERROR(cx, "Failed to build item array");
@@ -1644,8 +1656,11 @@ JSAPI_FUNC(unit_getParent) {
         pmyUnit->szName[0] = NULL;
 
         JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
-        if (!jsunit)
-            return JS_TRUE;
+        // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+        if (!jsunit) {
+            delete pmyUnit;
+            return JS_FALSE;
+        }
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
         return JS_TRUE;
     } else if (pUnit->dwType == UNIT_OBJECT) {
@@ -1669,6 +1684,10 @@ JSAPI_FUNC(unit_getParent) {
             pmyUnit->dwType = pUnit->pItemData->pOwnerInventory->pOwner->dwType;
             pmyUnit->szName[0] = NULL;
             JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
+            if (!jsunit) {
+                delete pmyUnit;
+                return JS_FALSE;
+            }
 
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
         }
@@ -1690,7 +1709,7 @@ JSAPI_FUNC(unit_getParent) {
         JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
         if (!jsunit) {
             delete pmyUnit;
-            return JS_TRUE;
+            return JS_FALSE;
         }
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
     }
@@ -1722,8 +1741,12 @@ JSAPI_FUNC(unit_getMerc) {
                 pmyUnit->szName[0] = NULL;
 
                 JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
-                if (jsunit)
-                    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
+                // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+                if (!jsunit) {
+                    delete pmyUnit;
+                    return JS_FALSE;
+                }
+                JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
             }
         }
     }
@@ -1894,8 +1917,11 @@ JSAPI_FUNC(unit_getItem) {
 
     JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyItem);
 
-    if (!jsunit)
-        return JS_TRUE;
+    // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+    if (!jsunit) {
+        delete pmyItem;
+        return JS_FALSE;
+    }
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
 

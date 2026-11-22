@@ -316,8 +316,11 @@ JSAPI_FUNC(my_getControl) {
     data->pControl = pControl;
 
     JSObject* control = BuildObject(cx, &control_class, control_funcs, control_props, data);
-    if (!control)
+    // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+    if (!control) {
+        delete data;
         THROW_ERROR(cx, "Failed to build control!");
+    }
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(control));
     return JS_TRUE;
@@ -343,6 +346,12 @@ JSAPI_FUNC(my_getControls) {
         data->pControl = pControl;
 
         JSObject* res = BuildObject(cx, &control_class, control_funcs, control_props, data);
+        if (!res) {
+            delete data;
+            JS_RemoveRoot(cx, &pReturnArray);
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         jsval a = OBJECT_TO_JSVAL(res);
         JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
         dwArrayCount++;

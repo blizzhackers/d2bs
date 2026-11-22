@@ -368,10 +368,11 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
         JSObject* globalObject = JS_NewGlobalObject(cx, &global_obj, NULL);
         JS_SetGCParameter(JS_GetRuntime(cx), JSGC_MODE, 2);
 
-        if (JS_InitStandardClasses(cx, globalObject) == JS_FALSE)
+        // Every engine failure below ends the request begun above before it goes back to the engine.
+        if (JS_InitStandardClasses(cx, globalObject) == JS_FALSE || JS_DefineFunctions(cx, globalObject, global_funcs) == JS_FALSE) {
+            JS_EndRequest(cx);
             return JS_FALSE;
-        if (JS_DefineFunctions(cx, globalObject, global_funcs) == JS_FALSE)
-            return JS_FALSE;
+        }
 
         myUnit* lpUnit = new myUnit;
         memset(lpUnit, NULL, sizeof(myUnit));
@@ -387,11 +388,17 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
             ScriptEngine::InitClass(cx, globalObject, entry->classp, entry->methods, entry->properties, entry->static_methods, entry->static_properties);
 
         JSObject* meObject = BuildObject(cx, &unit_class, unit_methods, me_props, lpUnit);
-        if (!meObject)
+        // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+        if (!meObject) {
+            delete lpUnit;
+            JS_EndRequest(cx);
             return JS_FALSE;
+        }
 
-        if (JS_DefineProperty(cx, globalObject, "me", OBJECT_TO_JSVAL(meObject), NULL, NULL, JSPROP_PERMANENT_VAR) == JS_FALSE)
+        if (JS_DefineProperty(cx, globalObject, "me", OBJECT_TO_JSVAL(meObject), NULL, NULL, JSPROP_PERMANENT_VAR) == JS_FALSE) {
+            JS_EndRequest(cx);
             return JS_FALSE;
+        }
 
 #define DEFCONST(vp) ScriptEngine::DefineConstant(cx, globalObject, #vp, vp)
         DEFCONST(FILE_READ);

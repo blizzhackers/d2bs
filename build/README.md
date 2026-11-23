@@ -84,13 +84,35 @@ would turn its macros into fixed numbers. As a backstop, the build fails if the 
 ## Releasing
 
 ```powershell
-pwsh -File build\Release-D2BS.ps1            # -DryRun rehearses it and changes nothing
+pwsh -File build\Release-D2BS.ps1            # -DryRun rehearses it
 ```
 
+`-DryRun` changes no file and makes no commit or tag, but it still fetches `origin` and its tags unless `-NoFetch` is
+given as well.
+
 The release notes come from `CHANGELOG.md`, in the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
-A change that script authors or bot operators would notice adds its entry under `## [Unreleased]`, in the same pull
-request: one line per entry, opening with a short bold lead, because GitHub shows every line break of a release's
-notes. `pwsh -File build\Get-ReleaseNotes.ps1 -Version 1.6.5` prints the notes a version's release opens with.
+A change that script authors or bot operators would notice adds its entry in the same pull request, as a file in
+`changelog.d` (below). `pwsh -File build\Get-ReleaseNotes.ps1 -Version 1.6.5` prints the notes a version's release
+opens with.
+
+### Changelog entries
+
+Each entry is a file of its own, `changelog.d/<slug>.<section>.md`, so pull requests never edit the same lines of
+`CHANGELOG.md`. The slug names the change (lowercase letters, digits and hyphens), and the section is the entry's
+Keep a Changelog group in lowercase (`added`, `changed`, `deprecated`, `removed`, `fixed` or `security`). The file
+holds exactly one line, the entry as `CHANGELOG.md` shows it, opening with a short bold lead, because GitHub shows
+every line break of a release's notes: `- **Steady preset lists.** getPresetUnits() keeps ...`.
+
+The release script adds them to `[Unreleased]`, under their groups' headings (a missing one goes in Keep a
+Changelog's order) after the entries already there, each group's in the order the files reached `master`, and its
+release commit deletes the files. Anything else in `changelog.d` but its `README.md` file (another name, an
+unknown section, a folder, a file of more than one line, of no entry, not in UTF-8 or holding a control character,
+a slug used twice, a file not yet committed, or a committed one changed since its commit or missing from the
+working tree, deleted or left out of a sparse checkout) stops a release that commits, which is any new version, at
+its plan until it is fixed. Releasing a version again after its tag was deleted commits nothing, so there these
+problems only warn. A `changelog.d` file already edited or deleted when the script starts stops it sooner, at its
+check for tracked changes; one edited or deleted after that check stops a new version at its plan. `-DryRun` shows
+`[Unreleased]` with the entries in it.
 
 ### Release candidates
 
@@ -108,24 +130,29 @@ On an up-to-date `master` with no uncommitted changes, the script:
 
 1. Checks the preconditions: on `master`, no tracked changes, not behind `origin/master`, a committed `CHANGELOG.md`
    with an `## [Unreleased]` heading, and the last CI build of `master`.
-2. Counts the entries under `[Unreleased]` and each release candidate's section per group, and offers the next
-   version: after a final release, the first release candidate of the next patch, minor or major version (e.g.
-   `1.6.5-rc.1` after `1.6.4`), or that version's final; after a release candidate, the next one (`1.6.5-rc.2`) or the
-   final (`1.6.5`). The default is the same version again when that is offered; otherwise the patch release
-   candidate after a final, and the next release candidate after one, or the final when nothing new is under
-   `[Unreleased]`. You can type another version; one that isn't newer than `VERSION` or the latest release tag
-   (release candidates included) needs a confirmation (except when it offers the same version again, below). A
-   release candidate needs entries under `[Unreleased]`; a final needs them there or in its release candidates'
-   sections. A final warns about commits made since the last release candidate, which no tester has run.
+2. Counts the entries under `[Unreleased]` (the `changelog.d` ones included) and each release candidate's section
+   per group, and offers the next version: after a final release, the first release candidate of the next patch,
+   minor or major version (e.g. `1.6.5-rc.1` after `1.6.4`), or that version's final; after a release candidate, the
+   next one (`1.6.5-rc.2`) or the final (`1.6.5`). The default is the same version again when that is offered;
+   otherwise the patch release candidate after a final, and the next release candidate after one, or the final when
+   nothing new is under `[Unreleased]`. You can type another version; one that isn't newer than `VERSION` or the
+   latest release tag (release candidates included) needs a confirmation (except when it offers the same version
+   again, below). A release candidate needs entries under `[Unreleased]`; a final needs them there or in its release
+   candidates' sections. A final warns about commits made since the last release candidate, which no tester has run.
 3. Shows the plan with the release notes. Notes the tag build would refuse (a missing section, no entries, or an
-   HTML comment or code fence that never closes) stop it there instead. After you confirm (it stops if `VERSION`,
-   `CHANGELOG.md` or the commit changed during the prompts), it writes `VERSION`, updates `CHANGELOG.md` as above
-   (under a new, empty `[Unreleased]`), points the links at the bottom at the new tag, and shows the change for
-   review. You can edit `CHANGELOG.md` before answering the review; `d` shows the diff as it is then, and `y` takes
-   the files as they are, as long as `VERSION` still names the version and the notes still pass those checks.
-   Leaving the review any other way puts both files back, after copying an edited `CHANGELOG.md` to your temp folder
-   (the script prints where).
-4. Commits both files as `chore(release): v1.6.5`, unless a commit was made during the review, which stops it.
+   HTML comment or code fence that never closes) stop it there instead, as do problems in `changelog.d`. After you
+   confirm (it stops if `VERSION`, `CHANGELOG.md`, the commit or, for a new version, `changelog.d` changed during
+   the prompts), it writes `VERSION`, updates `CHANGELOG.md` as above (under a new, empty `[Unreleased]`), points
+   the links at the bottom at the new tag, and shows the change for review, with the `changelog.d` files its commit
+   deletes. You can edit `CHANGELOG.md` before answering the review; `d` shows the diff as it is then, and `y`
+   takes the files as they are, as long as `VERSION` still names the version, the notes still pass those checks and
+   no file in `changelog.d` was added, renamed or edited (an edit to an entry belongs in `CHANGELOG.md` by then).
+   Leaving the review any other way puts back `VERSION`, `CHANGELOG.md` and the `changelog.d` files the plan read, as
+   they were, after copying an edited `CHANGELOG.md` or `changelog.d` file to your temp folder (the script prints
+   where). A file added to `changelog.d` during the review stays where it is, and a renamed one leaves both names:
+   the old one put back, the new one as you left it.
+4. Commits `VERSION` and `CHANGELOG.md`, deleting those `changelog.d` files, as `chore(release): v1.6.5`, unless a
+   commit was made during the review, which stops it.
 5. Creates the annotated tag `v1.6.5`.
 6. Pushes `master` and the tag in one atomic push.
 
@@ -140,13 +167,13 @@ one DLL):
 1. Delete the release if there is one: `gh release delete v1.6.5 --repo blizzhackers/d2bs --yes`.
 2. Delete the tag on GitHub and locally: `git push origin :refs/tags/v1.6.5`, then `git tag -d v1.6.5`.
 3. Fix `master`. A fix that needs a changelog entry goes under `## [1.6.5]`, the section the release posts, not
-   under `[Unreleased]`.
+   under `[Unreleased]` or in `changelog.d`.
 4. Run the script again. It offers the same version again, for the fixed `master`.
 
 Run `pwsh -File build\tests\Test-ReleaseScript.ps1` after changing `Release-D2BS.ps1`, `Changelog.psm1` or
 `Get-ReleaseNotes.ps1`. It releases into a throwaway sandbox (a bare clone of this repo without its tags as `origin`,
 with your working copies of the scripts and a `CHANGELOG.md` of its own) through every path above that needs no
-GitHub, including a rejected push, a re-release and a release candidate cycle up to its final, and nothing reaches
-this repo or GitHub.
-The check of `master`'s CI build and the watch of the tag build need GitHub, so the test can't run them. Its exit
-code is the number of failed checks, or 1 if a git step in the sandbox itself fails.
+GitHub, including a rejected push, a re-release, a release candidate cycle up to its final and `changelog.d` entries
+from several commits and a merge, and nothing reaches this repo or GitHub. The check of `master`'s CI build and the
+watch of the tag build need GitHub, so the test can't run them. Its exit code is the number of failed checks, or 1 if
+a git step in the sandbox itself fails.

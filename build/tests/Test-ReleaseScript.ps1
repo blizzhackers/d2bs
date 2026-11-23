@@ -2,9 +2,10 @@
 <#
   End-to-end test of build\Release-D2BS.ps1 and build\Get-ReleaseNotes.ps1 in a throwaway sandbox: a bare clone of
   this repo as "origin", and a working clone whose master is this checkout's HEAD plus the WORKING COPIES of the
-  release scripts (an uncommitted change to them is what gets tested), with VERSION set to 1.6.4 and a CHANGELOG.md
-  fixture. Each scenario runs the script with piped answers and checks the refs and files it leaves. Nothing reaches
-  this repo or GitHub, and the sandbox is deleted afterwards (-Keep keeps it). Exit code = number of failed checks.
+  release scripts and changelog.d\README.md (an uncommitted change to them is what gets tested) and no other
+  changelog.d file, with VERSION set to 1.6.4 and a CHANGELOG.md fixture. Each scenario runs the script with piped
+  answers and checks the refs and files it leaves. Nothing reaches this repo or GitHub, and the sandbox is deleted
+  afterwards (-Keep keeps it). Exit code = number of failed checks.
 
     pwsh -File build\tests\Test-ReleaseScript.ps1
 #>
@@ -20,6 +21,7 @@ $Sandbox = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPa
 $origin = Join-Path $Sandbox 'origin.git'
 $work = Join-Path $Sandbox 'work'
 $other = Join-Path $Sandbox 'other'
+$fragmentDir = Join-Path $work 'changelog.d'
 $script:failures = 0
 # The files under test, copied from this checkout's build folder.
 $scripts = @('Release-D2BS.ps1', 'Changelog.psm1', 'Get-ReleaseNotes.ps1')
@@ -97,6 +99,34 @@ function Add-Entry([string]$Entry, [string]$Group = 'Fixed') {
   G $work @('commit', '--quiet', '-m', "sandbox: $Entry", '--', 'CHANGELOG.md') | Out-Null
   G $work @('push', '--quiet', 'origin', 'master') | Out-Null
 }
+# changelog.d files: written as given (text as UTF-8 without a BOM, line endings included; a byte array as it is),
+# in a folder when the name has one, then committed and pushed together unless -NoCommit.
+function Add-Fragments([System.Collections.Specialized.OrderedDictionary]$Files, [string]$Message = 'changelog.d entries', [switch]$NoCommit) {
+  foreach ($name in $Files.Keys) {
+    $file = Join-Path $fragmentDir $name
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $file) | Out-Null
+    if ($Files[$name] -is [byte[]]) { [IO.File]::WriteAllBytes($file, $Files[$name]) } else { [IO.File]::WriteAllText($file, $Files[$name]) }
+  }
+  if ($NoCommit) { return }
+  G $work (@('add', '--') + @($Files.Keys | ForEach-Object { "changelog.d/$_" })) | Out-Null
+  G $work @('commit', '--quiet', '-m', "sandbox: $Message") | Out-Null
+  G $work @('push', '--quiet', 'origin', 'master') | Out-Null
+}
+# Removes these changelog.d files, or every one but its README, in one pushed commit.
+function Clear-Fragments([string[]]$Names) {
+  if (-not $Names) { $Names = @(Get-ChildItem -LiteralPath $fragmentDir -File | Where-Object { $_.Name -cne 'README.md' } | ForEach-Object { $_.Name }) }
+  # Only those still tracked: a release that went ahead when its check failed has deleted them already.
+  $paths = @($Names | ForEach-Object { "changelog.d/$_" } | Where-Object { G $work @('ls-files', '--', $_) })
+  if (-not $paths.Count) { return }
+  G $work (@('rm', '--quiet', '--') + $paths) | Out-Null
+  G $work @('commit', '--quiet', '-m', 'sandbox: clear changelog.d') | Out-Null
+  G $work @('push', '--quiet', 'origin', 'master') | Out-Null
+}
+# changelog.d and CHANGELOG.md as bytes, to tell that a run left them byte for byte as they were.
+function Get-FileSnapshot {
+  $files = @(Get-ChildItem -LiteralPath $fragmentDir -File | Sort-Object Name) + @(Get-Item -LiteralPath (Join-Path $work 'CHANGELOG.md'))
+  ($files | ForEach-Object { "$($_.Name)=$([Convert]::ToBase64String([IO.File]::ReadAllBytes($_.FullName)))" }) -join ';'
+}
 # The sandbox clones commit as their own identity (a CI runner has none).
 function Set-Identity([string]$Dir) {
   G $Dir @('config', 'user.name', 'release-test') | Out-Null
@@ -122,12 +152,22 @@ function Initialize-Sandbox {
   if (G $work @('tag', '--list')) { throw 'the sandbox still has tags' }
   Set-Identity $work
   foreach ($file in $scripts) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..' $file) -Destination (Join-Path $work 'build') -Force }
+  # The scenarios count every changelog.d entry, so the ones this checkout's HEAD has pending stay out of the sandbox.
+  G $work @('rm', '-r', '--quiet', '--ignore-unmatch', '--', 'changelog.d') | Out-Null
+  if (Test-Path -LiteralPath $fragmentDir) { Remove-Item -LiteralPath $fragmentDir -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $fragmentDir | Out-Null
+  Copy-Item -LiteralPath (Join-Path $repo 'changelog.d' 'README.md') -Destination $fragmentDir -Force
+  # git checks changelog.d out with CRLF wherever it runs, as core.autocrlf does on Windows, so putting a file with LF
+  # back byte for byte takes more than git restore.
+  [IO.File]::WriteAllText((Join-Path $work '.gitattributes'), "changelog.d/*.md text eol=crlf`n")
   [IO.File]::WriteAllText((Join-Path $work 'VERSION'), "1.6.4`n")
   # CRLF, as a Windows checkout has it: the release must keep the file's line endings.
   [IO.File]::WriteAllText((Join-Path $work 'CHANGELOG.md'), ($fixture -replace "`n", "`r`n"))
-  G $work (@('add', '--') + @($scripts | ForEach-Object { "build/$_" }) + @('VERSION', 'CHANGELOG.md')) | Out-Null
+  G $work (@('add', '--') + @($scripts | ForEach-Object { "build/$_" }) + @('VERSION', 'CHANGELOG.md', '.gitattributes', 'changelog.d/README.md')) | Out-Null
   G $work @('commit', '--quiet', '--allow-empty', '-m', 'sandbox: the release script under test') | Out-Null
   G $work @('push', '--quiet', 'origin', 'master') | Out-Null
+  $held = (@(Get-ChildItem -LiteralPath $fragmentDir -Force | ForEach-Object { $_.Name }) -join ',') + ' | ' + (G $work @('ls-files', '--', 'changelog.d'))
+  Check 'the sandbox changelog.d holds only its README, on disk and in git' ($held -ceq 'README.md | changelog.d/README.md') $held
   "sandbox master: $(G $work @('log', '-1', '--format=%h %s')), VERSION $((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim())"
 }
 
@@ -718,6 +758,570 @@ function Invoke-Scenarios {
   Check '  and the final merges it with its fence whole, linked from v0.9.0' ($out.Contains("~~~`r`n## [9.9.9]`r`n### Added`r`n[1.0.0-rc.1]: https://h/compare/bad...v1.0.0-rc.1`r`n~~~") -and
     $out.Contains('[1.0.0]: https://h/compare/v0.9.0...v1.0.0') -and $counts['Fixed'] -eq 1 -and $counts['(no group)'] -eq 1 -and
     $out -cnotmatch '(?m)^## \[1\.0\.0-rc\.1\]') $out
+
+  # 15. changelog.d: one file per entry, added to [Unreleased] at a release and deleted by its commit.
+  # 15a. The addition on its own: after an existing group's entries (its heading in any case), new headings in Keep a
+  #      Changelog order ahead of a group it doesn't know, nothing taken from the next section, a hidden heading
+  #      passed over, an empty group, an empty section, CRLF kept.
+  function E([string]$Group, [string]$Text) { [pscustomobject]@{ Group = $Group; Text = $Text } }
+  $out = Add-ChangelogUnreleased -Text "## [Unreleased]`n`n### fixed`n`n- old`n`n### Notes`n`n- n`n`n## [1.0.0] - D`n`n### Added`n`n- x`n" -Entries @(
+    (E 'Fixed' '- f1'), (E 'Security' '- s1'), (E 'Added' '- a1'), (E 'Fixed' '- f2'))
+  Check 'entries follow a group''s own, and new groups go in Keep a Changelog order before unknown ones' ($out -ceq
+    "## [Unreleased]`n`n### Added`n`n- a1`n`n### fixed`n`n- old`n- f1`n- f2`n`n### Security`n`n- s1`n`n### Notes`n`n- n`n`n## [1.0.0] - D`n`n### Added`n`n- x`n") $out
+  $out = Add-ChangelogUnreleased -Text ("## [Unreleased]`n`n<!--`n### Fixed`n-->`n`n### Security`n`n## [1.0.0] - D`n`n- x`n" -replace "`n", "`r`n") -Entries @(
+    (E 'Fixed' '- f1'), (E 'Security' '- s1'))
+  Check '  past a commented-out heading, into an empty group, with CRLF' ($out -ceq
+    ("## [Unreleased]`n`n<!--`n### Fixed`n-->`n`n### Fixed`n`n- f1`n`n### Security`n`n- s1`n`n## [1.0.0] - D`n`n- x`n" -replace "`n", "`r`n")) $out
+  $out = Add-ChangelogUnreleased -Text '## [Unreleased]' -Entries @((E 'Changed' '- c1'))
+  Check '  and into an empty section at the end of the file' ($out -ceq "## [Unreleased]`n`n### Changed`n`n- c1") $out
+  # One file's text as an entry: what stops it, and the line breaks at its end, which don't.
+  $textCases = [ordered]@{
+    'empty' = @('', 'is empty')
+    'a lone newline' = @("`n", 'is empty')
+    'blank lines only' = @("`r`n`n", 'is empty')
+    'an entry and blank lines after it' = @("- **A.** x`r`n`r`n`n", $null)
+    'a blank line inside' = @("- **A.** x`n`n- **B.** y`n", 'has more than one line')
+    'spaces on a line after it' = @("- **A.** x`n  `r`n", $null)
+    'a comment and nothing else' = @('- <!-- x -->', 'is no entry once its HTML comments are hidden')
+    'a comment that never closes' = @('- <!-- x', 'opens an HTML comment or a code fence that never closes')
+    'a leading space' = @(' - **A.** x', 'does not open with "- "')
+    'a leading tab' = @("`t- **A.** x", 'does not open with "- "')
+    'a "*" item' = @('* **A.** x', 'does not open with "- "')
+    'a backtick fence' = @('- ```', 'opens a code fence after "- "')
+    'a tilde fence' = @('-  ~~~ x', 'opens a code fence after "- "')
+    'inline code of three backticks' = @('- ```js x```', $null)
+    'a tilde fence after a tab' = @("- `t~~~", 'opens a code fence after "- "')
+    'inline code of three backticks after a tab' = @("- `t``````js x``````", $null)
+    'a NUL in place of a space' = @("- **A.**$([char]0)x", 'holds a control character')
+    'a right-to-left override' = @("- **A.** x $([char]0x202E)y", 'holds a control character')
+    'a tab inside' = @("- **A.**`tx", $null)
+  }
+  foreach ($case in $textCases.Keys) {
+    $text, $expect = $textCases[$case]
+    $got = Get-ChangelogFragmentProblem $text
+    $pass = if ($expect) { "$got".StartsWith($expect, [StringComparison]::Ordinal) } else { $null -eq $got }
+    Check "changelog.d text, ${case}: $(if ($expect) { $expect } else { 'an entry' })" $pass "$got"
+  }
+  # Its bytes: strict UTF-8, a BOM dropped without a word.
+  $utf8 = [Text.UTF8Encoding]::new($false)
+  $dash = [string][char]0x2014
+  $d = ConvertFrom-ChangelogFragmentBytes ([byte[]](@(0xEF, 0xBB, 0xBF) + $utf8.GetBytes("- **A.** x $dash y`n")))
+  Check 'a changelog.d file with a UTF-8 BOM reads without it' ($d.Text -ceq "- **A.** x $dash y`n" -and $null -eq $d.Problem) "$($d.Text)|$($d.Problem)"
+  $d = ConvertFrom-ChangelogFragmentBytes ([byte[]]($utf8.GetBytes('- **A.** x ') + @(0x97, 0x0A)))
+  Check '  one in Windows-1252 is not valid UTF-8' ($d.Problem -ceq 'is not valid UTF-8 (save it as UTF-8)') "$($d.Problem)"
+  $d = ConvertFrom-ChangelogFragmentBytes ($utf8.GetBytes("- **A.** x $([char]0xFFFD) y`n"))
+  Check '  and one holding U+FFFD is refused' ("$($d.Problem)".StartsWith('holds U+FFFD', [StringComparison]::Ordinal)) "$($d.Problem)"
+
+  # 15b. Entries from several commits, one a merge whose branch commit is older than the commit before the merge:
+  #      each group's go in the order their files reached master's first-parent history (where each was added, not
+  #      last changed), files added together by name, an uncommitted one last. A dry run shows them and changes
+  #      nothing.
+  Add-Entry '- **Existing fix.** One line.'
+  Add-Fragments ([ordered]@{ 'zeta.fixed.md' = "- **Zeta fix.** One line.`n" }) 'zeta'
+  Add-Fragments ([ordered]@{ 'beta.fixed.md' = "- **Beta fix.** One line.`r`n"; 'alpha.fixed.md' = '- **Alpha fix.** One line.'
+      'gamma.added.md' = "- **Gamma feature.** One line.`n" }) 'alpha, beta and gamma'
+  G $work @('checkout', '--quiet', '-b', 'side') | Out-Null
+  Add-Fragments ([ordered]@{ 'aaa-side.fixed.md' = "- **Side fix.** One line.`n" }) -NoCommit
+  $env:GIT_AUTHOR_DATE = '2001-01-01T00:00:00Z'
+  $env:GIT_COMMITTER_DATE = '2001-01-01T00:00:00Z'
+  try {
+    G $work @('add', '--', 'changelog.d/aaa-side.fixed.md') | Out-Null
+    G $work @('commit', '--quiet', '-m', 'sandbox: an older commit on a branch') | Out-Null
+  } finally { $env:GIT_AUTHOR_DATE = $null; $env:GIT_COMMITTER_DATE = $null }
+  G $work @('checkout', '--quiet', 'master') | Out-Null
+  Add-Fragments ([ordered]@{ 'mmm.fixed.md' = "- **Mmm fix.** One line.`n"; 'sec.security.md' = "- **Sec fix.** One line.`n" }) 'mmm and sec'
+  G $work @('merge', '--quiet', '--no-ff', '--no-edit', '-m', 'sandbox: merge side', 'side') | Out-Null
+  G $work @('push', '--quiet', 'origin', 'master') | Out-Null
+  G $work @('branch', '--quiet', '-D', 'side') | Out-Null
+  # A later commit that changes a file leaves its entry where the file was added.
+  Add-Fragments ([ordered]@{ 'zeta.fixed.md' = '- **Zeta fix.** One line.' }) 'zeta without its newline'
+  Add-Fragments ([ordered]@{ 'aaa-new.fixed.md' = "- **New fix.** One line.`n" }) -NoCommit
+  $fixed = '- **Existing fix.** One line.', '- **Zeta fix.** One line.', '- **Alpha fix.** One line.', '- **Beta fix.** One line.',
+    '- **Mmm fix.** One line.', '- **Side fix.** One line.'
+  $want = "### Added`n`n- **Gamma feature.** One line.`n`n### Fixed`n`n$($fixed -join "`n")`n- **New fix.** One line.`n`n### Security`n`n- **Sec fix.** One line."
+  $before = Get-FileSnapshot
+  $status = G $work @('status', '--porcelain', '--untracked-files=all')
+  $head = G $work @('rev-parse', 'HEAD')
+  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  $shown = ($want -split "`n" | ForEach-Object { "    $_" }) -join "`n"
+  Check 'a dry run shows [Unreleased] with the changelog.d entries in the order they reached master' ($r.Code -eq 0 -and
+    $r.Text.Contains("  [Unreleased] with them:`n$shown`n")) $r.Text
+  $order = 'Fixed: changelog.d/zeta.fixed.md', 'Fixed: changelog.d/alpha.fixed.md', 'Fixed: changelog.d/beta.fixed.md',
+    'Added: changelog.d/gamma.added.md', 'Fixed: changelog.d/mmm.fixed.md', 'Security: changelog.d/sec.security.md',
+    'Fixed: changelog.d/aaa-side.fixed.md', 'Fixed: changelog.d/aaa-new.fixed.md'
+  Check '  and lists them in that order' ($r.Text.Contains("changelog.d: 8 entries for [Unreleased], in this order:`n" + (($order | ForEach-Object { "      $_" }) -join "`n"))) $r.Text
+  Check '  counts them' ($r.Text -match 'CHANGELOG\.md \[Unreleased\]: Added 1, Fixed 7, Security 1, changelog\.d included') $r.Text
+  Check '  plans to delete them in the release commit' ($r.Text -match 'deleting the 8 changelog\.d files, as "chore\(release\): v1\.6\.8-rc\.1"' -and
+    $r.Text -match '> git rm --quiet -- changelog\.d/zeta\.fixed\.md changelog\.d/alpha\.fixed\.md ') $r.Text
+  Check '  warns that the uncommitted one would stop a release' ($r.Text -match '\[!!\] changelog\.d: changelog\.d/aaa-new\.fixed\.md: not committed' -and
+    $r.Text -match '\[!!\] changelog\.d has 1 problem\(s\)') $r.Text
+  Check '  and changes no file, commit or tag' ((Get-FileSnapshot) -ceq $before -and (G $work @('status', '--porcelain', '--untracked-files=all')) -ceq $status -and
+    (G $work @('rev-parse', 'HEAD')) -eq $head -and -not (G $work @('tag', '--list', 'v1.6.8-rc.1'))) ''
+
+  # 15b2. In a shallow clone whose oldest commit (the merge) already holds every file, they all count as committed
+  #       and go in by name, with log.showRoot off as well.
+  $shallow = Join-Path $Sandbox 'shallow'
+  & git clone --quiet --depth 2 --branch master "file:///$($origin -replace '\\', '/')" $shallow
+  if ($LASTEXITCODE) { throw 'shallow clone failed' }
+  G $shallow @('config', 'log.showRoot', 'false') | Out-Null
+  $out = (@('1', '', 'y') -join "`n") | pwsh -NoProfile -File (Join-Path $shallow 'build' 'Release-D2BS.ps1') -DryRun -NoFetch 2>&1
+  $r = [pscustomobject]@{ Code = $LASTEXITCODE; Text = (@($out) -join "`n") }
+  $order = 'Fixed: changelog.d/aaa-side.fixed.md', 'Fixed: changelog.d/alpha.fixed.md', 'Fixed: changelog.d/beta.fixed.md',
+    'Added: changelog.d/gamma.added.md', 'Fixed: changelog.d/mmm.fixed.md', 'Security: changelog.d/sec.security.md', 'Fixed: changelog.d/zeta.fixed.md'
+  Check 'a shallow clone folds every committed file, by name, none of them read as not committed' ((G $shallow @('rev-parse', '--is-shallow-repository')) -eq 'true' -and
+    $r.Code -eq 0 -and $r.Text -notmatch 'not committed' -and
+    $r.Text.Contains("changelog.d: 7 entries for [Unreleased], in this order:`n" + (($order | ForEach-Object { "      $_" }) -join "`n"))) $r.Text
+  Remove-Item -LiteralPath $shallow -Recurse -Force
+
+  # 15c. A real release stops at the plan on the uncommitted file, which its commit could not delete.
+  $r = Invoke-Release @('1', '', 'y', 'y')
+  Check 'an uncommitted changelog.d file stops the release at the plan' ($r.Code -eq 1 -and $r.Text -match '\[xx\] changelog\.d has 1 problem\(s\)' -and
+    $r.Text -notmatch 'Proceed\?' -and (Get-FileSnapshot) -ceq $before -and -not (G $work @('tag', '--list', 'v1.6.8-rc.1'))) $r.Text
+  Remove-Item -LiteralPath (Join-Path $fragmentDir 'aaa-new.fixed.md')
+  $want = "### Added`n`n- **Gamma feature.** One line.`n`n### Fixed`n`n$($fixed -join "`n")`n`n### Security`n`n- **Sec fix.** One line."
+
+  # 15d. An edit to a changelog.d file while "Proceed?" waits stops the release, and the edit survives.
+  $alpha = Join-Path $fragmentDir 'alpha.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.8-rc.1]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    [IO.File]::WriteAllText($alpha, '- **Alpha fix, edited.** One line.')
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'an edit to a changelog.d file at Proceed? stops the release' ($r.Code -eq 1 -and $r.Text -match 'changelog\.d or HEAD changed during the prompts' -and
+    [IO.File]::ReadAllText($alpha) -ceq '- **Alpha fix, edited.** One line.' -and -not (G $work @('tag', '--list', 'v1.6.8-rc.1'))) $r.Text
+  [IO.File]::WriteAllText($alpha, '- **Alpha fix.** One line.')
+
+  # 15e. The review names the files the commit deletes and asks again while one is edited; n, or the end of the
+  #      input, puts CHANGELOG.md and every file back byte for byte, LF ones included (git would check them out with
+  #      CRLF here), keeping the edit outside the repo, and with nothing left for git status to show.
+  $before = Get-FileSnapshot
+  $zeta = Join-Path $fragmentDir 'zeta.fixed.md'
+  $beta = Join-Path $fragmentDir 'beta.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.8-rc.1]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText($zeta, "- **Zeta fix, edited at the review.** One line.`n")
+    Remove-Item -LiteralPath $beta
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    Send-Answer $run 'n'
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'the review names the files the commit deletes' (($r.Text -replace "`r`n", "`n").Contains("The release commit deletes the 7 changelog.d files, whose entries are in CHANGELOG.md now:`n" +
+    "      changelog.d/zeta.fixed.md`n      changelog.d/alpha.fixed.md`n")) $r.Text
+  Check '  and asks again while one is edited' ($r.Text -match 'changelog\.d/zeta\.fixed\.md changed during the review, and the commit deletes it: make the edit in CHANGELOG\.md, or answer n' -and
+    $r.Text -notmatch 'beta\.fixed\.md changed') $r.Text
+  Check 'n at the review puts CHANGELOG.md and every changelog.d file back byte for byte' ($r.Code -eq 1 -and (Get-FileSnapshot) -ceq $before -and
+    -not (G $work @('status', '--porcelain', '--untracked-files=all'))) "$($r.Text)`n$(G $work @('status', '--porcelain', '--untracked-files=all'))"
+  Check '  and says so' ($r.Text -match 'VERSION put back to 1\.6\.7, and CHANGELOG\.md with it, and the 7 changelog\.d files as they were') $r.Text
+  $kept = if ($r.Text -match '(?m)Your edits to changelog\.d/zeta\.fixed\.md are kept in (.+?)\r?$') { $Matches[1] } else { $null }
+  Check '  keeping the edit outside the repo' ($kept -and (Test-Path -LiteralPath $kept) -and [IO.File]::ReadAllText($kept) -match 'edited at the review') $r.Text
+  if ($kept -and (Test-Path -LiteralPath $kept)) { Remove-Item -LiteralPath $kept }
+  $r = Invoke-Release @('1', '', 'y')
+  Check '  as the end of input there does' ($r.Code -eq 1 -and $r.Text -match 'no more input' -and (Get-FileSnapshot) -ceq $before -and
+    -not (G $work @('status', '--porcelain'))) $r.Text
+
+  # 15e2. A changelog.d file renamed or added during the review would stay behind with its entry in CHANGELOG.md, so
+  #       y asks again while one is there.
+  $head = G $work @('rev-parse', 'HEAD')
+  $renamed = Join-Path $fragmentDir 'alpha.added.md'
+  $extra = Join-Path $fragmentDir 'extra.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.8-rc.1]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    Move-Item -LiteralPath $alpha -Destination $renamed
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    Move-Item -LiteralPath $renamed -Destination $alpha
+    [IO.File]::WriteAllText($extra, "- **Extra fix.** One line.`n")
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    Send-Answer $run 'n'
+    $r = Complete-Release $run
+  } catch {
+    # A y that went ahead ends the script before the next prompt: record it as these checks failing, files restored.
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+    if (Test-Path -LiteralPath $renamed) { Move-Item -LiteralPath $renamed -Destination $alpha }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  $changedNote = 'changelog\.d changed during the review \({0}\), and the commit deletes only the files the plan named'
+  Check 'y at the review asks again while a changelog.d file is renamed' ($r.Text -match ($changedNote -f 'changelog\.d/alpha\.added\.md')) $r.Text
+  Check '  or added' ($r.Text -match ($changedNote -f 'changelog\.d/extra\.fixed\.md')) $r.Text
+  Check '  and n then commits nothing' ($r.Code -eq 1 -and (G $work @('rev-parse', 'HEAD')) -eq $head -and -not (G $work @('tag', '--list', 'v1.6.8-rc.1'))) $r.Text
+  Remove-Item -LiteralPath $extra
+  Check '  leaving the files as they were' ((Get-FileSnapshot) -ceq $before -and -not (G $work @('status', '--porcelain', '--untracked-files=all'))) (G $work @('status', '--porcelain', '--untracked-files=all'))
+
+  # 15e3. Each of the review's checks catches what the other two can't see: an edit git status skips (the file marked
+  #       assume-unchanged), a new file git ignores, and a staged edit whose working copy has its bytes back.
+  $before = Get-FileSnapshot
+  $exclude = Join-Path $work '.git' 'info' 'exclude'
+  $excludeBytes = if (Test-Path -LiteralPath $exclude) { [IO.File]::ReadAllBytes($exclude) } else { $null }
+  $ignored = Join-Path $fragmentDir 'ignored.fixed.md'
+  $zetaBytes = [IO.File]::ReadAllBytes($zeta)
+  $alphaBytes = [IO.File]::ReadAllBytes($alpha)
+  $steps = @{}
+  function Get-FragmentStatusNow { G $work @('status', '--porcelain', '--untracked-files=all', '--', 'changelog.d') }
+  G $work @('update-index', '--assume-unchanged', '--', 'changelog.d/zeta.fixed.md') | Out-Null
+  [IO.File]::AppendAllText($exclude, "`n/changelog.d/ignored.fixed.md`n")
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.8-rc.1]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    [IO.File]::WriteAllText($zeta, "- **Zeta fix, edited where git status can't see it.** One line.`n")
+    $steps['bytes quiet'] = -not (Get-FragmentStatusNow)
+    $at = $run.Out.Length
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    $steps['bytes'] = $run.Out.ToString().Substring($at)
+    [IO.File]::WriteAllBytes($zeta, $zetaBytes)
+    [IO.File]::WriteAllText($ignored, "- **Ignored fix.** One line.`n")
+    $steps['names quiet'] = -not (Get-FragmentStatusNow)
+    $at = $run.Out.Length
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    $steps['names'] = $run.Out.ToString().Substring($at)
+    Remove-Item -LiteralPath $ignored
+    [IO.File]::WriteAllText($alpha, '- **Alpha fix, staged.** One line.')
+    G $work @('add', '--', 'changelog.d/alpha.fixed.md') | Out-Null
+    [IO.File]::WriteAllBytes($alpha, $alphaBytes)
+    $at = $run.Out.Length
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    $steps['status'] = $run.Out.ToString().Substring($at)
+    G $work @('restore', '--staged', '--', 'changelog.d/alpha.fixed.md') | Out-Null
+    Send-Answer $run 'n'
+    $r = Complete-Release $run
+  } catch {
+    # A y that went ahead ends the script before the next prompt: record it as these checks failing.
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+    # Still tracked only if the release stopped as it should; otherwise its commit deleted the file.
+    if (G $work @('ls-files', '--', 'changelog.d/zeta.fixed.md')) { G $work @('update-index', '--no-assume-unchanged', '--', 'changelog.d/zeta.fixed.md') | Out-Null }
+    if ($null -eq $excludeBytes) { Remove-Item -LiteralPath $exclude -ErrorAction SilentlyContinue } else { [IO.File]::WriteAllBytes($exclude, $excludeBytes) }
+    if (Test-Path -LiteralPath $ignored) { Remove-Item -LiteralPath $ignored }
+  }
+  Check 'y at the review asks again for an edit git status does not show (the byte check)' ($steps['bytes quiet'] -eq $true -and
+    "$($steps['bytes'])" -match 'changelog\.d/zeta\.fixed\.md changed during the review, and the commit deletes it') "$($steps['bytes'])`n$($r.Text)"
+  Check '  for a new file git ignores (the folder listing)' ($steps['names quiet'] -eq $true -and
+    "$($steps['names'])" -match ($changedNote -f 'changelog\.d/ignored\.fixed\.md')) "$($steps['names'])`n$($r.Text)"
+  Check '  and for a staged edit whose working copy has its bytes back (git status)' ("$($steps['status'])" -match
+    'changelog\.d/alpha\.fixed\.md changed during the review, and the commit deletes it') "$($steps['status'])`n$($r.Text)"
+  Check '  and n then commits nothing and leaves the files as they were' ($r.Code -eq 1 -and (G $work @('rev-parse', 'HEAD')) -eq $head -and
+    (Get-FileSnapshot) -ceq $before -and -not (G $work @('status', '--porcelain', '--untracked-files=all'))) "$($r.Text)`n$(G $work @('status', '--porcelain', '--untracked-files=all'))"
+
+  # 15e4. A changelog.d file locked during the review can be neither compared nor put back: n names it and still puts
+  #       VERSION and CHANGELOG.md back.
+  $gamma = Join-Path $fragmentDir 'gamma.added.md'
+  $lock = $null
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.8-rc.1]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    $lock = [IO.File]::Open($gamma, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+    Send-Answer $run 'n'
+    $r = Complete-Release $run
+  } finally {
+    if ($lock) { $lock.Dispose() }
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'n with a changelog.d file locked names the file it could not put back' ($r.Code -eq 1 -and $r.Text -match 'Could not put changelog\.d/gamma\.added\.md back') $r.Text
+  Check '  and still puts VERSION and CHANGELOG.md back' ((Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.7' -and
+    -not (G $work @('status', '--porcelain', '--', 'VERSION', 'CHANGELOG.md'))) "$($r.Text)`n$(G $work @('status', '--porcelain'))"
+  Check '  leaving every file as it was' ((Get-FileSnapshot) -ceq $before -and -not (G $work @('status', '--porcelain', '--untracked-files=all'))) (G $work @('status', '--porcelain', '--untracked-files=all'))
+
+  # 15e5. A commit that fails (refused by a pre-commit hook here) prints its undo, which works as printed: VERSION,
+  #       CHANGELOG.md and every changelog.d file as HEAD has them, and a clean tree.
+  $hook = Join-Path $work '.git' 'hooks' 'pre-commit'
+  [IO.File]::WriteAllText($hook, "#!/bin/sh`necho sandbox refuses commits`nexit 1`n")
+  try { $r = Invoke-Release @('1', '', 'y', 'y') } finally { Remove-Item -LiteralPath $hook }
+  $undo = @($r.Text -split "`n" | Where-Object { $_ -cmatch '^  git ' } | ForEach-Object { $_.Trim() })
+  $wantUndo = 'git restore --staged --worktree -- VERSION CHANGELOG.md ' + ((@('zeta.fixed', 'alpha.fixed', 'beta.fixed', 'gamma.added', 'mmm.fixed',
+        'sec.security', 'aaa-side.fixed') | ForEach-Object { "changelog.d/$_.md" }) -join ' ')
+  Check 'a failed commit stops the release and prints its undo' ($r.Code -eq 1 -and $r.Text -match 'git commit failed' -and $undo.Count -eq 1 -and
+    $undo[0] -ceq $wantUndo) "$($undo -join ' | ')`n$($r.Text)"
+  if ($undo.Count -eq 1) { G $work @($undo[0].Substring(4) -split ' ') | Out-Null }
+  $names = @(Get-ChildItem -LiteralPath $fragmentDir -File | ForEach-Object { $_.Name }) -join ','
+  Check '  and the undo puts VERSION, CHANGELOG.md and every changelog.d file back as HEAD has them' ((G $work @('rev-parse', 'HEAD')) -eq $head -and
+    (Get-Content -LiteralPath (Join-Path $work 'VERSION') -Raw).Trim() -eq '1.6.7' -and -not (G $work @('status', '--porcelain', '--untracked-files=all')) -and
+    $names -ceq 'aaa-side.fixed.md,alpha.fixed.md,beta.fixed.md,gamma.added.md,mmm.fixed.md,README.md,sec.security.md,zeta.fixed.md' -and
+    -not (G $work @('tag', '--list', 'v1.6.8-rc.1'))) "$names`n$(G $work @('status', '--porcelain', '--untracked-files=all'))"
+
+  # 15f. A release candidate takes them into its own section and its commit deletes them, after printing the undo of
+  #      its git steps. A folded file deleted at the review goes with the rest.
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.8-rc.1]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    Remove-Item -LiteralPath $beta
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check 'a release candidate with changelog.d entries exits 0' ($r.Code -eq 0 -and (G $origin @('tag', '--list', 'v1.6.8-rc.1'))) $r.Text
+  Check '  taking a folded file deleted at the review without asking again' ($r.Text -notmatch 'changed during the review' -and
+    ([regex]::Matches($r.Text, [regex]::Escape($review))).Count -eq 1) $r.Text
+  $undoAt = $r.Text.IndexOf('Should these steps stop before the commit, this undoes them: git restore --staged --worktree -- VERSION CHANGELOG.md changelog.d/zeta.fixed.md changelog.d/alpha.fixed.md ', [StringComparison]::Ordinal)
+  $addAt = $r.Text.IndexOf('> git add -- VERSION CHANGELOG.md', [StringComparison]::Ordinal)
+  Check '  printing the undo before its first git step' ($undoAt -ge 0 -and $addAt -gt $undoAt) $r.Text
+  Check '  its section holds them' ((Read-Changelog).Contains("## [Unreleased]`n`n## [1.6.8-rc.1] - $today`n`n$want`n`n## [1.6.7]")) (Read-Changelog)
+  $n = Invoke-Notes @('-Version', 'v1.6.8-rc.1')
+  Check '  and Get-ReleaseNotes posts it' ($n.Code -eq 0 -and $n.Text -ceq $want) $n.Text
+  $changes = (G $work @('show', '--name-status', '--format=', 'HEAD')) -replace "`t", ' '
+  Check '  its commit deletes the files, the one deleted at the review included, with VERSION and CHANGELOG.md' ($changes -ceq ((@('M CHANGELOG.md', 'M VERSION') + @('aaa-side.fixed', 'alpha.fixed',
+    'beta.fixed', 'gamma.added', 'mmm.fixed', 'sec.security', 'zeta.fixed' | ForEach-Object { "D changelog.d/$_.md" })) -join "`n")) $changes
+  Check '  leaving changelog.d its README and a clean tree' ((@(Get-ChildItem -LiteralPath $fragmentDir -File | ForEach-Object { $_.Name }) -join ',') -ceq 'README.md' -and
+    -not (G $work @('status', '--porcelain', '--untracked-files=all'))) (G $work @('status', '--porcelain', '--untracked-files=all'))
+
+  # 15g. The final merges the candidate's section with the entries added since, as it merges any. A slug the
+  #      candidate's commit deleted and a later commit used again sorts where it came back.
+  Add-Fragments ([ordered]@{ 'late-change.changed.md' = "- **Late change.** One line.`n"; 'late-fix.fixed.md' = "- **Late fix.** One line.`n" }) 'late entries'
+  Add-Fragments ([ordered]@{ 'alpha.fixed.md' = "- **Alpha again.** One line.`n" }) 'alpha again'
+  $r = Invoke-Release @('2', '', 'y', 'y')
+  $want = ("### Added`n`n- **Gamma feature.** One line.`n`n### Changed`n`n- **Late change.** One line.`n`n### Fixed`n`n$($fixed -join "`n")`n" +
+    "- **Late fix.** One line.`n- **Alpha again.** One line.`n`n### Security`n`n- **Sec fix.** One line.")
+  $n = Invoke-Notes @('-Version', '1.6.8')
+  Check 'the final merges the candidate and the later changelog.d entries, a slug used again where it came back' ($r.Code -eq 0 -and $n.Text -ceq $want) "$($r.Text)`n---`n$($n.Text)"
+  $changes = (G $work @('show', '--name-status', '--format=', 'HEAD')) -replace "`t", ' '
+  Check '  drops the candidate section and deletes the files' ((Read-Changelog) -notmatch '1\.6\.8-rc\.' -and
+    $changes -ceq "M CHANGELOG.md`nM VERSION`nD changelog.d/alpha.fixed.md`nD changelog.d/late-change.changed.md`nD changelog.d/late-fix.fixed.md") $changes
+
+  # 15h. A re-release names changelog.d when the entries it leaves out wait there.
+  Add-Fragments ([ordered]@{ 'ok.fixed.md' = [byte[]](@(0xEF, 0xBB, 0xBF) + $utf8.GetBytes("- **Fine fix.** One line.`n")) }) 'a valid entry, with a BOM'
+  $tagCommit = G $work @('rev-parse', 'v1.6.8^{commit}')
+  G $work @('push', '--quiet', 'origin', ':refs/tags/v1.6.8') | Out-Null
+  G $work @('tag', '-d', 'v1.6.8') | Out-Null
+  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  Check 'a re-release warns that the changelog.d entries stay out' ($r.Code -eq 0 -and $r.Text -match '1\) 1\.6\.8 again \(release commit' -and
+    $r.Text -match '\[!!\] changelog\.d has entries, and re-releasing v1\.6\.8 posts only \[1\.6\.8\]') $r.Text
+  # It commits nothing and leaves changelog.d alone, so a file added there while Proceed? waits doesn't stop it.
+  $late = Join-Path $fragmentDir 'late-add.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    [IO.File]::WriteAllText($late, "- **Late add.** One line.`n")
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } catch {
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+    if (Test-Path -LiteralPath $late) { Remove-Item -LiteralPath $late }
+  }
+  Check '  and a file added to changelog.d while its Proceed? waits does not stop it' ($r.Code -eq 0 -and
+    $r.Text -notmatch 'changed during the prompts' -and (G $origin @('tag', '--list', 'v1.6.8'))) $r.Text
+  if (G $origin @('tag', '--list', 'v1.6.8')) { G $work @('push', '--quiet', 'origin', ':refs/tags/v1.6.8') | Out-Null }
+  if (G $work @('tag', '--list', 'v1.6.8')) { G $work @('tag', '-d', 'v1.6.8') | Out-Null }
+  G $work @('tag', '-a', 'v1.6.8', '-m', 'D2BS v1.6.8', $tagCommit) | Out-Null
+  G $work @('push', '--quiet', 'origin', 'v1.6.8') | Out-Null
+
+  # 15i. Each problem stops a real release at the plan, though a valid entry (its BOM dropped) would let it go on; a
+  #      dry run only warns.
+  $problemCases = [ordered]@{
+    'a malformed name' = @([ordered]@{ 'Bad_Name.fixed.md' = "- **Bad name.** One line.`n" }, 'changelog\.d/Bad_Name\.fixed\.md: not named <slug>\.<section>\.md')
+    'an uppercase slug' = @([ordered]@{ 'Bad.fixed.md' = "- **Uppercase slug.** One line.`n" }, 'changelog\.d/Bad\.fixed\.md: not named <slug>\.<section>\.md')
+    'an unknown section' = @([ordered]@{ 'misc.notes.md' = "- **Misc.** One line.`n" }, "changelog\.d/misc\.notes\.md: unknown section 'notes'")
+    'a multi-line file' = @([ordered]@{ 'two.fixed.md' = "- **Two lines.** One`n  and two.`n" }, 'changelog\.d/two\.fixed\.md: has more than one line')
+    'a slug used twice' = @([ordered]@{ 'dup.fixed.md' = "- **Dup fix.** One line.`n"; 'dup.added.md' = "- **Dup feature.** One line.`n" },
+      'changelog\.d/dup\.(added|fixed)\.md, changelog\.d/dup\.(added|fixed)\.md: the same slug twice')
+    'a file not in UTF-8' = @([ordered]@{ 'cp.fixed.md' = [byte[]]($utf8.GetBytes('- **Dash ') + @(0x97) + $utf8.GetBytes(' here.** One line.') + @(0x0A)) },
+      'changelog\.d/cp\.fixed\.md: is not valid UTF-8 \(save it as UTF-8\)')
+    'a file holding U+FFFD' = @([ordered]@{ 'lost.fixed.md' = "- **Lost $([char]0xFFFD) dash.** One line.`n" }, 'changelog\.d/lost\.fixed\.md: holds U\+FFFD')
+    'a folder' = @([ordered]@{ 'sub/inner.fixed.md' = "- **Inner.** One line.`n" }, 'changelog\.d/sub: a folder, which holds no entry')
+  }
+  $fineOnly = "  [Unreleased] with them:`n    ### Fixed`n    `n    - **Fine fix.** One line.`n"
+  foreach ($case in $problemCases.Keys) {
+    $files, $pattern = $problemCases[$case]
+    Add-Fragments $files $case
+    if ($case -eq 'a multi-line file') {
+      $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+      Check 'a dry run only warns about a problem, and leaves that file out' ($r.Code -eq 0 -and $r.Text -match "\[!!\] changelog\.d: $pattern" -and
+        $r.Text -match '\[!!\] changelog\.d has 1 problem\(s\)' -and $r.Text.Contains($fineOnly)) $r.Text
+    }
+    if ($case -eq 'a slug used twice') {
+      $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+      Check 'a dry run leaves both files of a shared slug out' ($r.Code -eq 0 -and $r.Text -match "\[!!\] changelog\.d: $pattern" -and
+        $r.Text -notmatch '\*\*Dup ' -and $r.Text.Contains($fineOnly)) $r.Text
+    }
+    $r = Invoke-Release @('1', '', 'y', 'y')
+    Check "$case in changelog.d stops the release at the plan" ($r.Code -eq 1 -and $r.Text -match "\[!!\] changelog\.d: $pattern" -and
+      $r.Text -match '\[xx\] changelog\.d has 1 problem\(s\), listed above' -and $r.Text -notmatch 'Proceed\?' -and -not (G $work @('tag', '--list', 'v1.6.9-rc.1')) -and
+      -not (G $work @('status', '--porcelain'))) $r.Text
+    Clear-Fragments @($files.Keys)
+  }
+  $oneProblem = '\[xx\] changelog\.d has 1 problem\(s\), listed above'
+  # 15i2. A slug is shared whatever the files hold: next to a file of more than one line, the valid one stays out too.
+  Add-Fragments ([ordered]@{ 'dup.fixed.md' = "- **Dup fix.** One line.`n"; 'dup.added.md' = "- **Dup feature.** One`n  and two.`n" }) 'a shared slug, one file invalid'
+  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  Check 'a slug shared with a file of more than one line is named, and a dry run leaves both out' ($r.Code -eq 0 -and
+    $r.Text -match '\[!!\] changelog\.d: changelog\.d/dup\.added\.md, changelog\.d/dup\.fixed\.md: the same slug twice' -and
+    $r.Text -match '\[!!\] changelog\.d: changelog\.d/dup\.added\.md: has more than one line' -and $r.Text -notmatch '\*\*Dup ' -and $r.Text.Contains($fineOnly)) $r.Text
+  Clear-Fragments @('dup.fixed.md', 'dup.added.md')
+  Add-Fragments ([ordered]@{ 'dup.fixed.md' = "- **Dup fix.** One line.`n"; 'dup.notes.md' = "- **Dup note.** One line.`n" }) 'a shared slug, one section unknown'
+  $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+  Check '  and so is one shared with a file of an unknown section' ($r.Code -eq 0 -and
+    $r.Text -match '\[!!\] changelog\.d: changelog\.d/dup\.fixed\.md, changelog\.d/dup\.notes\.md: the same slug twice' -and
+    $r.Text -match "\[!!\] changelog\.d: changelog\.d/dup\.notes\.md: unknown section 'notes'" -and $r.Text -notmatch '\*\*Dup ' -and $r.Text.Contains($fineOnly)) $r.Text
+  Clear-Fragments @('dup.fixed.md', 'dup.notes.md')
+
+  # 15i3. Only a file named README.md is changelog.d's own: a folder of that name is a folder like any other.
+  $readme = Join-Path $fragmentDir 'README.md'
+  $readmeBytes = [IO.File]::ReadAllBytes($readme)
+  G $work @('rm', '--quiet', '--', 'changelog.d/README.md') | Out-Null
+  Add-Fragments ([ordered]@{ 'README.md/inner.fixed.md' = "- **Inner.** One line.`n" }) 'a folder named README.md'
+  $r = Invoke-Release @('1', '', 'y', 'y')
+  Check 'a folder named README.md in changelog.d stops the release at the plan' ($r.Code -eq 1 -and
+    $r.Text -match '\[!!\] changelog\.d: changelog\.d/README\.md: a folder, which holds no entry' -and $r.Text -match $oneProblem -and
+    $r.Text -notmatch 'Proceed\?' -and -not (G $work @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
+  Clear-Fragments @('README.md/inner.fixed.md')
+  # Removing the folder's last file makes git delete changelog.d itself, so it is made again before the README.
+  New-Item -ItemType Directory -Force -Path $fragmentDir | Out-Null
+  [IO.File]::WriteAllBytes($readme, $readmeBytes)
+  G $work @('add', '--', 'changelog.d/README.md') | Out-Null
+  G $work @('commit', '--quiet', '-m', 'sandbox: changelog.d/README.md again') | Out-Null
+  G $work @('push', '--quiet', 'origin', 'master') | Out-Null
+
+  # 15i4. A tracked file missing from the working tree is a problem: one a sparse checkout leaves out (git status shows
+  #       it clean), the whole folder left out, or one deleted after the clean-tree check, while the publish prompt
+  #       waits.
+  Add-Fragments ([ordered]@{ 'sparse.fixed.md' = "- **Sparse fix.** One line.`n" }) 'an entry a sparse checkout leaves out'
+  $missingNote = 'changelog\.d/{0}: tracked by git but missing here \(deleted, or outside a sparse checkout\): restore it, or commit its deletion'
+  $allTracked = @((G $work @('ls-files', '--', 'changelog.d')) -split "`n" | Where-Object { $_ })
+  try {
+    G $work @('update-index', '--skip-worktree', '--', 'changelog.d/sparse.fixed.md') | Out-Null
+    Remove-Item -LiteralPath (Join-Path $fragmentDir 'sparse.fixed.md')
+    $quiet = -not (G $work @('status', '--porcelain', '--untracked-files=all'))
+    $r = Invoke-Release @('1', '', 'y') @('-DryRun')
+    Check 'a dry run names a tracked file a sparse checkout leaves out, which git status shows clean' ($quiet -and $r.Code -eq 0 -and
+      $r.Text -match ("\[!!\] changelog\.d: $missingNote" -f 'sparse\.fixed\.md') -and $r.Text -match '\[!!\] changelog\.d has 1 problem\(s\)') $r.Text
+    $r = Invoke-Release @('1', '', 'y', 'y')
+    Check '  and it stops a real release at the plan' ($r.Code -eq 1 -and $r.Text -match ($missingNote -f 'sparse\.fixed\.md') -and $r.Text -match $oneProblem -and
+      $r.Text -notmatch 'Proceed\?' -and -not (G $work @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
+    G $work (@('update-index', '--skip-worktree', '--') + $allTracked) | Out-Null
+    Remove-Item -LiteralPath $fragmentDir -Recurse -Force
+    $r = Invoke-Release @('1', '', 'y', 'y')
+    Check '  as does the whole folder left out' ($r.Code -eq 1 -and $r.Text -match ($missingNote -f 'sparse\.fixed\.md') -and
+      $r.Text -match ($missingNote -f 'ok\.fixed\.md') -and $r.Text -match '\[xx\] changelog\.d has 2 problem\(s\)' -and $r.Text -notmatch 'Proceed\?' -and
+      -not (G $work @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
+  } finally {
+    # Only the paths still tracked: a release that went ahead here has deleted the files it folded.
+    $stillTracked = @((G $work @('ls-files', '--', 'changelog.d')) -split "`n" | Where-Object { $_ })
+    if ($stillTracked.Count) { G $work (@('update-index', '--no-skip-worktree', '--') + $stillTracked) | Out-Null }
+    G $work @('checkout', '--quiet', '--', 'changelog.d') | Out-Null
+  }
+  Add-Fragments ([ordered]@{ 'ahead.fixed.md' = "- **Ahead fix.** One line.`n" }) -NoCommit
+  G $work @('add', '--', 'changelog.d/ahead.fixed.md') | Out-Null
+  G $work @('commit', '--quiet', '-m', 'sandbox: a commit not pushed yet') | Out-Null
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Continue and publish these commits? [y/N] '
+    Remove-Item -LiteralPath (Join-Path $fragmentDir 'sparse.fixed.md')
+    Send-Answer $run 'y'
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.9-rc.1]: '
+    Send-Answer $run ''
+    $r = Complete-Release $run
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check '  as does one deleted while the publish prompt waits, after the clean-tree check' ($r.Code -eq 1 -and $r.Text -match ($missingNote -f 'sparse\.fixed\.md') -and
+    $r.Text -match $oneProblem -and $r.Text -notmatch 'Proceed\?' -and -not (G $work @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
+  G $work @('checkout', '--quiet', '--', 'changelog.d/sparse.fixed.md') | Out-Null
+  # An edit there, which git rm would refuse at the commit step, stops it as well.
+  $sparse = Join-Path $fragmentDir 'sparse.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Continue and publish these commits? [y/N] '
+    [IO.File]::WriteAllText($sparse, "- **Sparse fix, edited.** One line.`n")
+    Send-Answer $run 'y'
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.9-rc.1]: '
+    Send-Answer $run ''
+    $r = Complete-Release $run
+  } catch {
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check '  and one edited while the publish prompt waits stops it too' ($r.Code -eq 1 -and
+    $r.Text -match "changelog\.d/sparse\.fixed\.md: changed since its commit \(git status ' M'\): commit the change, or restore the file" -and
+    $r.Text -match $oneProblem -and $r.Text -notmatch 'Proceed\?' -and -not (G $work @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
+  G $work @('checkout', '--quiet', '--', 'changelog.d/sparse.fixed.md') | Out-Null
+  # A new file staged there is one problem, "not committed", not also a change to a committed file.
+  $staged = Join-Path $fragmentDir 'staged.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Continue and publish these commits? [y/N] '
+    [IO.File]::WriteAllText($staged, "- **Staged fix.** One line.`n")
+    G $work @('add', '--', 'changelog.d/staged.fixed.md') | Out-Null
+    Send-Answer $run 'y'
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.9-rc.1]: '
+    Send-Answer $run ''
+    $r = Complete-Release $run
+  } catch {
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+    G $work @('rm', '--quiet', '--cached', '--ignore-unmatch', '--', 'changelog.d/staged.fixed.md') | Out-Null
+    if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged }
+  }
+  Check '  and one added and staged there is the one problem of not being committed' ($r.Code -eq 1 -and
+    $r.Text -match 'changelog\.d/staged\.fixed\.md: not committed' -and $r.Text -notmatch 'staged\.fixed\.md: changed since its commit' -and
+    $r.Text -match $oneProblem -and $r.Text -notmatch 'Proceed\?') $r.Text
+  G $work @('push', '--quiet', 'origin', 'master') | Out-Null
+  Clear-Fragments @('sparse.fixed.md', 'ahead.fixed.md')
+
+  # 15j. With changelog.d holding only its README and nothing under [Unreleased], a release stops as it always has.
+  Clear-Fragments
+  $r = Invoke-Release @('1', '', 'y')
+  Check 'no changelog.d entries and an empty [Unreleased] stop the release as before' ($r.Code -eq 1 -and $r.Text -match $noEntries -and
+    $r.Text -match 'a new version needs them there first, or in changelog\.d' -and $r.Text -notmatch 'changelog\.d:') $r.Text
 }
 
 if (Test-Path -LiteralPath $Sandbox) { throw "$Sandbox already exists: pass another -Sandbox" }

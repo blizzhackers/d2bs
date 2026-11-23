@@ -1,6 +1,6 @@
-# CHANGELOG.md (Keep a Changelog) for build\Release-D2BS.ps1, which dates the Unreleased section at a release (and at a
-# final release merges the release candidates' sections into it), and build\Get-ReleaseNotes.ps1, which hands a
-# version's section to the release build as its GitHub release notes.
+# CHANGELOG.md (Keep a Changelog) for build\Release-D2BS.ps1, which folds the changelog.d entries into the Unreleased
+# section and dates it at a release (and at a final release merges the release candidates' sections into it), and
+# build\Get-ReleaseNotes.ps1, which hands a version's section to the release build as its GitHub release notes.
 Set-StrictMode -Version 3
 
 # A version label: major.minor.patch, or a release candidate's major.minor.patch-rc.N.
@@ -314,6 +314,119 @@ function Update-ChangelogForRelease {
   $lines -join $newline
 }
 
+# A changelog.d file name read as <slug>.<section>.md: the slug in lowercase letters and digits, words joined by
+# hyphens, and the section one of Keep a Changelog's groups in lowercase. Group is that group's heading (Fixed);
+# Problem says why the name is no entry's, and then the release stops rather than leave the file out unseen.
+function Read-ChangelogFragmentName([string]$Name) {
+  $sections = [string[]]@($script:groupOrder | ForEach-Object { $_.ToLowerInvariant() })
+  $slug = $null
+  $group = $null
+  $problem = $null
+  if ($Name -cmatch '^([a-z0-9]+(?:-[a-z0-9]+)*)\.([^.]+)\.md\z') {
+    $slug = $Matches[1]
+    $section = $Matches[2]
+    $at = [Array]::IndexOf($sections, $section)
+    if ($at -ge 0) { $group = $script:groupOrder[$at] }
+    else { $problem = "unknown section '$section': the name ends in .<section>.md, one of $($sections -join ', ')" }
+  } else {
+    $problem = 'not named <slug>.<section>.md, the slug in lowercase letters, digits and hyphens'
+  }
+  [pscustomobject]@{ Slug = $slug; Group = $group; Problem = $problem }
+}
+
+# A changelog.d file's text without the line breaks at its end, which an editor may add more than one of.
+function Get-ChangelogFragmentLine([AllowEmptyString()][string]$Text) { $Text -replace '(\r?\n[ \t]*)+\z', '' }
+
+# A changelog.d file's bytes as text: strict UTF-8, a BOM dropped. Problem is set instead when they are not UTF-8 or
+# hold U+FFFD, which a lenient conversion leaves for each character it could not read.
+function ConvertFrom-ChangelogFragmentBytes([byte[]]$Bytes) {
+  $skip = if ($Bytes.Length -ge 3 -and $Bytes[0] -eq 0xEF -and $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF) { 3 } else { 0 }
+  $text = $null
+  $problem = $null
+  try { $text = [Text.UTF8Encoding]::new($false, $true).GetString($Bytes, $skip, $Bytes.Length - $skip) }
+  catch { $problem = 'is not valid UTF-8 (save it as UTF-8)' }
+  if ($null -ne $text -and $text.Contains([string][char]0xFFFD)) {
+    $problem = 'holds U+FFFD, the mark a conversion leaves for a character it could not read: type that character again'
+  }
+  [pscustomobject]@{ Text = $text; Problem = $problem }
+}
+
+# Why a changelog.d file's text can't be one entry, or $null: it is one line (line breaks at its end aside) that
+# opens with "- " and no code fence, counts as an entry, and leaves no HTML comment or code fence open to swallow
+# the entries after it.
+function Get-ChangelogFragmentProblem([AllowEmptyString()][string]$Text) {
+  $line = Get-ChangelogFragmentLine $Text
+  if (-not $line.Trim()) { return 'is empty: it holds one entry, "- **Lead.** Text."' }
+  if ($line.Contains("`n") -or $line.Contains("`r")) { return 'has more than one line: an entry is one line, because the release notes show every line break' }
+  # A NUL makes git read CHANGELOG.md as binary from then on; other controls and bidi overrides change the text unseen.
+  if ($line -cmatch '[\p{Cc}-[\t]]|[\u202A-\u202E\u2066-\u2069]') { return 'holds a control character, which CHANGELOG.md would carry unseen: type the line again' }
+  if (-not $line.StartsWith('- ', [StringComparison]::Ordinal)) { return 'does not open with "- ": an entry is one list item' }
+  # As in Find-ChangelogHiddenLines, a backtick in the info string makes the line inline code, not a fence. GitHub
+  # expands a tab after the marker as indentation, so "- <tab>~~~" opens a fence too.
+  if ($line -cmatch '^-[ \t]+(~{3,}|`{3,}[^`]*\z)') { return 'opens a code fence after "- ", which shows as an empty list item' }
+  if (Test-ChangelogUnclosed $line) { return 'opens an HTML comment or a code fence that never closes' }
+  if (-not (Test-ChangelogEntries $line)) { return 'is no entry once its HTML comments are hidden' }
+  $null
+}
+
+# Where a group sits in Keep a Changelog's order (any case); every other group sits after them all.
+function Get-ChangelogGroupRank([string]$Name) {
+  for ($i = 0; $i -lt $script:groupOrder.Count; $i++) { if ($script:groupOrder[$i] -eq $Name) { return $i } }
+  $script:groupOrder.Count
+}
+
+# Inserts lines at $At with a blank line after them unless one follows already; -Separate puts one before them too,
+# as a heading needs.
+function Add-ChangelogLines($Lines, [int]$At, [string[]]$New, [switch]$Separate) {
+  $block = [Collections.Generic.List[string]]::new()
+  if ($Separate -and $At -gt 0 -and $Lines[$At - 1].Trim()) { $block.Add('') }
+  $block.AddRange($New)
+  if ($At -lt $Lines.Count -and $Lines[$At].Trim()) { $block.Add('') }
+  $Lines.InsertRange($At, $block)
+}
+
+# Adds entries to [Unreleased], each group's in the order given: after the last line under the group's heading (its
+# last one, in any case), or under a new heading placed before the first group that Keep a Changelog orders after it
+# or doesn't know, as Merge-ChangelogBodies orders them, else at the section's end. Headings inside HTML comments or
+# fenced code don't count. $Entries hold Group (a Keep a Changelog group) and Text (one line). Keeps the file's line
+# endings.
+function Add-ChangelogUnreleased {
+  param([Parameter(Mandatory)][AllowEmptyString()][string]$Text, [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Entries)
+  if (-not $Entries.Count) { return $Text }
+  $newline = if ($Text.Contains("`r`n")) { "`r`n" } else { "`n" }
+  $lines = [Collections.Generic.List[string]]::new([string[]](Split-ChangelogLines $Text))
+  $start = Find-ChangelogHeading $lines.ToArray() 'Unreleased'
+  if ($start -lt 0) { throw 'CHANGELOG.md has no "## [Unreleased]" heading' }
+  foreach ($group in $script:groupOrder) {
+    $items = [string[]]@($Entries | Where-Object { $_.Group -eq $group } | ForEach-Object { $_.Text })
+    if (-not $items.Count) { continue }
+    $all = $lines.ToArray()
+    $end = Find-ChangelogSectionEnd $all $start
+    $hidden = Find-ChangelogHiddenLines $all
+    $heads = @(for ($i = $start + 1; $i -lt $end; $i++) {
+        if (-not $hidden[$i] -and $all[$i] -match '^### (.+)$') { [pscustomobject]@{ At = $i; Name = $Matches[1].Trim() } }
+      })
+    $own = -1
+    for ($h = 0; $h -lt $heads.Count; $h++) { if ($heads[$h].Name -eq $group) { $own = $h } }
+    if ($own -ge 0) {
+      $last = $(if ($own + 1 -lt $heads.Count) { $heads[$own + 1].At } else { $end }) - 1
+      while ($last -gt $heads[$own].At -and -not $all[$last].Trim()) { $last-- }
+      Add-ChangelogLines $lines ($last + 1) $items -Separate:($last -eq $heads[$own].At)
+    } else {
+      $rank = Get-ChangelogGroupRank $group
+      $next = @($heads | Where-Object { (Get-ChangelogGroupRank $_.Name) -gt $rank })
+      if ($next.Count) { $at = $next[0].At }
+      else {
+        $at = $end
+        while ($at - 1 -gt $start -and -not $all[$at - 1].Trim()) { $at-- }
+      }
+      Add-ChangelogLines $lines $at (@("### $group", '') + $items) -Separate
+    }
+  }
+  $lines -join $newline
+}
+
 Export-ModuleMember -Function Get-ChangelogSection, Get-ChangelogEntryCounts, Test-ChangelogEntries, Get-ChangelogWrappedLines,
   Get-ChangelogCandidates, Get-ChangelogLink, Get-ChangelogCompareBase, Test-ChangelogTagName, Test-ChangelogUnclosed,
-  Test-ChangelogHeadingHidden, Update-ChangelogForRelease
+  Test-ChangelogHeadingHidden, Update-ChangelogForRelease, Read-ChangelogFragmentName, Get-ChangelogFragmentLine,
+  ConvertFrom-ChangelogFragmentBytes, Get-ChangelogFragmentProblem, Add-ChangelogUnreleased

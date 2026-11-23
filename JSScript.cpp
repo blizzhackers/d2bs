@@ -191,7 +191,10 @@ JSAPI_FUNC(my_getScripts) {
 
     JSObject* pReturnArray = JS_NewArrayObject(cx, 0, NULL);
     JS_BeginRequest(cx);
-    JS_AddRoot(cx, &pReturnArray);
+    if (!pReturnArray || !JS_AddRoot(cx, &pReturnArray)) {
+        JS_EndRequest(cx);
+        return JS_FALSE;
+    }
     ScriptEngine::LockScriptList("getScripts");
 
     for (ScriptMap::iterator it = ScriptEngine::scripts.begin(); it != ScriptEngine::scripts.end(); it++) {
@@ -203,7 +206,12 @@ JSAPI_FUNC(my_getScripts) {
             return JS_FALSE;
         }
         jsval a = OBJECT_TO_JSVAL(res);
-        JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
+        if (!JS_SetElement(cx, pReturnArray, dwArrayCount, &a)) {
+            ScriptEngine::UnLockScriptList("getScripts");
+            JS_RemoveRoot(cx, &pReturnArray);
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         dwArrayCount++;
     }
 

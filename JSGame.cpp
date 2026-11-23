@@ -179,18 +179,26 @@ JSAPI_FUNC(my_getDialogLines) {
     unsigned int i;
     JSObject* pReturnArray;
     JSObject* line;
-    jsval js_text, js_selectable, js_line, js_handler, js_addr;
+    jsval js_text, js_selectable, js_line, js_handler;
     JSFunction* jsf_handler;
-    JSObject* jso_addr;
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
 
     if (pTdi != NULL) {
 
         pReturnArray = JS_NewArrayObject(cx, 0, NULL);
-        JS_AddObjectRoot(cx, &pReturnArray);
+        if (!pReturnArray || !JS_AddObjectRoot(cx, &pReturnArray)) {
+            delete cRoom;
+            return JS_FALSE;
+        }
         for (i = 0; i < pTdi->numLines; ++i) {
-            js_text = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, pTdi->dialogLines[i].text));
+            JSString* text = JS_NewUCStringCopyZ(cx, pTdi->dialogLines[i].text);
+            if (!text) {
+                JS_RemoveObjectRoot(cx, &pReturnArray);
+                delete cRoom;
+                return JS_FALSE;
+            }
+            js_text = STRING_TO_JSVAL(text);
             js_selectable = BOOLEAN_TO_JSVAL(pTdi->dialogLines[i].bMaybeSelectable);
 
             line = BuildObject(cx, &dialogLine_class, 0, 0, 0, 0);
@@ -199,11 +207,18 @@ JSAPI_FUNC(my_getDialogLines) {
                 delete cRoom;
                 return JS_FALSE;
             }
-            JS_SetProperty(cx, line, "text", &js_text);
-            JS_SetProperty(cx, line, "selectable", &js_selectable);
+            if (!JS_SetProperty(cx, line, "text", &js_text) || !JS_SetProperty(cx, line, "selectable", &js_selectable)) {
+                JS_RemoveObjectRoot(cx, &pReturnArray);
+                delete cRoom;
+                return JS_FALSE;
+            }
 
             jsf_handler = JS_DefineFunction(cx, line, "handler", my_clickDialog, 0, JSPROP_ENUMERATE);
-            js_addr = OBJECT_TO_JSVAL(jso_addr = JS_NewObject(cx, 0, 0, pReturnArray));
+            if (!jsf_handler) {
+                JS_RemoveObjectRoot(cx, &pReturnArray);
+                delete cRoom;
+                return JS_FALSE;
+            }
             // line -> JS_GetFunctionObject(jsf_handler) in 1.8.5
 
             // handler() or clickDialog() needs the private handler val stored somewhere
@@ -212,7 +227,11 @@ JSAPI_FUNC(my_getDialogLines) {
             // JS_SetPrivate(cx, JS_GetFunctionObject(jsf_handler), &pTdi->dialogLines[i]);
             // JS_SetPrivate(cx, line,  &pTdi->dialogLines[i]);
             js_line = OBJECT_TO_JSVAL(line);
-            JS_SetElement(cx, pReturnArray, i, &js_line);
+            if (!JS_SetElement(cx, pReturnArray, i, &js_line)) {
+                JS_RemoveObjectRoot(cx, &pReturnArray);
+                delete cRoom;
+                return JS_FALSE;
+            }
         }
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pReturnArray));
         JS_RemoveObjectRoot(cx, &pReturnArray);
@@ -336,11 +355,17 @@ JSAPI_FUNC(my_getPath) {
             return JS_FALSE;
         }
         vec[i] = OBJECT_TO_JSVAL(point);
-        JS_SetProperty(cx, point, "x", &jx);
-        JS_SetProperty(cx, point, "y", &jy);
+        if (!JS_SetProperty(cx, point, "x", &jx) || !JS_SetProperty(cx, point, "y", &jy)) {
+            delete reducer;
+            return JS_FALSE;
+        }
     }
 
     JSObject* arr = JS_NewArrayObject(cx, count, vec.begin());
+    if (!arr) {
+        delete reducer;
+        return JS_FALSE;
+    }
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
 
     delete reducer;
@@ -942,17 +967,24 @@ JSAPI_FUNC(my_getTextSize) {
         pObj = BuildObject(cx, NULL);
         if (!pObj)
             THROW_ERROR(cx, "Could not build object");
-        JS_AddRoot(cx, &pObj);
-        if (JS_SetProperty(cx, pObj, "width", &x) == JS_FALSE)
-            THROW_ERROR(cx, "Could not set width property");
-        if (JS_SetProperty(cx, pObj, "height", &y) == JS_FALSE)
-            THROW_ERROR(cx, "Could not set height property");
+        if (!JS_AddRoot(cx, &pObj))
+            return JS_FALSE;
+        if (!JS_SetProperty(cx, pObj, "width", &x) || !JS_SetProperty(cx, pObj, "height", &y)) {
+            JS_RemoveRoot(cx, &pObj);
+            return JS_FALSE;
+        }
     } else {
         JS_BeginRequest(cx);
-        pObj = JS_NewArrayObject(cx, NULL, NULL);
-        JS_AddRoot(cx, &pObj);
-        JS_SetElement(cx, pObj, 0, &x);
-        JS_SetElement(cx, pObj, 1, &y);
+        pObj = JS_NewArrayObject(cx, 0, NULL);
+        if (!pObj || !JS_AddRoot(cx, &pObj)) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
+        if (!JS_SetElement(cx, pObj, 0, &x) || !JS_SetElement(cx, pObj, 1, &y)) {
+            JS_RemoveRoot(cx, &pObj);
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         JS_EndRequest(cx);
     }
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pObj));
@@ -1376,22 +1408,26 @@ JSAPI_FUNC(my_getMouseCoords) {
         pObj = BuildObject(cx, NULL);
         if (!pObj)
             THROW_ERROR(cx, "Could not build object");
-        JS_AddRoot(cx, &pObj);
-        if (JS_SetProperty(cx, pObj, "x", &jsX) == JS_FALSE)
-            THROW_ERROR(cx, "Could not set x property");
-        if (JS_SetProperty(cx, pObj, "y", &jsY) == JS_FALSE)
-            THROW_ERROR(cx, "Could not set y property");
+        if (!JS_AddRoot(cx, &pObj))
+            return JS_FALSE;
+        if (!JS_SetProperty(cx, pObj, "x", &jsX) || !JS_SetProperty(cx, pObj, "y", &jsY)) {
+            JS_RemoveRoot(cx, &pObj);
+            return JS_FALSE;
+        }
     } else {
         JS_BeginRequest(cx);
-        pObj = JS_NewArrayObject(cx, NULL, NULL);
-        JS_AddRoot(cx, &pObj);
-        JS_SetElement(cx, pObj, 0, &jsX);
-        JS_SetElement(cx, pObj, 1, &jsY);
+        pObj = JS_NewArrayObject(cx, 0, NULL);
+        if (!pObj || !JS_AddRoot(cx, &pObj)) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
+        if (!JS_SetElement(cx, pObj, 0, &jsX) || !JS_SetElement(cx, pObj, 1, &jsY)) {
+            JS_RemoveRoot(cx, &pObj);
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         JS_EndRequest(cx);
     }
-
-    if (!pObj)
-        return JS_TRUE;
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pObj));
     JS_RemoveRoot(cx, &pObj);

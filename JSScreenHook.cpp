@@ -752,9 +752,12 @@ JSAPI_FUNC(screenToAutomap) {
             x = INT_TO_JSVAL(result.x);
             y = INT_TO_JSVAL(result.y);
             JSObject* res = JS_NewObject(cx, NULL, NULL, NULL);
+            if (!res)
+                return JS_FALSE;
             jsval* argv = JS_ARGV(cx, vp);
+            // A plain object's property write fails only out of memory, which the engine has already reported.
             if (JS_SetProperty(cx, res, "x", &argv[0]) == JS_FALSE || JS_SetProperty(cx, res, "y", &argv[1]) == JS_FALSE)
-                THROW_ERROR(cx, "Failed to set x and/or y values");
+                return JS_FALSE;
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(res));
         } else
             THROW_ERROR(cx, "Invalid object specified to screenToAutomap");
@@ -770,8 +773,10 @@ JSAPI_FUNC(screenToAutomap) {
             argv[0] = INT_TO_JSVAL(result.x);
             argv[1] = INT_TO_JSVAL(result.y);
             JSObject* res = JS_NewObject(cx, NULL, NULL, NULL);
+            if (!res)
+                return JS_FALSE;
             if (JS_SetProperty(cx, res, "x", &argv[0]) == JS_FALSE || JS_SetProperty(cx, res, "y", &argv[1]) == JS_FALSE)
-                THROW_ERROR(cx, "Failed to set x and/or y values");
+                return JS_FALSE;
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(res));
         } else
             THROW_ERROR(cx, "screenToAutomap expects two arguments to be two integers");
@@ -829,8 +834,10 @@ JSAPI_FUNC(automapToScreen) {
             argv[0] = INT_TO_JSVAL(result.x);
             argv[1] = INT_TO_JSVAL(result.y);
             JSObject* res = JS_NewObject(cx, NULL, NULL, NULL);
+            if (!res)
+                return JS_FALSE;
             if (JS_SetProperty(cx, res, "x", &argv[0]) == JS_FALSE || JS_SetProperty(cx, res, "y", &argv[1]) == JS_FALSE)
-                THROW_ERROR(cx, "Failed to set x and/or y values");
+                return JS_FALSE;
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(res));
         } else
             THROW_ERROR(cx, "automapToScreen expects two arguments to be two integers");

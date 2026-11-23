@@ -36,6 +36,10 @@ JSAPI_PROP(area_getProperty) {
         jsval exitList = JS_GetReservedSlot(obj, 0);
         if (JSVAL_IS_VOID(exitList)) {
             JS::RootedObject exitArray(cx, JS_NewArrayObject(cx, 0, NULL));
+            if (!exitArray) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
 
             ExitArray exits;
             {
@@ -61,11 +65,13 @@ JSAPI_PROP(area_getProperty) {
                 }
                 // Defined, not set: an inherited index setter would take the exit instead of the array and run
                 // script code mid-build, which could read exits again and cache a second list.
-                JS_DefineElement(cx, exitArray, i, OBJECT_TO_JSVAL(pExit), NULL, NULL, JSPROP_ENUMERATE);
+                if (!JS_DefineElement(cx, exitArray, i, OBJECT_TO_JSVAL(pExit), NULL, NULL, JSPROP_ENUMERATE)) {
+                    JS_EndRequest(cx);
+                    return JS_FALSE;
+                }
             }
             exitList = OBJECT_TO_JSVAL(exitArray);
-            if (exitArray)
-                JS_SetReservedSlot(obj, 0, exitList);
+            JS_SetReservedSlot(obj, 0, exitList);
         }
         vp.set(exitList);
     }
@@ -73,8 +79,12 @@ JSAPI_PROP(area_getProperty) {
         break;
     case AUNIT_NAME: {
         LevelTxt* pTxt = D2COMMON_GetLevelText(pArea->AreaId);
-        if (pTxt)
-            vp.setString(JS_InternString(cx, pTxt->szName));
+        if (pTxt) {
+            JSString* name = JS_InternString(cx, pTxt->szName);
+            if (!name)
+                return JS_FALSE;
+            vp.setString(name);
+        }
     } break;
     case AUNIT_X:
         vp.setInt32(pLevel->dwPosX);

@@ -257,6 +257,10 @@ JSAPI_FUNC(control_getText) {
         return JS_TRUE;
     JS_BeginRequest(cx);
     JSObject* pReturnArray = JS_NewArrayObject(cx, 0, NULL);
+    if (!pReturnArray) {
+        JS_EndRequest(cx);
+        return JS_FALSE;
+    }
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pReturnArray));
 
     int nArrayCount = 0;
@@ -267,19 +271,42 @@ JSAPI_FUNC(control_getText) {
 
         if (pText->wText[1]) {
             JSObject* pSubArray = JS_NewArrayObject(cx, 0, NULL);
+            if (!pSubArray) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
 
             for (int i = 0; i < 5; i++) {
                 if (pText->wText[i]) {
-                    jsval aString = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, pText->wText[i]));
-                    JS_SetElement(cx, pSubArray, i, &aString);
+                    JSString* str = JS_NewUCStringCopyZ(cx, pText->wText[i]);
+                    if (!str) {
+                        JS_EndRequest(cx);
+                        return JS_FALSE;
+                    }
+                    jsval aString = STRING_TO_JSVAL(str);
+                    if (!JS_SetElement(cx, pSubArray, i, &aString)) {
+                        JS_EndRequest(cx);
+                        return JS_FALSE;
+                    }
                 }
             }
 
             jsval sub = OBJECT_TO_JSVAL(pSubArray);
-            JS_SetElement(cx, pReturnArray, nArrayCount, &sub);
+            if (!JS_SetElement(cx, pReturnArray, nArrayCount, &sub)) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
         } else {
-            jsval aString = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, pText->wText[0]));
-            JS_SetElement(cx, pReturnArray, nArrayCount, &aString);
+            JSString* str = JS_NewUCStringCopyZ(cx, pText->wText[0]);
+            if (!str) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
+            jsval aString = STRING_TO_JSVAL(str);
+            if (!JS_SetElement(cx, pReturnArray, nArrayCount, &aString)) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
         }
 
         nArrayCount++;
@@ -335,7 +362,10 @@ JSAPI_FUNC(my_getControls) {
 
     JSObject* pReturnArray = JS_NewArrayObject(cx, 0, NULL);
     JS_BeginRequest(cx);
-    JS_AddRoot(cx, &pReturnArray);
+    if (!pReturnArray || !JS_AddRoot(cx, &pReturnArray)) {
+        JS_EndRequest(cx);
+        return JS_FALSE;
+    }
     for (Control* pControl = *p_D2WIN_FirstControl; pControl; pControl = pControl->pNext) {
         ControlData* data = new ControlData;
         data->dwType = pControl->dwType;
@@ -353,7 +383,11 @@ JSAPI_FUNC(my_getControls) {
             return JS_FALSE;
         }
         jsval a = OBJECT_TO_JSVAL(res);
-        JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
+        if (!JS_SetElement(cx, pReturnArray, dwArrayCount, &a)) {
+            JS_RemoveRoot(cx, &pReturnArray);
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         dwArrayCount++;
     }
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pReturnArray));

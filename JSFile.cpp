@@ -309,10 +309,19 @@ JSAPI_FUNC(file_read) {
             else {
                 JS_BeginRequest(cx);
                 JSObject* arr = JS_NewArrayObject(cx, 0, NULL);
+                if (!arr) {
+                    JS_EndRequest(cx);
+                    delete[] result;
+                    return JS_FALSE;
+                }
                 JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
                 for (int i = 0; i < count; i++) {
                     jsval val = INT_TO_JSVAL(result[i]);
-                    JS_SetElement(cx, arr, i, &val);
+                    if (!JS_SetElement(cx, arr, i, &val)) {
+                        JS_EndRequest(cx);
+                        delete[] result;
+                        return JS_FALSE;
+                    }
                 }
                 JS_EndRequest(cx);
             }
@@ -353,9 +362,12 @@ JSAPI_FUNC(file_read) {
                 offset = 3;
             }
             wchar_t* wresult = AnsiToUnicode(result + offset);
-            JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, wresult)));
+            JSString* str = JS_NewUCStringCopyZ(cx, wresult);
             delete[] wresult;
             delete[] result;
+            if (!str)
+                return JS_FALSE;
+            JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(str));
         }
     }
     return JS_TRUE;
@@ -396,6 +408,8 @@ JSAPI_FUNC(file_readAllLines) {
     FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
     if (fdata && fdata->fptr) {
         JSObject* arr = JS_NewArrayObject(cx, 0, NULL);
+        if (!arr)
+            return JS_FALSE;
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
         int i = 0;
         JS_BeginRequest(cx);
@@ -421,10 +435,18 @@ JSAPI_FUNC(file_readAllLines) {
             }
 
             wchar_t* wline = AnsiToUnicode(line + offset);
-            jsval val = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, wline));
-            JS_SetElement(cx, arr, i++, &val);
+            JSString* str = JS_NewUCStringCopyZ(cx, wline);
             delete[] wline;
             free(line);
+            if (!str) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
+            jsval val = STRING_TO_JSVAL(str);
+            if (!JS_SetElement(cx, arr, i++, &val)) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
         }
         JS_EndRequest(cx);
     }

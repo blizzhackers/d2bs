@@ -251,8 +251,10 @@ DWORD FillBaseStat(JSContext* cx, jsval* argv, int table, int row, int column, c
         memset(szBuffer, NULL, pTable[column].dwFieldLength + 1);
         if (!FillBaseStat(table, row, column, szBuffer, pTable[column].dwFieldLength + 1))
             (*argv) = JSVAL_VOID;
-        else
-            (*argv) = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, szBuffer));
+        else if (!StoreString(argv, JS_NewStringCopyZ(cx, szBuffer))) {
+            delete[] szBuffer;
+            return BASESTAT_ENGINE_FAILURE;
+        }
         delete[] szBuffer;
         return TRUE;
 
@@ -310,8 +312,10 @@ DWORD FillBaseStat(JSContext* cx, jsval* argv, int table, int row, int column, c
         memset(szBuffer, NULL, 5);
         if (!FillBaseStat(table, row, column, szBuffer, 5))
             (*argv) = JSVAL_VOID;
-        else
-            (*argv) = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, szBuffer));
+        else if (!StoreString(argv, JS_NewStringCopyZ(cx, szBuffer))) {
+            delete[] szBuffer;
+            return BASESTAT_ENGINE_FAILURE;
+        }
         delete[] szBuffer;
         return TRUE;
 

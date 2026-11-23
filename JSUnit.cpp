@@ -58,7 +58,10 @@ JSAPI_PROP(unit_getProperty) {
         // JS_NewNumberValue(cx, (jsdouble)GetCurrentProcessId(), vp);
         break;
     case ME_PROFILE:
-        vp.setString(JS_NewUCStringCopyZ(cx, Vars.szProfile));
+        if (!StoreString(vp, JS_NewUCStringCopyZ(cx, Vars.szProfile))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         break;
     case ME_GAMEREADY:
         vp.setBoolean(GameReady());
@@ -67,13 +70,19 @@ JSAPI_PROP(unit_getProperty) {
     case ME_ACCOUNT:
         if (!pData)
             return JS_TRUE;
-        vp.setString(JS_NewStringCopyZ(cx, pData->szAccountName));
+        if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szAccountName))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         // vp.setString(JS_NewStringCopyZ(cx, pData->szAccountName));
         break;
     case ME_CHARNAME:
         if (!pData)
             return JS_TRUE;
-        vp.setString(JS_NewStringCopyZ(cx, pData->szPlayerName));
+        if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szPlayerName))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         break;
     case ME_CHICKENHP:
         vp.setInt32(Vars.nChickenHP);
@@ -90,17 +99,26 @@ JSAPI_PROP(unit_getProperty) {
     case ME_GAMENAME:
         if (!pInfo)
             return JS_TRUE;
-        vp.setString(JS_NewStringCopyZ(cx, pInfo->szGameName));
+        if (!StoreString(vp, JS_NewStringCopyZ(cx, pInfo->szGameName))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         break;
     case ME_GAMEPASSWORD:
         if (!pInfo)
             return JS_TRUE;
-        vp.setString(JS_NewStringCopyZ(cx, pInfo->szGamePassword));
+        if (!StoreString(vp, JS_NewStringCopyZ(cx, pInfo->szGamePassword))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         break;
     case ME_GAMESERVERIP:
         if (!pInfo)
             return JS_TRUE;
-        vp.setString(JS_NewStringCopyZ(cx, pInfo->szGameServerIp));
+        if (!StoreString(vp, JS_NewStringCopyZ(cx, pInfo->szGameServerIp))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         break;
     case ME_GAMESTARTTIME: {
         // On getTickCount()'s clock: dwGameTime holds GetTickCount's 32 bits, and a game is far shorter than their
@@ -136,10 +154,16 @@ JSAPI_PROP(unit_getProperty) {
         vp.setBoolean(Vars.bQuitOnHostile);
         break;
     case ME_REALM:
-        vp.setString(JS_NewStringCopyZ(cx, pData->szRealmName));
+        if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szRealmName))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         break;
     case ME_REALMSHORT:
-        vp.setString(JS_NewStringCopyZ(cx, pData->szRealmName2));
+        if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szRealmName2))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         break;
     case OOG_SCREENSIZE:
         vp.setInt32(D2GFX_GetScreenSize());
@@ -147,7 +171,10 @@ JSAPI_PROP(unit_getProperty) {
     case OOG_WINDOWTITLE: {
         wchar_t szTitle[256];
         GetWindowTextW(D2GFX_GetHwnd(), szTitle, 256);
-        vp.setString(JS_NewUCStringCopyZ(cx, szTitle));
+        if (!StoreString(vp, JS_NewUCStringCopyZ(cx, szTitle))) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
     } break;
     case ME_PING:
         vp.setInt32(*p_D2CLIENT_Ping);
@@ -215,8 +242,10 @@ JSAPI_PROP(unit_getProperty) {
         char tmp[128] = "";
         GetUnitName(pUnit, tmp, 128);
         wchar_t* wtmp = AnsiToUnicode(tmp);
-        vp.setString(JS_InternUCString(cx, wtmp));
+        bool stored = StoreString(vp, JS_InternUCString(cx, wtmp));
         delete[] wtmp;
+        if (!stored)
+            return JS_FALSE;
     } break;
     case ME_MAPID:
         vp.setInt32(*p_D2CLIENT_MapId);
@@ -314,23 +343,27 @@ JSAPI_PROP(unit_getProperty) {
         ItemTxt* pTxt;
         pTxt = D2COMMON_GetItemText(pUnit->dwTxtFileNo);
         if (!pTxt) {
-            vp.setString(JS_InternString(cx, "Unknown"));
+            if (!StoreString(vp, JS_InternString(cx, "Unknown")))
+                return JS_FALSE;
             return JS_TRUE;
         }
         char szCode[4];
         memcpy(szCode, pTxt->szCode, 3);
         szCode[3] = 0x00;
-        vp.setString(JS_InternString(cx, szCode));
+        if (!StoreString(vp, JS_InternString(cx, szCode)))
+            return JS_FALSE;
         break;
     case ITEM_PREFIX:
         if (pUnit->dwType == UNIT_ITEM && pUnit->pItemData)
             if (D2COMMON_GetItemMagicalMods(pUnit->pItemData->wMagicPrefix[0]))
-                vp.setString(JS_InternString(cx, D2COMMON_GetItemMagicalMods(pUnit->pItemData->wMagicPrefix[0])));
+                if (!StoreString(vp, JS_InternString(cx, D2COMMON_GetItemMagicalMods(pUnit->pItemData->wMagicPrefix[0]))))
+                    return JS_FALSE;
         break;
     case ITEM_SUFFIX:
         if (pUnit->dwType == UNIT_ITEM && pUnit->pItemData)
             if (D2COMMON_GetItemMagicalMods(pUnit->pItemData->wMagicSuffix[0]))
-                vp.setString(JS_InternString(cx, D2COMMON_GetItemMagicalMods(pUnit->pItemData->wMagicSuffix[0])));
+                if (!StoreString(vp, JS_InternString(cx, D2COMMON_GetItemMagicalMods(pUnit->pItemData->wMagicSuffix[0]))))
+                    return JS_FALSE;
         break;
     case ITEM_PREFIXNUM:
         if (pUnit->dwType == UNIT_ITEM && pUnit->pItemData)
@@ -429,7 +462,8 @@ JSAPI_PROP(unit_getProperty) {
             wchar_t wszfname[256] = L"";
             D2CLIENT_GetItemName(pUnit, wszfname, _countof(wszfname));
             if (wszfname) {
-                vp.setString(JS_InternUCString(cx, wszfname));
+                if (!StoreString(vp, JS_InternUCString(cx, wszfname)))
+                    return JS_FALSE;
             }
         }
         break;
@@ -484,7 +518,8 @@ JSAPI_PROP(unit_getProperty) {
         }
         delete cRoom;
         if (wcslen(wBuffer) > 0) {
-            vp.setString(JS_InternUCString(cx, wBuffer));
+            if (!StoreString(vp, JS_InternUCString(cx, wBuffer)))
+                return JS_FALSE;
         }
     }
 
@@ -1717,7 +1752,8 @@ JSAPI_FUNC(unit_getParent) {
             char szBuffer[128] = "";
             strcpy_s(szBuffer, sizeof(szBuffer), pUnit->pObjectData->szOwner);
 
-            JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternString(cx, szBuffer)));
+            if (!StoreString(vp, JS_InternString(cx, szBuffer)))
+                return JS_FALSE;
         }
     } else if (pUnit->dwType == UNIT_ITEM) {
         if (pUnit->pItemData && pUnit->pItemData->pOwnerInventory && pUnit->pItemData->pOwnerInventory->pOwner) {

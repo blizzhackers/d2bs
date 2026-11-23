@@ -122,6 +122,22 @@ JSScript* JS_CompileFile(JSContext* cx, JSObject* globalObject, std::wstring fil
         return JS_TRUE;                                                                                                                                                  \
     }
 
+// A NULL str is a string-creation failure (out of memory, or a string over the engine's length limit) the engine has
+// already reported: nothing is stored and the caller frees what it owns and returns JS_FALSE, because STRING_TO_JSVAL
+// and setString only MOZ_ASSERT the pointer, so a release build would hand the NULL to the script.
+inline bool StoreString(jsval* vp, JSString* str) {
+    if (!str)
+        return false;
+    *vp = STRING_TO_JSVAL(str);
+    return true;
+}
+inline bool StoreString(JSMutableHandleValue vp, JSString* str) {
+    if (!str)
+        return false;
+    vp.setString(str);
+    return true;
+}
+
 // EXPORT JSBool JS_ThrowError(JSContext* cx, const char* message, ...);
 EXPORT void JS_DefineClasses(JSContext* cx, JSObject* obj, JSClassSpec* classes);
 EXPORT JSObject* JS_GetProtoForClass(JSContext* cx, JSClass* classp);

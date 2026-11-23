@@ -160,8 +160,10 @@ JSAPI_FUNC(socket_read) {
     } while (iResult > 10000);
 
     wchar_t* wret = AnsiToUnicode(returnVal.c_str());
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternUCString(cx, wret)));
+    bool stored = StoreString(vp, JS_InternUCString(cx, wret));
     delete[] wret;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 

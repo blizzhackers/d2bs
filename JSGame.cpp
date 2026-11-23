@@ -718,8 +718,10 @@ JSAPI_FUNC(my_getLocaleString) {
     JS_BeginRequest(cx);
     JS_ValueToUint16(cx, JS_ARGV(cx, vp)[0], &localeId);
     wchar_t* wString = D2LANG_GetLocaleText(localeId);
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, wString)));
+    bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, wString));
     JS_EndRequest(cx);
+    if (!stored)
+        return JS_FALSE;
 
     return JS_TRUE;
 }
@@ -934,13 +936,16 @@ JSAPI_FUNC(my_getSkillById) {
 
     jsint nId = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
     JS_BeginRequest(cx);
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, "Unknown")));
+    bool stored = StoreString(vp, JS_NewStringCopyZ(cx, "Unknown"));
     JS_EndRequest(cx);
+    if (!stored)
+        return JS_FALSE;
     int row = 0;
     if (FillBaseStat("skills", nId, "skilldesc", &row, sizeof(int))) {
         if (FillBaseStat("skilldesc", row, "str name", &row, sizeof(int))) {
             wchar_t* szName = D2LANG_GetLocaleText((WORD)row);
-            JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, szName)));
+            if (!StoreString(vp, JS_NewUCStringCopyZ(cx, szName)))
+                return JS_FALSE;
         }
     }
 
@@ -1281,7 +1286,12 @@ JSAPI_FUNC(my_getBaseStat) {
             THROW_ERROR(cx, "Invalid column value");
         }
         jsval rval = JSVAL_VOID;
-        FillBaseStat(cx, &rval, nBaseStat, nClassId, nStat, szTableName, szStatName);
+        if (FillBaseStat(cx, &rval, nBaseStat, nClassId, nStat, szTableName, szStatName) == BASESTAT_ENGINE_FAILURE) {
+            JS_EndRequest(cx);
+            JS_free(cx, szTableName);
+            JS_free(cx, szStatName);
+            return JS_FALSE;
+        }
         JS_SET_RVAL(cx, vp, rval);
         JS_EndRequest(cx);
 

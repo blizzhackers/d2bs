@@ -179,7 +179,7 @@ JSAPI_FUNC(my_getDialogLines) {
     unsigned int i;
     JSObject* pReturnArray;
     JSObject* line;
-    jsval js_text, js_selectable, js_line, js_handler;
+    jsval js_text, js_selectable, js_line;
     JSFunction* jsf_handler;
 
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;

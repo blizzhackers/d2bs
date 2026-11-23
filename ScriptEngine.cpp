@@ -850,10 +850,11 @@ void FreeTimer(DelayedTimer* t) {
 }
 } // namespace
 
-int ScriptEngine::AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat) {
+bool ScriptEngine::AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat, int* id) {
+    *id = 0;
     HANDLE timer = CreateWaitableTimer(NULL, TRUE, NULL);
     if (!timer)
-        return 0;
+        return true;
     DelayedTimer* t = new DelayedTimer;
     t->owner = owner;
     t->timer = timer;
@@ -863,31 +864,32 @@ int ScriptEngine::AddTimer(Script* owner, JSContext* cx, jsval callback, uint ar
         JSObject* args = JS_NewArrayObject(cx, (int)argc, argv);
         if (!args) {
             FreeTimer(t);
-            return -1;
+            return false;
         }
         t->args = new AutoRoot(cx, OBJECT_TO_JSVAL(args));
     }
     t->repeat = repeat;
     t->queued = false;
     t->cancelled = false;
-    int id = t->id = (int)InterlockedIncrement(&lastTimerId);
+    int newId = t->id = (int)InterlockedIncrement(&lastTimerId);
 
     LARGE_INTEGER due;
     due.QuadPart = -(LONGLONG)delayMs * 10000; // relative, in 100 ns units
     // A period of 0 makes a one-shot timer, so an interval repeats at least every millisecond.
     LONG period = repeat ? (delayMs > 0 ? delayMs : 1) : 0;
     EnterCriticalSection(&timerLock);
-    timers[id] = t;
+    timers[newId] = t;
     // The completion routine runs on this thread, the owner's, while it waits alertably (delay()).
-    BOOL set = SetWaitableTimer(timer, &due, period, EventTimerProc, (LPVOID)(INT_PTR)id, FALSE);
+    BOOL set = SetWaitableTimer(timer, &due, period, EventTimerProc, (LPVOID)(INT_PTR)newId, FALSE);
     if (!set)
-        timers.erase(id);
+        timers.erase(newId);
     LeaveCriticalSection(&timerLock);
     if (!set) {
         FreeTimer(t);
-        return 0;
+        return true;
     }
-    return id;
+    *id = newId;
+    return true;
 }
 
 void ScriptEngine::ClearTimer(int id) {

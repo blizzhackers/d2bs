@@ -1291,6 +1291,29 @@ function Invoke-Scenarios {
     $r.Text -match "changelog\.d/sparse\.fixed\.md: changed since its commit \(git status ' M'\): commit the change, or restore the file" -and
     $r.Text -match $oneProblem -and $r.Text -notmatch 'Proceed\?' -and -not (G $work @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
   G $work @('checkout', '--quiet', '--', 'changelog.d/sparse.fixed.md') | Out-Null
+  # A new file staged there is one problem, "not committed", not also a change to a committed file.
+  $staged = Join-Path $fragmentDir 'staged.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Continue and publish these commits? [y/N] '
+    [IO.File]::WriteAllText($staged, "- **Staged fix.** One line.`n")
+    G $work @('add', '--', 'changelog.d/staged.fixed.md') | Out-Null
+    Send-Answer $run 'y'
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.9-rc.1]: '
+    Send-Answer $run ''
+    $r = Complete-Release $run
+  } catch {
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+    G $work @('rm', '--quiet', '--cached', '--ignore-unmatch', '--', 'changelog.d/staged.fixed.md') | Out-Null
+    if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged }
+  }
+  Check '  and one added and staged there is the one problem of not being committed' ($r.Code -eq 1 -and
+    $r.Text -match 'changelog\.d/staged\.fixed\.md: not committed' -and $r.Text -notmatch 'staged\.fixed\.md: changed since its commit' -and
+    $r.Text -match $oneProblem -and $r.Text -notmatch 'Proceed\?') $r.Text
   G $work @('push', '--quiet', 'origin', 'master') | Out-Null
   Clear-Fragments @('sparse.fixed.md', 'ahead.fixed.md')
 

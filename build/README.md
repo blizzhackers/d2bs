@@ -111,7 +111,7 @@ a slug used twice, a file not yet committed, or a committed one changed since it
 working tree, deleted or left out of a sparse checkout) stops a release that commits, which is any new version, at
 its plan until it is fixed. Releasing a version again after its tag was deleted commits nothing, so there these
 problems only warn. A `changelog.d` file already edited or deleted when the script starts stops it sooner, at its
-check for tracked changes; one edited or deleted after that check stops it at its plan. `-DryRun` shows
+check for tracked changes; one edited or deleted after that check stops a new version at its plan. `-DryRun` shows
 `[Unreleased]` with the entries in it.
 
 ### Release candidates

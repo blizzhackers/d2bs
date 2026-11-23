@@ -170,11 +170,12 @@ function Read-Fragments {
     }
   }
   # A committed file changed after the clean-tree check (while the publish prompt waited) would go in as changed, and
-  # git rm refuses it at the commit step. Untracked files and worktree deletions have their own problems.
+  # git rm refuses it at the commit step. Untracked or newly added files and worktree deletions have their own
+  # problems ("not committed", "missing here").
   $statusLines = Read-FragmentStatus
   if ($null -eq $statusLines) { $problems.Add("git could not read changelog.d's status") }
   foreach ($line in @($statusLines | Where-Object { $_ })) {
-    if ($line.StartsWith('??') -or $line.StartsWith(' D') -or $line.Substring(3) -ceq 'changelog.d/README.md') { continue }
+    if ($line.StartsWith('??') -or $line[0] -ceq 'A' -or $line.StartsWith(' D') -or $line.Substring(3) -ceq 'changelog.d/README.md') { continue }
     $problems.Add("$($line.Substring(3)): changed since its commit (git status '$($line.Substring(0, 2))'): commit the change, or restore the file")
   }
   if (-not (Test-Path -LiteralPath $fragmentDir -PathType Container)) { return [pscustomobject]@{ Entries = @(); Problems = $problems.ToArray() } }

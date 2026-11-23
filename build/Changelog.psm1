@@ -358,6 +358,8 @@ function Get-ChangelogFragmentProblem([AllowEmptyString()][string]$Text) {
   $line = Get-ChangelogFragmentLine $Text
   if (-not $line.Trim()) { return 'is empty: it holds one entry, "- **Lead.** Text."' }
   if ($line.Contains("`n") -or $line.Contains("`r")) { return 'has more than one line: an entry is one line, because the release notes show every line break' }
+  # A NUL makes git read CHANGELOG.md as binary from then on; other controls and bidi overrides change the text unseen.
+  if ($line -cmatch '[\p{Cc}-[\t]]|[\u202A-\u202E\u2066-\u2069]') { return 'holds a control character, which CHANGELOG.md would carry unseen: type the line again' }
   if (-not $line.StartsWith('- ', [StringComparison]::Ordinal)) { return 'does not open with "- ": an entry is one list item' }
   # As in Find-ChangelogHiddenLines, a backtick in the info string makes the line inline code, not a fence. GitHub
   # expands a tab after the marker as indentation, so "- <tab>~~~" opens a fence too.

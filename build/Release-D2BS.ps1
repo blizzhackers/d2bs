@@ -159,7 +159,8 @@ function Read-Fragments {
   $entries = [Collections.Generic.List[object]]::new()
   $problems = [Collections.Generic.List[string]]::new()
   # Before the folder check: a sparse checkout can leave out the whole folder, and git status reports its files clean.
-  # Unquoted paths, so a name outside ASCII compares with the folder listing as it is.
+  # Unquoted paths, so they compare with the folder listing. Valid names are ASCII: only a name already refused can
+  # still differ, as the console code page decodes git's output.
   $listed = Read-Git @('-c', 'core.quotePath=false', 'ls-files', '--', 'changelog.d')
   if ($null -eq $listed) { $problems.Add("git could not list changelog.d's tracked files") }
   $tracked = @("$listed" -split "`n" | Where-Object { $_ })
@@ -167,6 +168,14 @@ function Read-Fragments {
     if ($path -cne 'changelog.d/README.md' -and -not (Test-Path -LiteralPath (Join-Path $repo $path) -PathType Leaf)) {
       $problems.Add("${path}: tracked by git but missing here (deleted, or outside a sparse checkout): restore it, or commit its deletion")
     }
+  }
+  # A committed file changed after the clean-tree check (while the publish prompt waited) would go in as changed, and
+  # git rm refuses it at the commit step. Untracked files and worktree deletions have their own problems.
+  $statusLines = Read-FragmentStatus
+  if ($null -eq $statusLines) { $problems.Add("git could not read changelog.d's status") }
+  foreach ($line in @($statusLines | Where-Object { $_ })) {
+    if ($line.StartsWith('??') -or $line.StartsWith(' D') -or $line.Substring(3) -ceq 'changelog.d/README.md') { continue }
+    $problems.Add("$($line.Substring(3)): changed since its commit (git status '$($line.Substring(0, 2))'): commit the change, or restore the file")
   }
   if (-not (Test-Path -LiteralPath $fragmentDir -PathType Container)) { return [pscustomobject]@{ Entries = @(); Problems = $problems.ToArray() } }
   # --root lists a shallow clone's boundary commit as adding its files, whatever log.showRoot says.
@@ -464,7 +473,7 @@ if (-not (Confirm-Step 'Proceed?' $true)) { Stop-Release }
 # The new CHANGELOG.md was made from the file as read at the start, and the plan named the commit to tag: an edit or
 # a commit made during the prompts would be lost or published unseen.
 if (-not $DryRun -and ((Read-Changelog) -cne $changelog -or (Read-Git @('status', '--porcelain', '--', 'VERSION', 'CHANGELOG.md')) -or
-    (Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart -or @(Get-FragmentChanges).Count)) {
+    (Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart -or ($bump -and @(Get-FragmentChanges).Count))) {
   Stop-Release 'VERSION, CHANGELOG.md, changelog.d or HEAD changed during the prompts: run this again'
 }
 

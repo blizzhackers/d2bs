@@ -106,12 +106,13 @@ every line break of a release's notes: `- **Steady preset lists.** getPresetUnit
 The release script adds them to `[Unreleased]`, under their groups' headings (a missing one goes in Keep a
 Changelog's order) after the entries already there, each group's in the order the files reached `master`, and its
 release commit deletes the files. Anything else in `changelog.d` but its `README.md` file (another name, an
-unknown section, a folder, a file of more than one line, of no entry or not in UTF-8, a slug used twice, a file not
-yet committed, or a committed one missing from the working tree, deleted or left out of a sparse checkout) stops a
-release that commits, which is any new version, at its plan until it is fixed. Releasing a version again after its
-tag was deleted commits nothing, so there these problems only warn. A `changelog.d` file already edited or deleted
-when the script starts stops it sooner, at its check for tracked changes. `-DryRun` shows `[Unreleased]` with the
-entries in it.
+unknown section, a folder, a file of more than one line, of no entry, not in UTF-8 or holding a control character,
+a slug used twice, a file not yet committed, or a committed one changed since its commit or missing from the
+working tree, deleted or left out of a sparse checkout) stops a release that commits, which is any new version, at
+its plan until it is fixed. Releasing a version again after its tag was deleted commits nothing, so there these
+problems only warn. A `changelog.d` file already edited or deleted when the script starts stops it sooner, at its
+check for tracked changes; one edited or deleted after that check stops it at its plan. `-DryRun` shows
+`[Unreleased]` with the entries in it.
 
 ### Release candidates
 
@@ -140,16 +141,16 @@ On an up-to-date `master` with no uncommitted changes, the script:
    candidates' sections. A final warns about commits made since the last release candidate, which no tester has run.
 3. Shows the plan with the release notes. Notes the tag build would refuse (a missing section, no entries, or an
    HTML comment or code fence that never closes) stop it there instead, as do problems in `changelog.d`. After you
-   confirm (it stops if `VERSION`, `CHANGELOG.md`, `changelog.d` or the commit changed during the prompts), it
-   writes `VERSION`, updates `CHANGELOG.md` as above (under a new, empty `[Unreleased]`), points the links at the
-   bottom at the new tag, and shows the change for review, with the `changelog.d` files its commit deletes. You can
-   edit `CHANGELOG.md` before answering the review; `d` shows the diff as it is then, and `y` takes the files as
-   they are, as long as `VERSION` still names the version, the notes still pass those checks and no file in
-   `changelog.d` was added, renamed or edited (an edit to an entry belongs in `CHANGELOG.md` by then). Leaving the
-   review any other way puts back `VERSION`, `CHANGELOG.md` and the `changelog.d` files the plan read, as they were,
-   after copying an edited `CHANGELOG.md` or `changelog.d` file to your temp folder (the script prints where). A file
-   added to `changelog.d` during the review stays where it is, and a renamed one leaves both names: the old one put
-   back, the new one as you left it.
+   confirm (it stops if `VERSION`, `CHANGELOG.md`, the commit or, for a new version, `changelog.d` changed during
+   the prompts), it writes `VERSION`, updates `CHANGELOG.md` as above (under a new, empty `[Unreleased]`), points
+   the links at the bottom at the new tag, and shows the change for review, with the `changelog.d` files its commit
+   deletes. You can edit `CHANGELOG.md` before answering the review; `d` shows the diff as it is then, and `y`
+   takes the files as they are, as long as `VERSION` still names the version, the notes still pass those checks and
+   no file in `changelog.d` was added, renamed or edited (an edit to an entry belongs in `CHANGELOG.md` by then).
+   Leaving the review any other way puts back `VERSION`, `CHANGELOG.md` and the `changelog.d` files the plan read, as
+   they were, after copying an edited `CHANGELOG.md` or `changelog.d` file to your temp folder (the script prints
+   where). A file added to `changelog.d` during the review stays where it is, and a renamed one leaves both names:
+   the old one put back, the new one as you left it.
 4. Commits `VERSION` and `CHANGELOG.md`, deleting those `changelog.d` files, as `chore(release): v1.6.5`, unless a
    commit was made during the review, which stops it.
 5. Creates the annotated tag `v1.6.5`.

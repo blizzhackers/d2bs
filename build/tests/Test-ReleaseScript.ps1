@@ -792,6 +792,9 @@ function Invoke-Scenarios {
     'inline code of three backticks' = @('- ```js x```', $null)
     'a tilde fence after a tab' = @("- `t~~~", 'opens a code fence after "- "')
     'inline code of three backticks after a tab' = @("- `t``````js x``````", $null)
+    'a NUL in place of a space' = @("- **A.**$([char]0)x", 'holds a control character')
+    'a right-to-left override' = @("- **A.** x $([char]0x202E)y", 'holds a control character')
+    'a tab inside' = @("- **A.**`tx", $null)
   }
   foreach ($case in $textCases.Keys) {
     $text, $expect = $textCases[$case]
@@ -1130,6 +1133,27 @@ function Invoke-Scenarios {
   $r = Invoke-Release @('1', '', 'y') @('-DryRun')
   Check 'a re-release warns that the changelog.d entries stay out' ($r.Code -eq 0 -and $r.Text -match '1\) 1\.6\.8 again \(release commit' -and
     $r.Text -match '\[!!\] changelog\.d has entries, and re-releasing v1\.6\.8 posts only \[1\.6\.8\]') $r.Text
+  # It commits nothing and leaves changelog.d alone, so a file added there while Proceed? waits doesn't stop it.
+  $late = Join-Path $fragmentDir 'late-add.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    [IO.File]::WriteAllText($late, "- **Late add.** One line.`n")
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } catch {
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+    if (Test-Path -LiteralPath $late) { Remove-Item -LiteralPath $late }
+  }
+  Check '  and a file added to changelog.d while its Proceed? waits does not stop it' ($r.Code -eq 0 -and
+    $r.Text -notmatch 'changed during the prompts' -and (G $origin @('tag', '--list', 'v1.6.8'))) $r.Text
+  if (G $origin @('tag', '--list', 'v1.6.8')) { G $work @('push', '--quiet', 'origin', ':refs/tags/v1.6.8') | Out-Null }
+  if (G $work @('tag', '--list', 'v1.6.8')) { G $work @('tag', '-d', 'v1.6.8') | Out-Null }
   G $work @('tag', '-a', 'v1.6.8', '-m', 'D2BS v1.6.8', $tagCommit) | Out-Null
   G $work @('push', '--quiet', 'origin', 'v1.6.8') | Out-Null
 
@@ -1244,6 +1268,27 @@ function Invoke-Scenarios {
     if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
   }
   Check '  as does one deleted while the publish prompt waits, after the clean-tree check' ($r.Code -eq 1 -and $r.Text -match ($missingNote -f 'sparse\.fixed\.md') -and
+    $r.Text -match $oneProblem -and $r.Text -notmatch 'Proceed\?' -and -not (G $work @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
+  G $work @('checkout', '--quiet', '--', 'changelog.d/sparse.fixed.md') | Out-Null
+  # An edit there, which git rm would refuse at the commit step, stops it as well.
+  $sparse = Join-Path $fragmentDir 'sparse.fixed.md'
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Continue and publish these commits? [y/N] '
+    [IO.File]::WriteAllText($sparse, "- **Sparse fix, edited.** One line.`n")
+    Send-Answer $run 'y'
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '1'
+    Wait-Prompt $run 'Version [1.6.9-rc.1]: '
+    Send-Answer $run ''
+    $r = Complete-Release $run
+  } catch {
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+  }
+  Check '  and one edited while the publish prompt waits stops it too' ($r.Code -eq 1 -and
+    $r.Text -match "changelog\.d/sparse\.fixed\.md: changed since its commit \(git status ' M'\): commit the change, or restore the file" -and
     $r.Text -match $oneProblem -and $r.Text -notmatch 'Proceed\?' -and -not (G $work @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
   G $work @('checkout', '--quiet', '--', 'changelog.d/sparse.fixed.md') | Out-Null
   G $work @('push', '--quiet', 'origin', 'master') | Out-Null

@@ -72,11 +72,15 @@ CellFile* LoadBmpCellFile(const char* filename);
 CellFile* LoadBmpCellFile(const wchar_t* filename);
 CellFile* myInitCellFile(CellFile* cf);
 
+// D2COMMON_AddRoomData for pRoom2, which keeps its preset list free of the copies the game's room build adds again to a
+// list that outlived the room's last unload. Call it holding the game lock.
+void LoadRoomData(Act* pAct, Room2* pRoom2, Room1* pNear);
+
 static inline UnitAny* GetPlayerUnit() {
     return D2CLIENT_GetPlayerUnit();
 }
 static inline void AddRoomData(Room2* room) {
-    D2COMMON_AddRoomData(room->pLevel->pMisc->pAct, room->pLevel->dwLevelNo, room->dwPosX, room->dwPosY, room->pRoom1);
+    LoadRoomData(room->pLevel->pMisc->pAct, room, room->pRoom1);
 }
 static inline void RemoveRoomData(Room2* room) {
     D2COMMON_RemoveRoomData(room->pLevel->pMisc->pAct, room->pLevel->dwLevelNo, room->dwPosX, room->dwPosY, room->pRoom1);

@@ -6,6 +6,8 @@ Versions up to 1.6.4 have no section here; their history is in the git log, and 
 
 Each release candidate (1.7.0-rc.1, 1.7.0-rc.2, ...) has its own section, listing what changed since the release before it; the final release brings them together in one section.
 
+Entries for changes not released yet wait in `changelog.d/`, one file each, until a release adds them to the section below.
+
 ## [Unreleased]
 
 ### Fixed

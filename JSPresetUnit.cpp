@@ -90,12 +90,9 @@ JSAPI_FUNC(my_getPresetUnits) {
         return JS_FALSE;
 
     // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
-    // only while it holds this lock. An act change frees the old act before the player's own pointer moves on, and the
-    // game thread can release the lock in between while it waits for a packet listener, so that pointer is trusted only
-    // while it is the loaded act.
+    // only while it holds this lock.
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
-    Level* pLevel = pPlayer && *p_D2CLIENT_CurrentAct && pPlayer->pAct == *p_D2CLIENT_CurrentAct ? GetLevel(levelId) : NULL;
+    Level* pLevel = GetLevel(levelId);
 
     if (!pLevel) {
         delete cRoom;
@@ -188,12 +185,9 @@ JSAPI_FUNC(my_getPresetUnit) {
         return JS_FALSE;
 
     // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
-    // only while it holds this lock. An act change frees the old act before the player's own pointer moves on, and the
-    // game thread can release the lock in between while it waits for a packet listener, so that pointer is trusted only
-    // while it is the loaded act.
+    // only while it holds this lock.
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
-    Level* pLevel = pPlayer && *p_D2CLIENT_CurrentAct && pPlayer->pAct == *p_D2CLIENT_CurrentAct ? GetLevel(levelId) : NULL;
+    Level* pLevel = GetLevel(levelId);
 
     if (!pLevel) {
         delete cRoom;

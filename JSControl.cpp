@@ -46,7 +46,10 @@ JSAPI_PROP(control_getProperty) {
     switch (JSID_TO_INT(id)) {
     case CONTROL_TEXT:
         if (ctrl->dwIsCloaked != 33) {
-            vp.setString(JS_InternUCString(cx, ctrl->dwType == 6 ? ctrl->wText2 : ctrl->wText));
+            if (!StoreString(vp, JS_InternUCString(cx, ctrl->dwType == 6 ? ctrl->wText2 : ctrl->wText))) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
         }
         break;
     case CONTROL_X:

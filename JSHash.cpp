@@ -10,10 +10,13 @@ JSAPI_FUNC(my_md5) {
 
     char* input = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     char* result = md5(input);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternString(cx, result)));
+        stored = StoreString(vp, JS_InternString(cx, result));
     delete[] result;
     JS_free(cx, input);
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -23,10 +26,13 @@ JSAPI_FUNC(my_sha1) {
 
     char* input = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     char* result = sha1(input);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternString(cx, result)));
+        stored = StoreString(vp, JS_InternString(cx, result));
     delete[] result;
     JS_free(cx, input);
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -36,10 +42,13 @@ JSAPI_FUNC(my_sha256) {
 
     char* input = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     char* result = sha256(input);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternString(cx, result)));
+        stored = StoreString(vp, JS_InternString(cx, result));
     delete[] result;
     JS_free(cx, input);
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -49,10 +58,13 @@ JSAPI_FUNC(my_sha384) {
 
     char* input = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     char* result = sha384(input);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternString(cx, result)));
+        stored = StoreString(vp, JS_InternString(cx, result));
     delete[] result;
     JS_free(cx, input);
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -62,10 +74,13 @@ JSAPI_FUNC(my_sha512) {
 
     char* input = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     char* result = sha512(input);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternString(cx, result)));
+        stored = StoreString(vp, JS_InternString(cx, result));
     delete[] result;
     JS_free(cx, input);
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -81,9 +96,12 @@ JSAPI_FUNC(my_md5_file) {
     swprintf_s(path, _countof(path), L"%s\\%s", Vars.szScriptPath, file);
 
     char* result = md5_file(path);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, result)));
+        stored = StoreString(vp, JS_NewStringCopyZ(cx, result));
     delete[] result;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -99,9 +117,12 @@ JSAPI_FUNC(my_sha1_file) {
     swprintf_s(path, _countof(path), L"%s\\%s", Vars.szScriptPath, file);
 
     char* result = sha1_file(path);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, result)));
+        stored = StoreString(vp, JS_NewStringCopyZ(cx, result));
     delete[] result;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -117,9 +138,12 @@ JSAPI_FUNC(my_sha256_file) {
     swprintf_s(path, _countof(path), L"%s\\%s", Vars.szScriptPath, file);
 
     char* result = sha256_file(path);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, result)));
+        stored = StoreString(vp, JS_NewStringCopyZ(cx, result));
     delete[] result;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -135,9 +159,12 @@ JSAPI_FUNC(my_sha384_file) {
     swprintf_s(path, _countof(path), L"%s\\%s", Vars.szScriptPath, file);
 
     char* result = sha384_file(path);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, result)));
+        stored = StoreString(vp, JS_NewStringCopyZ(cx, result));
     delete[] result;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -153,8 +180,11 @@ JSAPI_FUNC(my_sha512_file) {
     swprintf_s(path, _countof(path), L"%s\\%s", Vars.szScriptPath, file);
 
     char* result = sha512_file(path);
+    bool stored = true;
     if (result && result[0])
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, result)));
+        stored = StoreString(vp, JS_NewStringCopyZ(cx, result));
     delete[] result;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }

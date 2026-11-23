@@ -90,7 +90,8 @@ static const char* db_stmt_errmsg(DBStmt* stmt) {
 }
 
 JSAPI_FUNC(my_sqlite_version) {
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternString(cx, sqlite3_version)));
+    if (!StoreString(vp, JS_InternString(cx, sqlite3_version)))
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -274,7 +275,8 @@ JSAPI_PROP(sqlite_getProperty) {
     JS_IdToValue(cx, id, &ID);
     switch (JSVAL_TO_INT(ID)) {
     case SQLITE_PATH:
-        vp.setString(JS_NewUCStringCopyZ(cx, dbobj->path));
+        if (!StoreString(vp, JS_NewUCStringCopyZ(cx, dbobj->path)))
+            return JS_FALSE;
         break;
     case SQLITE_OPEN:
         vp.setBoolean(dbobj->open);
@@ -384,8 +386,10 @@ JSAPI_FUNC(sqlite_stmt_getobject) {
             break;
         case SQLITE_TEXT: {
             wchar_t* wText = AnsiToUnicode(reinterpret_cast<const char*>(sqlite3_column_text(stmt, i)));
-            val = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, wText));
+            bool stored = StoreString(&val, JS_NewUCStringCopyZ(cx, wText));
             delete[] wText;
+            if (!stored)
+                return JS_FALSE;
             if (!JS_SetProperty(cx, obj2, colnam, &val))
                 THROW_ERROR(cx, "Failed to add column to row results");
             break;
@@ -442,8 +446,10 @@ JSAPI_FUNC(sqlite_stmt_colval) {
         break;
     case SQLITE_TEXT: {
         wchar_t* wText = AnsiToUnicode(reinterpret_cast<const char*>(sqlite3_column_text(stmt, i)));
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, wText)));
+        bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, wText));
         delete[] wText;
+        if (!stored)
+            return JS_FALSE;
         break;
     }
     case SQLITE_BLOB:
@@ -469,8 +475,10 @@ JSAPI_FUNC(sqlite_stmt_colname) {
 
     int i = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
     wchar_t* wname = AnsiToUnicode(sqlite3_column_name(stmt, i));
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, wname)));
+    bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, wname));
     delete[] wname;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -605,8 +613,10 @@ JSAPI_PROP(sqlite_stmt_getProperty) {
     switch (JSVAL_TO_INT(ID)) {
     case SQLITE_STMT_SQL: {
         wchar_t* wText = AnsiToUnicode(sqlite3_sql(stmtobj->stmt));
-        vp.setString(JS_NewUCStringCopyZ(cx, wText));
+        bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, wText));
         delete[] wText;
+        if (!stored)
+            return JS_FALSE;
         break;
     }
     case SQLITE_STMT_READY:

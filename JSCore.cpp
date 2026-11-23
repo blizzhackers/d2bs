@@ -43,8 +43,10 @@ JSAPI_FUNC(my_stringToEUC) {
     }
 
     char* euc = UnicodeToAnsi(szText, CP_ACP);
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, euc)));
+    bool stored = StoreString(vp, JS_NewStringCopyZ(cx, euc));
     delete[] euc;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 
@@ -308,7 +310,8 @@ JSAPI_FUNC(my_version) {
     JS_SET_RVAL(cx, vp, JSVAL_TRUE);
 
     if (argc < 1) {
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_InternUCString(cx, D2BS_VERSION)));
+        if (!StoreString(vp, JS_InternUCString(cx, D2BS_VERSION)))
+            return JS_FALSE;
         return JS_TRUE;
     }
 
@@ -370,8 +373,10 @@ JSAPI_FUNC(my_paste) {
     LPVOID lptstr = GlobalLock(foo);
     //   (char*)lptstr;
     wchar_t* cpy = AnsiToUnicode((const char*)lptstr);
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, cpy)));
+    bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, cpy));
     delete[] cpy;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 JSAPI_FUNC(my_sendCopyData) {
@@ -463,8 +468,10 @@ JSAPI_FUNC(my_sendDDE) {
 
     if (mode == 0) {
         wchar_t* buf = AnsiToUnicode(buffer);
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, buf)));
+        bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, buf));
         delete[] buf;
+        if (!stored)
+            return JS_FALSE;
     }
     return JS_TRUE;
 }
@@ -697,8 +704,10 @@ JSAPI_FUNC(my_getIP) {
     InternetCloseHandle(hFile);
     InternetCloseHandle(hInternet);
     JS_BeginRequest(cx);
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewStringCopyZ(cx, (char*)buffer)));
+    bool stored = StoreString(vp, JS_NewStringCopyZ(cx, (char*)buffer));
     JS_EndRequest(cx);
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 

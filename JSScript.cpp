@@ -27,7 +27,8 @@ JSAPI_PROP(script_getProperty) {
 
     switch (JSVAL_TO_INT(ID)) {
     case SCRIPT_FILENAME:
-        vp.setString(JS_InternUCString(cx, script->GetShortFilename()));
+        if (!StoreString(vp, JS_InternUCString(cx, script->GetShortFilename())))
+            return JS_FALSE;
         break;
     case SCRIPT_GAMETYPE:
         vp.setBoolean(script->GetState() == InGame ? false : true);

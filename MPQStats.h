@@ -58,6 +58,9 @@ bool FillBaseStat(char* szTable, int row, char* szStat, void* result, size_t siz
 bool FillBaseStat(char* szTable, int row, int column, void* result, size_t size);
 bool FillBaseStat(int table, int row, char* szStat, void* result, size_t size);
 bool FillBaseStat(int table, int row, int column, void* result, size_t size);
+// The JS form returns FALSE for an unknown table, column or field type, TRUE once *argv is set (undefined when the row
+// can't be read), and BASESTAT_ENGINE_FAILURE when the engine refused the field's string (out of memory, reported).
+#define BASESTAT_ENGINE_FAILURE ((DWORD)2)
 DWORD FillBaseStat(JSContext* cx, jsval* argv, int table, int row, int column, char* szTable, char* szStat);
 
 // Tables dumped by Sheppard

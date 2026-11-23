@@ -181,10 +181,12 @@ JSAPI_FUNC(filetools_readText) {
     // Convert to JSVAL cleanup and return
     JS_BeginRequest(cx);
     wchar_t* wcontents = AnsiToUnicode(contents + offset);
-    JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyN(cx, wcontents, wcslen(wcontents))));
+    bool stored = StoreString(vp, JS_NewUCStringCopyN(cx, wcontents, wcslen(wcontents)));
     JS_EndRequest(cx);
     delete[] wcontents;
     delete[] contents;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 

@@ -81,7 +81,10 @@ JSAPI_PROP(file_getProperty) {
                 vp.setInt32(0); //= JSVAL_ZERO;
             break;
         case FILE_PATH:
-            vp.setString(JS_NewUCStringCopyZ(cx, fdata->path + 1));
+            if (!StoreString(vp, JS_NewUCStringCopyZ(cx, fdata->path + 1))) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
             break;
         case FILE_POSITION:
             if (fdata->fptr) {
@@ -385,9 +388,11 @@ JSAPI_FUNC(file_readLine) {
         }
 
         wchar_t* wline = AnsiToUnicode(line + offset);
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, wline)));
+        bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, wline));
         delete[] wline;
         free(line);
+        if (!stored)
+            return JS_FALSE;
     }
     return JS_TRUE;
 }
@@ -481,10 +486,12 @@ JSAPI_FUNC(file_readAll) {
             offset = 3;
         }
         wchar_t* wcontents = AnsiToUnicode(contents + offset);
-        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(JS_NewUCStringCopyN(cx, wcontents, wcslen(wcontents))));
+        bool stored = StoreString(vp, JS_NewUCStringCopyN(cx, wcontents, wcslen(wcontents)));
         JS_EndRequest(cx);
         delete[] wcontents;
         delete[] contents;
+        if (!stored)
+            return JS_FALSE;
     }
     return JS_TRUE;
 }

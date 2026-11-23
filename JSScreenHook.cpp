@@ -519,7 +519,8 @@ JSAPI_PROP(text_getProperty) {
         vp.setInt32(pTextHook->GetFont());
         break;
     case TEXT_TEXT:
-        vp.setString(JS_InternUCString(cx, pTextHook->GetText()));
+        if (!StoreString(vp, JS_InternUCString(cx, pTextHook->GetText())))
+            return JS_FALSE;
         break;
     case TEXT_ALIGN:
         vp.setInt32(pTextHook->GetAlign());
@@ -666,7 +667,8 @@ JSAPI_PROP(image_getProperty) {
         vp.setInt32(pImageHook->GetY());
         break;
     case IMAGE_LOCATION:
-        vp.setString(JS_InternUCString(cx, pImageHook->GetImage()));
+        if (!StoreString(vp, JS_InternUCString(cx, pImageHook->GetImage())))
+            return JS_FALSE;
         break;
     case IMAGE_ALIGN:
         vp.setInt32(pImageHook->GetAlign());

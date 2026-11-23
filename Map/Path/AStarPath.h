@@ -107,7 +107,8 @@ template <class Allocator = std::allocator<Node>> class AStarPath : public MapPa
         std::priority_queue<Node*, std::vector<Node*>, NodeComparer> open;
         std::set<Point> closed;
         PointList newNodes;
-        // Checked before the first node is allocated, which only reaches nodes (and so its free) below.
+        // Checked before begin is allocated: GetPath frees only what nodes holds, so a return between the allocation
+        // and the push below would leak it.
         if (PlayerLevelNo(session) != startLvl)
             return;
         Node* begin = alloc.allocate(1);

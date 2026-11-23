@@ -68,8 +68,9 @@ class ScriptEngine {
     static void DefineConstant(JSContext* context, JSObject* globalObject, const char* name, int value);
     static void UpdateConsole();
     // setTimeout / setInterval. A timer belongs to the script that set it, whose thread alone runs its callback and
-    // frees it; any thread may cancel it by id. Returns the id, 0 when no timer could be set.
-    static int AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat);
+    // frees it; any thread may cancel it by id. Returns false only when the arguments' array could not be made (an
+    // engine failure, already reported); otherwise *id is the timer's id, or 0 when no timer could be set.
+    static bool AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat, int* id);
     static void ClearTimer(int id);
     static int ClearTimers(Script* owner);
     static void RunTimer(Event* evt, bool clearList);

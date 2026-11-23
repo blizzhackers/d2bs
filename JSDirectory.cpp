@@ -79,13 +79,19 @@ JSAPI_FUNC(my_openDir) {
 JSAPI_FUNC(dir_getFiles) {
     if (argc > 1)
         return JS_FALSE;
-    if (argc < 1)
-        JS_ARGV(cx, vp)[0] = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, L"*.*"));
 
     DirData* d = (DirData*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
-    const wchar_t* search = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
-    if (!search)
-        THROW_ERROR(cx, "Failed to get search string");
+    JSObject* jsarray = JS_NewArrayObject(cx, 0, NULL);
+    if (!jsarray)
+        return JS_FALSE;
+    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsarray));
+    // The default stays native: the engine gives a native no argument slot past argc to store it in.
+    const wchar_t* search = L"*.*";
+    if (argc == 1) {
+        search = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
+        if (!search)
+            THROW_ERROR(cx, "Failed to get search string");
+    }
 
     long hFile;
     wchar_t path[_MAX_PATH], oldpath[_MAX_PATH];
@@ -101,8 +107,6 @@ JSAPI_FUNC(dir_getFiles) {
     }
 
     _wfinddata_t found;
-    JSObject* jsarray = JS_NewArrayObject(cx, 0, NULL);
-    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsarray));
 
     if ((hFile = _wfindfirst(search, &found)) != -1L) {
         JS_BeginRequest(cx);
@@ -110,8 +114,21 @@ JSAPI_FUNC(dir_getFiles) {
         do {
             if ((found.attrib & _A_SUBDIR))
                 continue;
-            jsval file = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, found.name));
-            JS_SetElement(cx, jsarray, element++, &file);
+            // The cwd is process-wide, so every path out after the chdir above restores it.
+            JSString* name = JS_NewUCStringCopyZ(cx, found.name);
+            if (!name) {
+                JS_EndRequest(cx);
+                _findclose(hFile);
+                _wchdir(oldpath);
+                return JS_FALSE;
+            }
+            jsval file = STRING_TO_JSVAL(name);
+            if (!JS_SetElement(cx, jsarray, element++, &file)) {
+                JS_EndRequest(cx);
+                _findclose(hFile);
+                _wchdir(oldpath);
+                return JS_FALSE;
+            }
         } while (_wfindnext(hFile, &found) == 0);
         JS_EndRequest(cx);
         _findclose(hFile);
@@ -128,13 +145,19 @@ JSAPI_FUNC(dir_getFiles) {
 JSAPI_FUNC(dir_getFolders) {
     if (argc > 1)
         return JS_FALSE;
-    if (argc < 1)
-        JS_ARGV(cx, vp)[0] = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, L"*.*"));
 
     DirData* d = (DirData*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
-    const wchar_t* search = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
-    if (!search)
-        THROW_ERROR(cx, "Failed to get search string");
+    JSObject* jsarray = JS_NewArrayObject(cx, 0, NULL);
+    if (!jsarray)
+        return JS_FALSE;
+    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsarray));
+    // The default stays native: the engine gives a native no argument slot past argc to store it in.
+    const wchar_t* search = L"*.*";
+    if (argc == 1) {
+        search = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
+        if (!search)
+            THROW_ERROR(cx, "Failed to get search string");
+    }
 
     long hFile;
     wchar_t path[_MAX_PATH], oldpath[_MAX_PATH];
@@ -150,8 +173,6 @@ JSAPI_FUNC(dir_getFolders) {
     }
 
     _wfinddata_t found;
-    JSObject* jsarray = JS_NewArrayObject(cx, 0, NULL);
-    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsarray));
 
     if ((hFile = _wfindfirst(search, &found)) != -1L) {
         jsint element = 0;
@@ -159,8 +180,21 @@ JSAPI_FUNC(dir_getFolders) {
         do {
             if (!wcscmp(found.name, L"..") || !wcscmp(found.name, L".") || !(found.attrib & _A_SUBDIR))
                 continue;
-            jsval file = STRING_TO_JSVAL(JS_NewUCStringCopyZ(cx, found.name));
-            JS_SetElement(cx, jsarray, element++, &file);
+            // The cwd is process-wide, so every path out after the chdir above restores it.
+            JSString* name = JS_NewUCStringCopyZ(cx, found.name);
+            if (!name) {
+                JS_EndRequest(cx);
+                _findclose(hFile);
+                _wchdir(oldpath);
+                return JS_FALSE;
+            }
+            jsval file = STRING_TO_JSVAL(name);
+            if (!JS_SetElement(cx, jsarray, element++, &file)) {
+                JS_EndRequest(cx);
+                _findclose(hFile);
+                _wchdir(oldpath);
+                return JS_FALSE;
+            }
         } while (_wfindnext(hFile, &found) == 0);
         JS_EndRequest(cx);
         _findclose(hFile);

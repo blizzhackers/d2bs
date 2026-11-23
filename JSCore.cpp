@@ -92,7 +92,9 @@ static JSBool StartTimer(JSContext* cx, uint argc, jsval* vp, bool repeat) {
         // NaN and negative delays run at once, like 0.
         int delayMs = delay >= 0x7FFFFFFF ? 0x7FFFFFFF : (delay > 0 ? (int)delay : 0);
         Script* self = (Script*)JS_GetContextPrivate(cx);
-        int id = ScriptEngine::AddTimer(self, cx, JS_ARGV(cx, vp)[0], argc - 2, JS_ARGV(cx, vp) + 2, delayMs, repeat);
+        int id = 0;
+        if (!ScriptEngine::AddTimer(self, cx, JS_ARGV(cx, vp)[0], argc - 2, JS_ARGV(cx, vp) + 2, delayMs, repeat, &id))
+            return JS_FALSE;
         if (id)
             JS_SET_RVAL(cx, vp, INT_TO_JSVAL(id));
     }

@@ -112,8 +112,9 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  * running while one waits, for example in delay(), and they may call
  * getCollision() and getPath(). The exception is a getPath inside a listener
  * the game is already waiting on: the game then stays paused until it returns.
- * If the player changes area, act or game while one runs, getPath returns an
- * empty path.
+ * If the player changes area, act or game while reject or mutate runs, getPath
+ * returns an empty path; reduce runs after the search, so the path it reduces
+ * is still returned.
  *
  * \return The path as an array of objects with x and y properties.
  */

@@ -246,7 +246,7 @@ Returns an array of points that form a path from the source to the destination. 
 
 * `mutate` Called with (x, y) for the start or the end when it is blocked, before the search. Return [x, y] to move that point (fractions are truncated); a return that isn't an object keeps it. An object whose elements 0 and 1 don't convert to numbers in the 32-bit integer range makes getPath throw a TypeError.
 
-Reduction type 3 needs all three functions, or getPath throws. They are called with getPath's this (the global object for a plain call). An error one of them throws, or the script being stopped while one runs, ends the getPath call with it. They run without the game lock, so the game keeps running while one waits, for example in delay(), and they may call getCollision() and getPath(). The exception is a getPath inside a listener the game is already waiting on: the game then stays paused until it returns. If the player changes area, act or game while one runs, getPath returns an empty path.
+Reduction type 3 needs all three functions, or getPath throws. They are called with getPath's this (the global object for a plain call). An error one of them throws, or the script being stopped while one runs, ends the getPath call with it. They run without the game lock, so the game keeps running while one waits, for example in delay(), and they may call getCollision() and getPath(). The exception is a getPath inside a listener the game is already waiting on: the game then stays paused until it returns. If the player changes area, act or game while reject or mutate runs, getPath returns an empty path; reduce runs after the search, so the path it reduces is still returned.
 
 #### Returns
 The path as an array of objects with x and y properties.

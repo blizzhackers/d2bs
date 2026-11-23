@@ -9,6 +9,9 @@
 #include <queue>
 #include <cmath>
 
+// Declared in JSParty.h, which this Map-layer header does not include.
+bool OpenGameSession(void);
+
 namespace Mapping {
 namespace Pathing {
 
@@ -87,13 +90,27 @@ template <class Allocator = std::allocator<Node>> class AStarPath : public MapPa
         } while ((current = current->parent) != NULL);
     }
 
-    void FindPath(Point const& start, Point const& end, Node** result, std::vector<Node*>& nodes, bool abs) {
+    // The player's rooms are walked only while its act is the loaded act, checked before GameReady() as GetLevel does:
+    // an act change frees the old act before the player's own pointer moves on, and a type-3 callback or AllowCritSpace
+    // can let the game run in between. 0 means the search must stop.
+    DWORD PlayerLevelNo(DWORD session) const {
+        UnitAny* player = D2CLIENT_GetPlayerUnit();
+        Act* act = *p_D2CLIENT_CurrentAct;
+        if (!player || !act || player->pAct != act || !GameReady() || Vars.dwGameSession != session)
+            return 0;
+        if (!player->pPath || !player->pPath->pRoom1 || !player->pPath->pRoom1->pRoom2 || !player->pPath->pRoom1->pRoom2->pLevel)
+            return 0;
+        return player->pPath->pRoom1->pRoom2->pLevel->dwLevelNo;
+    }
+
+    void FindPath(Point const& start, Point const& end, Node** result, std::vector<Node*>& nodes, bool abs, DWORD session, DWORD startLvl) {
         std::priority_queue<Node*, std::vector<Node*>, NodeComparer> open;
         std::set<Point> closed;
         PointList newNodes;
+        // Checked before the first node is allocated, which only reaches nodes (and so its free) below.
+        if (PlayerLevelNo(session) != startLvl)
+            return;
         Node* begin = alloc.allocate(1);
-        UnitAny* player = D2CLIENT_GetPlayerUnit();
-        DWORD startLvl = player->pPath->pRoom1->pRoom2->pLevel->dwLevelNo;
 
         // if we don't get a valid node, just return
         if (!begin)
@@ -110,21 +127,23 @@ template <class Allocator = std::allocator<Node>> class AStarPath : public MapPa
             if (closed.find(current->point) != closed.end())
                 continue;
 
-            if (current->point == end) {
-                *result = current;
-                return;
-            }
             // this is to make d2 not completly freeze on long paths.
             if (GetTickCount() - ticks > 500) {
                 map->AllowCritSpace();
                 ticks = GetTickCount();
             }
-            if (!GameReady() || startLvl != player->pPath->pRoom1->pRoom2->pLevel->dwLevelNo) {
+            // Checked before the goal test too: the game may have moved on during the last expansion's callbacks.
+            if (PlayerLevelNo(session) != startLvl) {
                 Log(L"Pather lvl change while pathing");
                 return;
             }
-            if (Vars.bQuitting)
+            if (Vars.bQuitting || reducer->Failed())
                 return;
+
+            if (current->point == end) {
+                *result = current;
+                return;
+            }
 
             bool result = closed.insert(current->point).second;
             assert(result == true);
@@ -137,6 +156,8 @@ template <class Allocator = std::allocator<Node>> class AStarPath : public MapPa
                 newNodes.pop_back();
 
                 if (point != end && reducer->Reject(point, abs)) {
+                    if (reducer->Failed())
+                        return;
                     closed.insert(point);
                     continue;
                 }
@@ -173,6 +194,15 @@ template <class Allocator = std::allocator<Node>> class AStarPath : public MapPa
         Node* result = NULL;
         Point start = _start, end = _end;
 
+        // Recorded before the first callback: a type-3 callback runs without the game lock, so a rejoin or act change
+        // inside reject or mutate of the start or end must still stop the search.
+        if (!OpenGameSession())
+            return;
+        const DWORD session = Vars.dwGameSession;
+        const DWORD startLvl = PlayerLevelNo(session);
+        if (!startLvl)
+            return;
+
         // if we don't have a valid start and end, try mutating the points
         if (reducer->Reject(start, abs))
             reducer->MutatePoint(start, abs);
@@ -183,7 +213,7 @@ template <class Allocator = std::allocator<Node>> class AStarPath : public MapPa
         // if(!map->IsValidPoint(start, abs) || !map->IsValidPoint(end, abs)) return;
 
         std::vector<Node*> nodes;
-        FindPath(start, end, &result, nodes, abs);
+        FindPath(start, end, &result, nodes, abs, session, startLvl);
         if (result) {
             PointList in;
             ReverseList(result, in);

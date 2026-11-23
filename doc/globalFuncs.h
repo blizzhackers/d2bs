@@ -86,15 +86,35 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  * \param reductionType The type of reduction: {0 - walking, 1 - teleport,
  * 	2 - none, 3 - user specified}
  *
- * \param Radius The distance between each point.
+ * \param Radius The distance between each point. Reduction type 3 does not
+ * 	use it, but it must be passed so the functions are the 8th to 10th
+ * 	arguments.
  *
- * \param reject Called on start and end to determine if point is valid.
+ * \param reject Called with (x, y) for the start and the end before the
+ * 	search, then for each neighbouring point the search considers (some more
+ * 	than once), never for the end. A truthy return blocks the point. A point
+ * 	outside the current act's levels is blocked without a call.
  *
- * \param reduce Function to determine whether to keep point. Returns true if
- * 	point should be kept, false if point should be eliminated.
+ * \param reduce Called once for each point of the path found, in order, with
+ * 	the point ({x, y}), its index and the array of all the points. A truthy
+ * 	return keeps the point in the result.
  *
- * \param mutate Called on the start/end if it isn't/is rejected respectively.
- * 	This is done before path generation.
+ * \param mutate Called with (x, y) for the start or the end when it is
+ * 	blocked, before the search. Return [x, y] to move that point (fractions
+ * 	are truncated); a return that isn't an object keeps it. An object whose
+ * 	elements 0 and 1 don't convert to numbers in the 32-bit integer range
+ * 	makes getPath throw a TypeError.
+ *
+ * Reduction type 3 needs all three functions, or getPath throws. They are
+ * called with getPath's this (the global object for a plain call). An error
+ * one of them throws, or the script being stopped while one runs, ends the
+ * getPath call with it. They run without the game lock, so the game keeps
+ * running while one waits, for example in delay(), and they may call
+ * getCollision() and getPath(). The exception is a getPath inside a listener
+ * the game is already waiting on: the game then stays paused until it returns.
+ * If the player changes area, act or game while reject or mutate runs, getPath
+ * returns an empty path; reduce runs after the search, so the path it reduces
+ * is still returned.
  *
  * \return The path as an array of objects with x and y properties.
  */

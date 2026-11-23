@@ -20,6 +20,10 @@ class PathReducer {
     virtual bool Reject(Point const& pt, bool abs) = 0;
     virtual int GetPenalty(Point const& pt, bool abs) = 0;
     virtual void MutatePoint(Point& pt, bool abs) = 0;
+    // True once a reducer's script callback failed; getPath then fails with the error the callback left pending.
+    virtual bool Failed() const {
+        return false;
+    }
 };
 
 } // namespace Reducing

@@ -5,7 +5,7 @@
 `public `[`Unit`](#classUnit)` `[`getUnit`](#group__globalFunctions_1ga6073f506327123ebf40219400e4d3f70)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` type,String name,uint32_t mode,uint32_t nUnitId)`            | Get a unit by type, name, mode and nUnitId.
 `public `[`Unit`](#classUnit)` `[`getUnit`](#group__globalFunctions_1ga22c01b5a8480e8fbf540e43bad5ae2f8)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` type,uint32_t classId,uint32_t mode,uint32_t nUnitId)`            | Get a unit by type, classId, mode and nUnitId.
 `public object[] `[`getPath`](#group__globalFunctions_1ga7913f6338480cc180c015198b6c18024)`(uint32_t Area,uint32_t srcX,uint32_t srcY,uint32_t dstX,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dstY,uint32_t reductionType,uint32_t Radius)`            | Creates a path (walking or teleporting) from the source to the destination.
-`public object[] `[`getPath`](#group__globalFunctions_1ga051897c1e76c0ceeccd946dbedc6ea54)`(uint32_t Area,uint32_t srcX,uint32_t srcY,uint32_t dstX,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dstY,uint32_t reductionType,uint32_t Radius,bool(*)(int32_t x, int32_t y) reject,bool(*)(object curPt, `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac) i, object[] pts)` reduce,int32_t(*)(int32_t x, int32_t y) mutate)`            | Creates a path (walking or teleporting) from the source to the destination.
+`public object[] `[`getPath`](#group__globalFunctions_1ga051897c1e76c0ceeccd946dbedc6ea54)`(uint32_t Area,uint32_t srcX,uint32_t srcY,uint32_t dstX,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dstY,uint32_t reductionType,uint32_t Radius,bool(*)(int32_t x, int32_t y) reject,bool(*)(object curPt, `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac) i, object[] pts)` reduce,int32_t[](*)(int32_t x, int32_t y) mutate)`            | Creates a path (walking or teleporting) from the source to the destination.
 `public unsigned short `[`getCollision`](#group__globalFunctions_1gac3a89f2d8c4940ae49dce43fbe2f626b)`(uint32_t nLevelId,int32_t nX,int32_t nY)`            | Get the collision flags at a given point in a given area.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMercHP`](#group__globalFunctions_1gac4217ed30da8eb07d8addca4cdb51a9d)`()`            | Get the health points of the controlled unit's merc.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getCursorType`](#group__globalFunctions_1gaa0bc4f7877d6992600202b8dce442787)`()`            | Get the cursor type from p_D2CLIENT_RegularCursorType.
@@ -219,7 +219,7 @@ Returns an array of points that form a path from the source to the destination. 
 #### Returns
 The path as an array of objects with x and y properties.
 
-#### `public object[] `[`getPath`](#group__globalFunctions_1ga051897c1e76c0ceeccd946dbedc6ea54)`(uint32_t Area,uint32_t srcX,uint32_t srcY,uint32_t dstX,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dstY,uint32_t reductionType,uint32_t Radius,bool(*)(int32_t x, int32_t y) reject,bool(*)(object curPt, `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac) i, object[] pts)` reduce,int32_t(*)(int32_t x, int32_t y) mutate)` 
+#### `public object[] `[`getPath`](#group__globalFunctions_1ga051897c1e76c0ceeccd946dbedc6ea54)`(uint32_t Area,uint32_t srcX,uint32_t srcY,uint32_t dstX,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dstY,uint32_t reductionType,uint32_t Radius,bool(*)(int32_t x, int32_t y) reject,bool(*)(object curPt, `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac) i, object[] pts)` reduce,int32_t[](*)(int32_t x, int32_t y) mutate)` 
 
 Creates a path (walking or teleporting) from the source to the destination.
 
@@ -238,13 +238,15 @@ Returns an array of points that form a path from the source to the destination. 
 
 * `reductionType` The type of reduction: {0 - walking, 1 - teleport, 2 - none, 3 - user specified}
 
-* `Radius` The distance between each point.
+* `Radius` The distance between each point. Reduction type 3 does not use it, but it must be passed so the functions are the 8th to 10th arguments.
 
-* `reject` Called on start and end to determine if point is valid.
+* `reject` Called with (x, y) for the start and the end before the search, then for each neighbouring point the search considers (some more than once), never for the end. A truthy return blocks the point. A point outside the current act's levels is blocked without a call.
 
-* `reduce` Function to determine whether to keep point. Returns true if point should be kept, false if point should be eliminated.
+* `reduce` Called once for each point of the path found, in order, with the point ({x, y}), its index and the array of all the points. A truthy return keeps the point in the result.
 
-* `mutate` Called on the start/end if it isn't/is rejected respectively. This is done before path generation.
+* `mutate` Called with (x, y) for the start or the end when it is blocked, before the search. Return [x, y] to move that point (fractions are truncated); a return that isn't an object keeps it. An object whose elements 0 and 1 don't convert to numbers in the 32-bit integer range makes getPath throw a TypeError.
+
+Reduction type 3 needs all three functions, or getPath throws. They are called with getPath's this (the global object for a plain call). An error one of them throws, or the script being stopped while one runs, ends the getPath call with it. They run without the game lock, so the game keeps running while one waits, for example in delay(), and they may call getCollision() and getPath(). The exception is a getPath inside a listener the game is already waiting on: the game then stays paused until it returns. If the player changes area, act or game while reject or mutate runs, getPath returns an empty path; reduce runs after the search, so the path it reduces is still returned.
 
 #### Returns
 The path as an array of objects with x and y properties.

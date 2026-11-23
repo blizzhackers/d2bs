@@ -282,8 +282,16 @@ JSAPI_FUNC(my_getPath) {
         return JS_FALSE;
     }
     JS_EndRequest(cx);
-    if (reductionType == 3 && !(JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[7]) && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[8]) && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[9]))) {
-        THROW_ERROR(cx, "Invalid function values for reduction type");
+    JSObject* thisObj = NULL;
+    if (reductionType == 3) {
+        jsval* argv = JS_ARGV(cx, vp);
+        if (argc < 10 || !JSVAL_IS_FUNCTION(cx, argv[7]) || !JSVAL_IS_FUNCTION(cx, argv[8]) || !JSVAL_IS_FUNCTION(cx, argv[9]))
+            THROW_ERROR(cx, "getPath reduction type 3 needs reject, reduce and mutate functions");
+        // Computed before the game lock: boxing a primitive this allocates.
+        jsval thisv = JS_THIS(cx, vp);
+        if (JSVAL_IS_NULL(thisv))
+            return JS_FALSE;
+        thisObj = JSVAL_TO_OBJECT(thisv);
     }
     if (lvl == 0) {
         THROW_ERROR(cx, "Invalid level passed to getPath");
@@ -309,7 +317,7 @@ JSAPI_FUNC(my_getPath) {
         reducer = new NoPathReducer(map.get());
         break;
     case 3:
-        reducer = new JSPathReducer(map.get(), cx, JS_THIS_OBJECT(cx, vp), JS_ARGV(cx, vp)[7], JS_ARGV(cx, vp)[8], JS_ARGV(cx, vp)[9]);
+        reducer = new JSPathReducer(map.get(), cx, thisObj, JS_ARGV(cx, vp)[7], JS_ARGV(cx, vp)[8], JS_ARGV(cx, vp)[9]);
         break;
     default:
         THROW_ERROR(cx, "Invalid path reducer value!");
@@ -328,6 +336,11 @@ JSAPI_FUNC(my_getPath) {
     path.GetPath(start, end, list, true);
     // The game lock is released before the points are built: BuildObject can run the GC, which the game must not wait on.
     map->CleanUp();
+    // A failed type-3 callback left its exception, stop or out-of-memory report pending.
+    if (reducer->Failed()) {
+        delete reducer;
+        return JS_FALSE;
+    }
     // box18JS_ResumeRequest(cx, depth);
 #if defined(_TIME)
     char p[510];

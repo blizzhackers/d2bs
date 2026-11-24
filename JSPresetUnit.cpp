@@ -34,10 +34,13 @@ void presetunit_finalize(JSFreeOp* fop, JSObject* obj) {
 }
 
 JSAPI_PROP(presetunit_getProperty) {
-    myPresetUnit* pUnit = (myPresetUnit*)JS_GetPrivate(cx, obj);
+    myPresetUnit* pUnit = (myPresetUnit*)JS_GetInstancePrivate(cx, obj, &presetunit_class, NULL);
 
-    if (!pUnit)
+    if (!pUnit) {
+        // Preset unit props are slotful: a getter that leaves vp unset hands back the holder's last stored value.
+        vp.setUndefined();
         return JS_TRUE;
+    }
 
     jsval ID;
     JS_IdToValue(cx, id, &ID);

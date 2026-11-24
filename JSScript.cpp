@@ -79,6 +79,9 @@ JSAPI_FUNC(script_getNext) {
 JSAPI_FUNC(script_stop) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     Script* script = (Script*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &script_class, NULL);
+    // A foreign or prototype this has no Script, and the member calls below would dereference NULL.
+    if (!script)
+        return JS_TRUE;
     if (script->IsRunning())
         script->Stop();
 
@@ -88,6 +91,8 @@ JSAPI_FUNC(script_stop) {
 JSAPI_FUNC(script_pause) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     Script* script = (Script*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &script_class, NULL);
+    if (!script)
+        return JS_TRUE;
 
     if (script->IsRunning())
         script->Pause();
@@ -98,6 +103,8 @@ JSAPI_FUNC(script_pause) {
 JSAPI_FUNC(script_resume) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     Script* script = (Script*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &script_class, NULL);
+    if (!script)
+        return JS_TRUE;
 
     if (script->IsPaused())
         script->Resume();
@@ -134,6 +141,8 @@ JSAPI_FUNC(script_send) {
 JSAPI_FUNC(script_join) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     Script* script = (Script*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &script_class, NULL);
+    if (!script)
+        return JS_TRUE;
 
     script->Join();
 

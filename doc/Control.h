@@ -1,4 +1,8 @@
 /** This class represents out of game (OOG) Control s.
+ *
+ * A Control whose control is gone (the screen changed, or the game left the
+ * menu) reads every property as undefined and ignores writes; getNext() then
+ * returns false and click() and setText() do nothing.
  */
 class Control
 {
@@ -91,11 +95,8 @@ public:
 	 */
 	double type;
 
-	/** Something...
-	 *
-	 * \todo Determine what this is.
-	 */
-	double cursorPos;
+	/** The position of the text cursor in an edit box. Reading it returns the current position, and setting it stores a new one. On any other control type it reads as undefined and ignores writes. */
+	double cursorpos;
 
 	/** Someting...
 	 *

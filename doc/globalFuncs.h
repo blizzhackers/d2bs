@@ -177,7 +177,7 @@ int getCursorType(int nType);
  *
  * \param skillName The skill name.
  *
- * \return The skill ID.
+ * \return The skill ID (0 is Attack), or undefined when the name is not a known skill or the argument is not a string. The name is matched case-insensitively.
  */
 int getSkillByName(String skillName);
 
@@ -983,6 +983,8 @@ D2BSScript load(String file, ...);
  *
  * \param file Filename of the file that might have been included.
  *
+ * Throws if file is not a string.
+ *
  * \return Whether or not the file has been included.
  */
 bool isIncluded(String file);
@@ -992,6 +994,8 @@ bool isIncluded(String file);
  * \ingroup globalFunctions
  *
  * \param file Filename of the file to include.
+ *
+ * Throws if file is not a string.
  *
  * \return Whether the inclusion was successful.
  */
@@ -1607,6 +1611,8 @@ int getLocation();
  * \ingroup globalFunctions
  *
  * \param path The mpq file to load
+ *
+ * Throws if path is not a string.
  */
 void loadMpq(String path);
 
@@ -1892,13 +1898,13 @@ double getDistance(Unit a, Unit b);
  *
  * \ingroup globalFunctions
  *
- * \param a The first Unit.
+ * \param a The first Unit, or any object with x and y.
  *
  * \param bx The x coordinate of point b.
  *
  * \param by The y coordinate of point b.
  *
- * \return The euclidean distance from a to b.
+ * \return The euclidean distance from a to b, or undefined when a Unit argument has left the game.
  */
 double getDistance(Unit a, int32_t bx, int32_t by);
 
@@ -1922,9 +1928,9 @@ double getDistance(int32_t ax, int32_t ay);
  *
  * \param ay The y coordinate of point a.
  *
- * \param b The second Unit.
+ * \param b The second Unit, or any object with x and y.
  *
- * \return The euclidean distance from a to b.
+ * \return The euclidean distance from a to b, or undefined when a Unit argument has left the game.
  */
 double getDistance(int32_t ax, int32_t ay, Unit b);
 
@@ -1965,6 +1971,9 @@ void gold(int nGold = 0, int nMode = 1);
  * \param b Unit b.
  *
  * \param nBitMask Bit mask to check collision of a and b with.
+ *
+ * \return The collision result for nBitMask, or nBitMask itself (reads as
+ * blocked) when either unit has left the game; undefined for wrong arguments.
  */
 int checkCollision(Unit a, Unit b, int nBitMask);
 
@@ -2093,7 +2102,9 @@ void takeScreenshot();
  *
  * \param y Y coord to move to.
  *
- * \return true
+ * \return true once the move request is sent; false with a warning when EnableUnsupported is off or the game
+ * is not ready. Throws if fewer than three arguments are passed or npc is not a monster Unit. x and y are converted
+ * like any JS number.
  */
 bool moveNPC(Unit npc, uint32_t x, uint32_t y);
 
@@ -2133,7 +2144,7 @@ String getIP();
  *
  * \param arg An object with x and y parameters specifying the point.
  *
- * \return An object with x and y, containing the automap coordinate.
+ * \return A new object with x and y, containing the automap coordinate. The argument is not changed.
  */
 Object screenToAutomap(Object arg);
 
@@ -2155,7 +2166,7 @@ Object screenToAutomap(int ix, int iy);
  *
  * \param arg An object with x and y parameters specifying the point.
  *
- * \return An object with x and y, containing the screen coordinate.
+ * \return A new object with x and y, containing the screen coordinate. The argument is not changed.
  */
 Object automapToScreen(Object arg);
 

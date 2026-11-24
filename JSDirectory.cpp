@@ -209,19 +209,27 @@ JSAPI_FUNC(dir_getFolders) {
 }
 
 JSAPI_FUNC(dir_create) {
-    DirData* d = (DirData*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    // A foreign or prototype this has no folder; reading past a plain object's slots would be a garbage pointer.
+    DirData* d = (DirData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &folder_class, NULL);
+    if (!d) {
+        JS_SET_RVAL(cx, vp, JSVAL_VOID);
+        return JS_TRUE;
+    }
     wchar_t path[_MAX_PATH];
-    if (!JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
         THROW_ERROR(cx, "No path passed to dir.create()");
     const wchar_t* name = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
-
-    if (!isValidPath(name)) {
+    if (!name)
         return JS_FALSE;
-    }
+
+    // swprintf_s below and DirData's wcscpy_s end the process on overflow (no invalid-parameter handler), and
+    // isValidPath accepts names longer than _MAX_PATH, so the joined <script path>\<folder>\<name> is bounded first.
+    if (wcslen(Vars.szScriptPath) + wcslen(d->name) + wcslen(name) + 3 > _MAX_PATH || !isValidPath(name))
+        THROW_ERROR(cx, "Invalid folder name");
 
     swprintf_s(path, _MAX_PATH, L"%s\\%s\\%s", Vars.szScriptPath, d->name, name);
     if (_wmkdir(path) == -1 && (errno == ENOENT)) {
-        JS_ReportError(cx, "Couldn't create directory %s, path %s not found", name, path);
+        JS_ReportError(cx, "Couldn't create directory %hs, path %hs not found", name, path);
         return JS_FALSE;
     } else {
         DirData* d = new DirData(name);
@@ -236,7 +244,11 @@ JSAPI_FUNC(dir_create) {
 }
 
 JSAPI_FUNC(dir_delete) {
-    DirData* d = (DirData*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    DirData* d = (DirData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &folder_class, NULL);
+    if (!d) {
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
 
     wchar_t path[_MAX_PATH];
     swprintf_s(path, _MAX_PATH, L"%s\\%s", Vars.szScriptPath, d->name);
@@ -254,10 +266,12 @@ JSAPI_FUNC(dir_delete) {
 }
 
 JSAPI_PROP(dir_getProperty) {
-    DirData* d = (DirData*)JS_GetPrivate(cx, obj);
+    DirData* d = (DirData*)JS_GetInstancePrivate(cx, obj, &folder_class, NULL);
 
-    if (!d)
-        return JS_FALSE;
+    if (!d) {
+        vp.setUndefined();
+        return JS_TRUE;
+    }
 
     jsval ID;
     JS_IdToValue(cx, id, &ID);

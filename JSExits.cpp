@@ -1,4 +1,5 @@
 #include "JSExits.h"
+#include "JSGlobalClasses.h"
 
 EMPTY_CTOR(exit)
 
@@ -8,7 +9,7 @@ void exit_finalize(JSFreeOp* fop, JSObject* obj) {
 }
 
 JSAPI_PROP(exit_getProperty) {
-    myExit* pExit = (myExit*)JS_GetPrivate(cx, obj);
+    myExit* pExit = (myExit*)JS_GetInstancePrivate(cx, obj, &exit_class, NULL);
 
     vp.set(JSVAL_VOID);
 

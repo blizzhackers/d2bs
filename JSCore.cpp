@@ -234,9 +234,14 @@ JSAPI_FUNC(my_include) {
         return JS_FALSE;
     }
 
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "include: the file name must be a string");
     const wchar_t* file = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (!file)
+        return JS_FALSE;
 
-    if (wcslen(file) > (_MAX_FNAME + _MAX_PATH - wcslen(Vars.szScriptPath) - 6)) {
+    // "\libs\" plus the terminator must also fit: a one-short buffer makes swprintf_s end the process.
+    if (wcslen(file) > (_MAX_FNAME + _MAX_PATH - wcslen(Vars.szScriptPath) - 7)) {
         JS_ReportError(cx, "File name too long!");
         return JS_FALSE;
     }
@@ -251,8 +256,8 @@ JSAPI_FUNC(my_include) {
 }
 
 JSAPI_FUNC(my_stop) {
-    if (argc > 0 && (JSVAL_IS_INT(JS_ARGV(cx, vp)[0]) && JSVAL_TO_INT(JS_ARGV(cx, vp)[0]) == 1) ||
-        (JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[0]) && JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[0]) == TRUE)) {
+    if (argc > 0 && ((JSVAL_IS_INT(JS_ARGV(cx, vp)[0]) && JSVAL_TO_INT(JS_ARGV(cx, vp)[0]) == 1) ||
+                     (JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[0]) && JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[0]) == TRUE))) {
         Script* script = (Script*)JS_GetContextPrivate(cx);
         if (script)
             script->Stop();
@@ -294,9 +299,14 @@ JSAPI_FUNC(my_getThreadPriority) {
 }
 
 JSAPI_FUNC(my_isIncluded) {
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "isIncluded: the file name must be a string");
     const wchar_t* file = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (!file)
+        return JS_FALSE;
 
-    if (wcslen(file) > (_MAX_FNAME + _MAX_PATH - wcslen(Vars.szScriptPath) - 6)) {
+    // "\libs\" plus the terminator must also fit: a one-short buffer makes swprintf_s end the process.
+    if (wcslen(file) > (_MAX_FNAME + _MAX_PATH - wcslen(Vars.szScriptPath) - 7)) {
         JS_ReportError(cx, "File name too long");
         return JS_FALSE;
     }
@@ -322,6 +332,8 @@ JSAPI_FUNC(my_version) {
 }
 
 JSAPI_FUNC(my_debugLog) {
+    // Every early JS_TRUE return must leave a value: an unset rval hands the script this function (truthy).
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     for (uint i = 0; i < argc; i++) {
         if (!JSVAL_IS_NULL(JS_ARGV(cx, vp)[i])) {
             JS_BeginRequest(cx);
@@ -489,35 +501,53 @@ JSAPI_FUNC(my_keystate) {
 }
 
 JSAPI_FUNC(my_addEventListener) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    // argv is not padded to nargs: a missing argument would be read from a stale stack slot.
+    if (argc < 2)
+        THROW_ERROR(cx, "Invalid arguments");
     if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]) && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[1])) {
         char* evtName = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
-        if (evtName && strlen(evtName)) {
-            Script* self = (Script*)JS_GetContextPrivate(cx);
-            self->RegisterEvent(evtName, JS_ARGV(cx, vp)[1]);
-        } else
+        if (!evtName)
+            return JS_FALSE; // JS_EncodeStringToUTF8 failed; the engine has already reported
+        if (!evtName[0]) {
+            JS_free(cx, evtName);
             THROW_ERROR(cx, "Event name is invalid!");
+        }
+        Script* self = (Script*)JS_GetContextPrivate(cx);
+        self->RegisterEvent(evtName, JS_ARGV(cx, vp)[1]);
         JS_free(cx, evtName);
     }
     return JS_TRUE;
 }
 
 JSAPI_FUNC(my_removeEventListener) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    if (argc < 2)
+        THROW_ERROR(cx, "Invalid arguments");
     if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]) && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[1])) {
         char* evtName = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
-        if (evtName && strlen(evtName)) {
-            Script* self = (Script*)JS_GetContextPrivate(cx);
-            self->UnregisterEvent(evtName, JS_ARGV(cx, vp)[1]);
-        } else
+        if (!evtName)
+            return JS_FALSE; // JS_EncodeStringToUTF8 failed; the engine has already reported
+        if (!evtName[0]) {
+            JS_free(cx, evtName);
             THROW_ERROR(cx, "Event name is invalid!");
+        }
+        Script* self = (Script*)JS_GetContextPrivate(cx);
+        self->UnregisterEvent(evtName, JS_ARGV(cx, vp)[1]);
         JS_free(cx, evtName);
     }
     return JS_TRUE;
 }
 
 JSAPI_FUNC(my_clearEvent) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    if (argc < 1)
+        THROW_ERROR(cx, "Invalid arguments");
     if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[0])) {
         Script* self = (Script*)JS_GetContextPrivate(cx);
         char* evt = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+        if (!evt)
+            return JS_FALSE;
         self->ClearEvent(evt);
         JS_free(cx, evt);
     }
@@ -525,12 +555,14 @@ JSAPI_FUNC(my_clearEvent) {
 }
 
 JSAPI_FUNC(my_clearAllEvents) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     Script* self = (Script*)JS_GetContextPrivate(cx);
     self->ClearAllEvents();
     return JS_TRUE;
 }
 
 JSAPI_FUNC(my_js_strict) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (argc == NULL) {
         JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(((JS_GetOptions(cx) & JSOPTION_STRICT) == JSOPTION_STRICT)));
         return JS_TRUE;
@@ -538,7 +570,10 @@ JSAPI_FUNC(my_js_strict) {
 
     if (argc == 1) {
         bool bFlag = ((JS_GetOptions(cx) & JSOPTION_STRICT) == JSOPTION_STRICT);
-        if (JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[0])) {
+        JSBool bSet = JS_FALSE;
+        if (!JS_ValueToBoolean(cx, JS_ARGV(cx, vp)[0], &bSet))
+            return JS_FALSE;
+        if (bSet) {
             if (!bFlag)
                 JS_ToggleOptions(cx, JSOPTION_STRICT);
         } else {
@@ -578,7 +613,11 @@ JSAPI_FUNC(my_handler) {
 
 JSAPI_FUNC(my_loadMpq) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "loadMpq: the file name must be a string");
     const wchar_t* path = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (!path)
+        return JS_FALSE;
 
     if (isValidPath(path)) {
         LoadMPQ(path);

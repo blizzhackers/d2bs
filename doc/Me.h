@@ -128,7 +128,7 @@ public:
 
 	/** Get all items from inventory.
 	 *
-	 * \return An array of all the items from inventory.
+	 * \return An array of all the items from inventory; empty when the unit has no items, has left the game, or the method is called on something that is not a unit.
 	 */
 	Unit[] getItems();
 
@@ -473,7 +473,8 @@ public:
 	 *
 	 * \param nQuest The quest number.
 	 *
-	 * \return The quest flag for the specified quest.
+	 * \return The quest flag for the specified quest, or undefined when act and
+	 * quest are not both integers.
 	 */
 	int getQuest(int nAct, int nQuest);
 

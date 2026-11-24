@@ -61,6 +61,8 @@ struct invUnit {
     DWORD dwOwnerType;
 };
 
+myUnit* GetUnitPrivate(JSContext* cx, JSObject* obj);
+
 enum unit_tinyid {
     UNIT_TYPE,
     UNIT_CLASSID,

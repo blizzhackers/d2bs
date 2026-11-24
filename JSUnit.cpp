@@ -30,6 +30,14 @@ void unit_finalize(JSFreeOp* fop, JSObject* obj) {
     JS_SetPrivate(obj, NULL);
 }
 
+// Only a Unit object's private is a myUnit/invUnit; any other object's private is foreign data or, on a class
+// without a private, garbage. NULL obj is a failed JS_THIS_OBJECT.
+myUnit* GetUnitPrivate(JSContext* cx, JSObject* obj) {
+    if (!obj)
+        return NULL;
+    return (myUnit*)JS_GetInstancePrivate(cx, obj, &unit_class, NULL);
+}
+
 // JSBool unit_equal(JSContext *cx, JSObject *obj, jsval v, JSBool *bp) // not 1.8 compatable
 //{
 //	if(ClientState() == ClientStateInGame) {
@@ -68,8 +76,10 @@ JSAPI_PROP(unit_getProperty) {
         //*vp = BOOLEAN_TO_JSVAL(GameReady());
         break;
     case ME_ACCOUNT:
-        if (!pData)
+        if (!pData) {
+            JS_EndRequest(cx);
             return JS_TRUE;
+        }
         if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szAccountName))) {
             JS_EndRequest(cx);
             return JS_FALSE;
@@ -77,8 +87,10 @@ JSAPI_PROP(unit_getProperty) {
         // vp.setString(JS_NewStringCopyZ(cx, pData->szAccountName));
         break;
     case ME_CHARNAME:
-        if (!pData)
+        if (!pData) {
+            JS_EndRequest(cx);
             return JS_TRUE;
+        }
         if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szPlayerName))) {
             JS_EndRequest(cx);
             return JS_FALSE;
@@ -94,27 +106,37 @@ JSAPI_PROP(unit_getProperty) {
         vp.setInt32(D2CLIENT_GetDifficulty());
         break;
     case ME_MAXDIFF:
-        vp.setInt32(pData->nMaxDiff);
+        // Every other BnData read guards a NULL; undefined, so a NULL never returns the slot's last value.
+        if (pData)
+            vp.setInt32(pData->nMaxDiff);
+        else
+            vp.setUndefined();
         break;
     case ME_GAMENAME:
-        if (!pInfo)
+        if (!pInfo) {
+            JS_EndRequest(cx);
             return JS_TRUE;
+        }
         if (!StoreString(vp, JS_NewStringCopyZ(cx, pInfo->szGameName))) {
             JS_EndRequest(cx);
             return JS_FALSE;
         }
         break;
     case ME_GAMEPASSWORD:
-        if (!pInfo)
+        if (!pInfo) {
+            JS_EndRequest(cx);
             return JS_TRUE;
+        }
         if (!StoreString(vp, JS_NewStringCopyZ(cx, pInfo->szGamePassword))) {
             JS_EndRequest(cx);
             return JS_FALSE;
         }
         break;
     case ME_GAMESERVERIP:
-        if (!pInfo)
+        if (!pInfo) {
+            JS_EndRequest(cx);
             return JS_TRUE;
+        }
         if (!StoreString(vp, JS_NewStringCopyZ(cx, pInfo->szGameServerIp))) {
             JS_EndRequest(cx);
             return JS_FALSE;
@@ -154,13 +176,17 @@ JSAPI_PROP(unit_getProperty) {
         vp.setBoolean(Vars.bQuitOnHostile);
         break;
     case ME_REALM:
-        if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szRealmName))) {
+        if (!pData)
+            vp.setUndefined();
+        else if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szRealmName))) {
             JS_EndRequest(cx);
             return JS_FALSE;
         }
         break;
     case ME_REALMSHORT:
-        if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szRealmName2))) {
+        if (!pData)
+            vp.setUndefined();
+        else if (!StoreString(vp, JS_NewStringCopyZ(cx, pData->szRealmName2))) {
             JS_EndRequest(cx);
             return JS_FALSE;
         }
@@ -218,7 +244,7 @@ JSAPI_PROP(unit_getProperty) {
         return JS_TRUE;
     // JSObject* obj ;
     // JS_ValueToObject(cx,  JS_CALLEE(cx,vp),obj);
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, obj);
+    myUnit* lpUnit = GetUnitPrivate(cx, obj);
     if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
 
@@ -639,14 +665,21 @@ JSAPI_FUNC(unit_getUnit) {
     uint32 nClassId = (uint32)-1;
     uint32 nMode = (uint32)-1;
     uint32 nUnitId = (uint32)-1;
-    char* szName = "";
+    // NULL unless the name was encoded here, so only an engine-owned string reaches JS_free.
+    char* szName = NULL;
 
     JS_BeginRequest(cx);
     if (argc > 0 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
         nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
 
-    if (argc > 1 && JSVAL_IS_STRING(JS_ARGV(cx, vp)[1]))
+    if (argc > 1 && JSVAL_IS_STRING(JS_ARGV(cx, vp)[1])) {
         szName = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[1]));
+        // NULL is an engine failure (out of memory); the engine has reported it.
+        if (!szName) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
+    }
 
     if (argc > 1 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) && !JSVAL_IS_NULL(JS_ARGV(cx, vp)[1]))
         JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nClassId);
@@ -686,7 +719,8 @@ JSAPI_FUNC(unit_getUnit) {
     pmyUnit->dwMode = nMode;
     pmyUnit->dwType = pUnit->dwType;
     pmyUnit->dwUnitId = pUnit->dwUnitId;
-    strcpy_s(pmyUnit->szName, sizeof(pmyUnit->szName), szName);
+    // _TRUNCATE: a name too long for the buffer is cut, not fatal; no unit name is that long, so the cut name matches nothing.
+    strncpy_s(pmyUnit->szName, sizeof(pmyUnit->szName), szName ? szName : "", _TRUNCATE);
     JS_free(cx, szName);
 
     JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
@@ -703,8 +737,8 @@ JSAPI_FUNC(unit_getUnit) {
 }
 
 JSAPI_FUNC(unit_getNext) {
-    JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    Private* unit = (Private*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+    Private* unit = (Private*)GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!unit)
         return JS_TRUE;
@@ -718,14 +752,20 @@ JSAPI_FUNC(unit_getNext) {
         JS_BeginRequest(cx);
         if (argc > 0 && JSVAL_IS_STRING(JS_ARGV(cx, vp)[0])) {
             char* szText = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
-            strcpy_s(lpUnit->szName, 128, szText);
+            // NULL is an engine failure (out of memory); the engine has reported it.
+            if (!szText) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
+            // _TRUNCATE: a name too long for the buffer is cut, not fatal; no unit name is that long, so the cut name matches nothing.
+            strncpy_s(lpUnit->szName, sizeof(lpUnit->szName), szText, _TRUNCATE);
             JS_free(cx, szText);
         }
 
-        if (argc > 0 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0]) && !JSVAL_IS_NULL(JS_ARGV(cx, vp)[1]))
+        if (argc > 0 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0]) && !(argc > 1 && JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])))
             JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], (uint32*)&(lpUnit->dwClassId));
 
-        if (argc > 1 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) && !JSVAL_IS_NULL(JS_ARGV(cx, vp)[2]))
+        if (argc > 1 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) && !(argc > 2 && JSVAL_IS_NULL(JS_ARGV(cx, vp)[2])))
             JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], (uint32*)&(lpUnit->dwMode));
         JS_EndRequest(cx);
         pUnit = GetNextUnit(pUnit, lpUnit->szName, lpUnit->dwClassId, lpUnit->dwType, lpUnit->dwMode);
@@ -754,14 +794,18 @@ JSAPI_FUNC(unit_getNext) {
         JS_BeginRequest(cx);
         if (argc > 0 && JSVAL_IS_STRING(JS_ARGV(cx, vp)[0])) {
             char* szText = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
-            strcpy_s(pmyUnit->szName, 128, szText);
+            if (!szText) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
+            strncpy_s(pmyUnit->szName, sizeof(pmyUnit->szName), szText, _TRUNCATE);
             JS_free(cx, szText);
         }
 
-        if (argc > 0 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0]) && !JSVAL_IS_NULL(JS_ARGV(cx, vp)[1]))
+        if (argc > 0 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0]) && !(argc > 1 && JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])))
             JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], (uint32*)&(pmyUnit->dwClassId));
 
-        if (argc > 1 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) && !JSVAL_IS_NULL(JS_ARGV(cx, vp)[2]))
+        if (argc > 1 && JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) && !(argc > 2 && JSVAL_IS_NULL(JS_ARGV(cx, vp)[2])))
             JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], (uint32*)&(pmyUnit->dwMode));
         JS_EndRequest(cx);
         UnitAny* nextItem = GetInvNextUnit(pUnit, pOwner, pmyUnit->szName, pmyUnit->dwClassId, pmyUnit->dwMode);
@@ -844,7 +888,7 @@ JSAPI_FUNC(unit_cancel) {
 }
 
 JSAPI_FUNC(unit_repair) {
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
     if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
@@ -869,7 +913,7 @@ JSAPI_FUNC(unit_repair) {
 }
 
 JSAPI_FUNC(unit_useMenu) {
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
     if (argc < 1 || !JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
@@ -897,7 +941,7 @@ JSAPI_FUNC(unit_interact) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
@@ -937,7 +981,7 @@ JSAPI_FUNC(unit_interact) {
         JS_BeginRequest(cx);
         if (!JS_ValueToECMAInt32(cx, JS_ARGV(cx, vp)[0], &nWaypointID)) {
             JS_EndRequest(cx);
-            return JS_TRUE;
+            return JS_FALSE;
         }
         JS_EndRequest(cx);
         int retVal = 0;
@@ -987,7 +1031,7 @@ JSAPI_FUNC(unit_getStat) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
@@ -999,12 +1043,17 @@ JSAPI_FUNC(unit_getStat) {
     if (!pUnit)
         return JS_TRUE;
 
+    // No stat id reads as false: JS_ConvertArguments' missing-argument report would name the function from the
+    // callee slot, which the rval above has overwritten.
+    if (argc < 1)
+        return JS_TRUE;
+
     jsint nStat = 0;
     jsint nSubIndex = 0;
     JS_BeginRequest(cx);
     if (!JS_ConvertArguments(cx, argc, JS_ARGV(cx, vp), "i/i", &nStat, &nSubIndex)) {
         JS_EndRequest(cx);
-        return JS_TRUE;
+        return JS_FALSE;
     }
     JS_EndRequest(cx);
 
@@ -1170,7 +1219,6 @@ bool InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
                 jsuint len = 0;
                 if (!JS_GetArrayLength(cx, arr, &len))
                     return false;
-                len++;
                 JS_BeginRequest(cx);
                 if (!JS_SetElement(cx, arr, len, &obj)) {
                     JS_EndRequest(cx);
@@ -1223,12 +1271,16 @@ JSAPI_FUNC(unit_getState) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
     if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
+
+    // argv is not padded to nargs: with no state id, argv[0] is a stale stack slot.
+    if (argc < 1)
+        THROW_ERROR(cx, "Invalid arguments");
 
     UnitAny* pUnit = D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType);
 
@@ -1239,7 +1291,7 @@ JSAPI_FUNC(unit_getState) {
     JS_BeginRequest(cx);
     if (JS_ValueToInt32(cx, JS_ARGV(cx, vp)[0], &nState) == JS_FALSE) {
         JS_EndRequest(cx);
-        return JS_TRUE;
+        return JS_FALSE;
     }
     JS_EndRequest(cx);
 
@@ -1253,10 +1305,12 @@ JSAPI_FUNC(unit_getState) {
 }
 
 JSAPI_FUNC(item_getFlags) {
+    // Every early JS_TRUE return must leave a value: an unset rval hands the script this function (truthy).
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
@@ -1272,13 +1326,14 @@ JSAPI_FUNC(item_getFlags) {
 }
 
 JSAPI_FUNC(item_getFlag) {
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
     if (argc < 1 || !JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
         return JS_TRUE;
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
@@ -1347,6 +1402,7 @@ JSAPI_FUNC(item_getFlag) {
 //}
 
 JSAPI_FUNC(item_getItemCost) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
@@ -1358,7 +1414,7 @@ JSAPI_FUNC(item_getItemCost) {
     if (argc < 1 || !JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
         return JS_TRUE;
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
@@ -1372,7 +1428,7 @@ JSAPI_FUNC(item_getItemCost) {
 
     if (argc > 1) {
         if (JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[1])) {
-            myUnit* pmyNpc = (myUnit*)JS_GetPrivate(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[1]));
+            myUnit* pmyNpc = GetUnitPrivate(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[1]));
 
             if (!pmyNpc || (pmyNpc->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
                 return JS_TRUE;
@@ -1386,7 +1442,7 @@ JSAPI_FUNC(item_getItemCost) {
             JS_BeginRequest(cx);
             if (!JS_ValueToECMAInt32(cx, JS_ARGV(cx, vp)[1], &nNpcClassId)) {
                 JS_EndRequest(cx);
-                return JS_TRUE;
+                return JS_FALSE;
             }
             JS_EndRequest(cx);
         }
@@ -1418,15 +1474,21 @@ JSAPI_FUNC(unit_getItems) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
-    if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
+    UnitAny* pUnit = NULL;
+    if (lpUnit && (lpUnit->_dwPrivateType & PRIVATE_UNIT) == PRIVATE_UNIT)
+        pUnit = D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType);
+
+    // Nothing to list (not a unit, no inventory, an empty one, or gone) gets an empty array: the documented Unit[]
+    // return, which `getItems().some(...)` callers rely on.
+    if (!pUnit || !pUnit->pInventory || !pUnit->pInventory->pFirstItem) {
+        JSObject* pEmpty = JS_NewArrayObject(cx, 0, NULL);
+        if (!pEmpty)
+            return JS_FALSE;
+        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pEmpty));
         return JS_TRUE;
-
-    UnitAny* pUnit = D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType);
-
-    if (!pUnit || !pUnit->pInventory || !pUnit->pInventory->pFirstItem)
-        return JS_TRUE;
+    }
     JS_BeginRequest(cx);
     JSObject* pReturnArray = JS_NewArrayObject(cx, 0, NULL);
     if (!pReturnArray || !JS_AddRoot(cx, &pReturnArray)) {
@@ -1473,6 +1535,7 @@ JSAPI_FUNC(unit_getItems) {
 }
 
 JSAPI_FUNC(unit_getSkill) {
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
     if (argc == NULL || argc > 3)
         return JS_TRUE;
 
@@ -1483,7 +1546,7 @@ JSAPI_FUNC(unit_getSkill) {
     jsint nSkillId = NULL;
     jsint nExt = NULL;
 
-    myUnit* pmyUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* pmyUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
     if (!pmyUnit)
         return JS_TRUE;
 
@@ -1599,6 +1662,12 @@ JSAPI_FUNC(unit_getSkill) {
 JSAPI_FUNC(item_shop) {
 
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+    // The mode is the last argument; with none, argv[argc - 1] would be `this`.
+    uint32 nModeArg = 0;
+    if (argc < 1 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[argc - 1]) ||
+        !JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[argc - 1], &nModeArg))
+        return JS_TRUE;
+
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
@@ -1609,7 +1678,7 @@ JSAPI_FUNC(item_shop) {
         return JS_TRUE;
     }
 
-    myUnit* lpItem = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpItem = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!lpItem || (lpItem->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT) {
         delete cRoom;
@@ -1629,7 +1698,7 @@ JSAPI_FUNC(item_shop) {
     }
 
     UnitAny* pNPC = D2CLIENT_GetCurrentInteractingNPC();
-    DWORD dwMode = JSVAL_TO_INT(JS_ARGV(cx, vp)[argc - 1]);
+    DWORD dwMode = nModeArg;
 
     // Check if we are interacted.
     if (!pNPC) {
@@ -1709,7 +1778,7 @@ JSAPI_FUNC(unit_getParent) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
@@ -1808,7 +1877,7 @@ JSAPI_FUNC(unit_getMerc) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
 
     if (lpUnit && (lpUnit->_dwPrivateType & PRIVATE_UNIT) == PRIVATE_UNIT) {
@@ -1839,6 +1908,7 @@ JSAPI_FUNC(unit_getMerc) {
 }
 
 JSAPI_FUNC(unit_getMercHP) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
     JSObject* test = JS_THIS_OBJECT(cx, vp);
@@ -1872,6 +1942,9 @@ JSAPI_FUNC(unit_setskill) {
 
     if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[0])) {
         char* name = JS_EncodeStringToUTF8(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
+        // NULL is an engine failure (out of memory); the engine has reported it.
+        if (!name)
+            return JS_FALSE;
         nSkillId = GetSkillByName(name);
         JS_free(cx, name);
     } else if (JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
@@ -1879,18 +1952,16 @@ JSAPI_FUNC(unit_setskill) {
     else
         return JS_TRUE;
 
-    if (JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
+    if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
         nHand = !!JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
     else
         return JS_TRUE;
 
     if (argc == 3 && JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[2])) {
         JSObject* object = JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[2]);
-        if (JS_InstanceOf(cx, object, &unit_class, JS_ARGV(cx, vp))) {
-            myUnit* unit = (myUnit*)JS_GetPrivate(cx, object);
-            if (unit->dwType == UNIT_ITEM)
-                itemId = unit->dwUnitId;
-        }
+        myUnit* unit = GetUnitPrivate(cx, object);
+        if (unit && unit->dwType == UNIT_ITEM)
+            itemId = unit->dwUnitId;
     }
 
     if (SetSkill(cx, nSkillId, nHand, itemId))
@@ -1904,32 +1975,47 @@ JSAPI_FUNC(my_overhead) {
         THROW_WARNING(cx, vp, "Game not ready");
 
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-    myUnit* pmyUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* pmyUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!pmyUnit || (pmyUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
 
+    // A gone unit returns false before the message is read, so its toString() never runs.
+    if (!D2CLIENT_FindUnit(pmyUnit->dwUnitId, pmyUnit->dwType))
+        return JS_TRUE;
+
+    // argv is not padded to nargs: with no message, argv[0] is a stale stack slot.
+    if (argc < 1)
+        THROW_ERROR(cx, "Invalid arguments");
+
+    const wchar_t* lpszText = NULL;
+    if (!JSVAL_IS_NULL(JS_ARGV(cx, vp)[0]) && !JSVAL_IS_VOID(JS_ARGV(cx, vp)[0])) {
+        JSString* str = JS_ValueToString(cx, JS_ARGV(cx, vp)[0]);
+        if (!str)
+            return JS_FALSE;
+        lpszText = JS_GetStringCharsZ(cx, str);
+        if (!lpszText)
+            return JS_FALSE;
+    }
+
+    // toString() can run script, during which the unit may leave the game: find it again.
     UnitAny* pUnit = D2CLIENT_FindUnit(pmyUnit->dwUnitId, pmyUnit->dwType);
 
     if (!pUnit)
         return JS_TRUE;
 
-    if (!JSVAL_IS_NULL(JS_ARGV(cx, vp)[0]) && !JSVAL_IS_VOID(JS_ARGV(cx, vp)[0])) {
-        const wchar_t* lpszText = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
-        if (lpszText && lpszText[0]) {
-            // Fix overhead msg for locale text
-            // wchar_t* tmpw = AnsiToUnicode(lpszText);
-            // Convert back to multibyte in locale code page
-            char* tmpc = UnicodeToAnsi(lpszText, CP_ACP);
-            OverheadMsg* pMsg = D2COMMON_GenerateOverheadMsg(NULL, tmpc, *p_D2CLIENT_OverheadTrigger);
-            if (pMsg) {
-                // D2COMMON_FixOverheadMsg(pMsg, NULL);
-                pUnit->pOMsg = pMsg;
-            }
-            delete[] tmpc;
-            // delete[] tmpw;
+    if (lpszText && lpszText[0]) {
+        // Fix overhead msg for locale text
+        // wchar_t* tmpw = AnsiToUnicode(lpszText);
+        // Convert back to multibyte in locale code page
+        char* tmpc = UnicodeToAnsi(lpszText, CP_ACP);
+        OverheadMsg* pMsg = D2COMMON_GenerateOverheadMsg(NULL, tmpc, *p_D2CLIENT_OverheadTrigger);
+        if (pMsg) {
+            // D2COMMON_FixOverheadMsg(pMsg, NULL);
+            pUnit->pOMsg = pMsg;
         }
-        // JS_free(cx, lpszText);
+        delete[] tmpc;
+        // delete[] tmpw;
     }
 
     JS_SET_RVAL(cx, vp, JSVAL_TRUE);
@@ -1937,6 +2023,7 @@ JSAPI_FUNC(my_overhead) {
 }
 
 JSAPI_FUNC(my_revive) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
@@ -1950,7 +2037,7 @@ JSAPI_FUNC(unit_getItem) {
         THROW_WARNING(cx, vp, "Game not ready");
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
 
-    myUnit* pmyUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* pmyUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!pmyUnit || (pmyUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
@@ -1967,8 +2054,12 @@ JSAPI_FUNC(unit_getItem) {
 
     if (argc > 0 && JSVAL_IS_STRING(JS_ARGV(cx, vp)[0])) {
         const wchar_t* szText = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
+        // NULL is an engine failure (out of memory); the engine has reported it.
+        if (!szText)
+            return JS_FALSE;
         char* euc = UnicodeToAnsi(szText, CP_ACP);
-        strcpy_s(szName, sizeof(szName), euc);
+        // _TRUNCATE: a name too long for the buffer is cut, not fatal; no item name is that long, so the cut name matches nothing.
+        strncpy_s(szName, sizeof(szName), euc, _TRUNCATE);
         delete[] euc;
     }
 
@@ -2014,10 +2105,11 @@ JSAPI_FUNC(unit_getItem) {
 }
 
 JSAPI_FUNC(unit_move) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* pmyUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* pmyUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!pmyUnit || (pmyUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
@@ -2037,9 +2129,9 @@ JSAPI_FUNC(unit_move) {
             return JS_TRUE;
 
         if (JS_ValueToInt32(cx, JS_ARGV(cx, vp)[0], &x) == JS_FALSE)
-            return JS_TRUE;
+            return JS_FALSE;
         if (JS_ValueToInt32(cx, JS_ARGV(cx, vp)[1], &y) == JS_FALSE)
-            return JS_TRUE;
+            return JS_FALSE;
     } else {
         x = D2CLIENT_GetUnitX(pUnit);
         y = D2CLIENT_GetUnitY(pUnit);
@@ -2053,13 +2145,14 @@ JSAPI_FUNC(unit_move) {
 }
 
 JSAPI_FUNC(unit_getEnchant) {
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
     if (argc < 1 || !JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
         return JS_TRUE;
 
-    myUnit* pmyUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* pmyUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!pmyUnit || (pmyUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;
@@ -2082,6 +2175,7 @@ JSAPI_FUNC(unit_getEnchant) {
 }
 
 JSAPI_FUNC(unit_getQuest) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
@@ -2097,6 +2191,7 @@ JSAPI_FUNC(unit_getQuest) {
 }
 
 JSAPI_FUNC(unit_getMinionCount) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
@@ -2105,7 +2200,7 @@ JSAPI_FUNC(unit_getMinionCount) {
 
     jsint nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
 
-    myUnit* pmyUnit = (myUnit*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* pmyUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
 
     if (!pmyUnit || (pmyUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;

@@ -2,9 +2,9 @@
  *
  * \todo Get a better description (and understanding).
  *
- * After close(), a go() that returns or the database's close() the statement is closed: every method except
- * close() throws "The statement is closed", sql reads undefined and ready reads false. When go()'s step reports
- * an error, go() throws and the statement stays open, not ready.
+ * The statement is closed after close(), after a go() that returns, and after the database's close(): every method
+ * except close() throws "The statement is closed", sql reads undefined and ready reads false. When go()'s step
+ * reports an error, go() throws and the statement stays open, not ready.
  */
 class DBStatement
 {
@@ -27,6 +27,8 @@ public:
 	 *
 	 * \param colIndex The index of the column to get data from.
 	 *
+	 * Throws "Invalid column index" if colIndex is not a column of the statement.
+	 *
 	 * \return The data.
 	 */
 	double getColumnValue(int colIndex);
@@ -34,6 +36,8 @@ public:
 	/** Get the value from the column specified by index.
 	 *
 	 * \param colIndex The index of the column to get data from.
+	 *
+	 * Throws "Invalid column index" if colIndex is not a column of the statement.
 	 *
 	 * \return The data.
 	 */

@@ -526,10 +526,6 @@ JSAPI_FUNC(sqlite_stmt_getobject) {
         // sqlite column names are UTF-8 and a char* property name is read as Latin-1, so the key is decoded the
         // same way getColumnName decodes the name.
         wchar_t* wName = AnsiToUnicode(colnam);
-        if (!wName) {
-            JS_ReportOutOfMemory(cx);
-            return JS_FALSE;
-        }
         JSBool defined = JS_DefineUCProperty(cx, obj2, (const jschar*)wName, wcslen(wName), val, NULL, NULL, JSPROP_ENUMERATE);
         delete[] wName;
         if (!defined)
@@ -583,6 +579,8 @@ JSAPI_FUNC(sqlite_stmt_colval) {
         THROW_ERROR(cx, "Invalid parameter for SQLiteStatement.getColumnValue");
     jsval rval = JS_RVAL(cx, vp);
     int i = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
+    if (i < 0 || i >= sqlite3_column_count(stmt))
+        THROW_ERROR(cx, "Invalid column index");
     switch (sqlite3_column_type(stmt, i)) {
     case SQLITE_INTEGER:
         // jsdouble == double, so this conversion is no problem

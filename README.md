@@ -2425,7 +2425,7 @@ A class describing ...
 
 > Todo: Get a better description (and understanding).
 
-After [close()](#classDBStatement_1a1d8293b4debace6e99c0dbede2677ee7), a [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be) that returns or the database's close() the statement is closed: every method except close() throws "The statement is closed", `sql` reads undefined and `ready` reads false. When go()'s step reports an error, go() throws and the statement stays open, not ready.
+The statement is closed after [close()](#classDBStatement_1a1d8293b4debace6e99c0dbede2677ee7), after a [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be) that returns, and after the database's close(): every method except close() throws "The statement is closed", `sql` reads undefined and `ready` reads false. When go()'s step reports an error, go() throws and the statement stays open, not ready.
 
 ## Summary
 
@@ -2479,6 +2479,8 @@ Get the value from the column specified by index.
 #### Parameters
 * `colIndex` The index of the column to get data from.
 
+Throws "Invalid column index" if colIndex is not a column of the statement.
+
 #### Returns
 The data.
 
@@ -2488,6 +2490,8 @@ Get the value from the column specified by index.
 
 #### Parameters
 * `colIndex` The index of the column to get data from.
+
+Throws "Invalid column index" if colIndex is not a column of the statement.
 
 #### Returns
 The data.

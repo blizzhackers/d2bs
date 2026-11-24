@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <io.h>
+#include <new>
 
 #include "JSFile.h"
 #include "D2BS.h"
@@ -81,7 +82,7 @@ JSAPI_PROP(file_getProperty) {
                 vp.setInt32(0); //= JSVAL_ZERO;
             break;
         case FILE_PATH:
-            if (!StoreString(vp, JS_NewUCStringCopyZ(cx, fdata->path + 1))) {
+            if (!StoreString(vp, JS_NewUCStringCopyZ(cx, fdata->path))) {
                 JS_EndRequest(cx);
                 return JS_FALSE;
             }
@@ -208,6 +209,12 @@ JSAPI_FUNC(file_open) {
 
     fdata->mode = mode;
     fdata->path = _wcsdup(file);
+    if (!fdata->path) {
+        fclose(fptr);
+        delete fdata;
+        JS_ReportOutOfMemory(cx);
+        return JS_FALSE;
+    }
     fdata->autoflush = autoflush;
     fdata->locked = lockFile;
     fdata->fptr = fptr;
@@ -285,100 +292,197 @@ JSAPI_FUNC(file_reopen) {
 }
 
 JSAPI_FUNC(file_read) {
+    // Not a File: the nothing value. Setting rval before JS_THIS_OBJECT is safe (it reads only vp[1]).
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
-    if (fdata && fdata->fptr) {
-        clearerr(fdata->fptr);
-        int32 count = 1;
-        if (!(argc > 0 && JSVAL_TO_INT(JS_ARGV(cx, vp)[0]) > 0 && JS_ValueToInt32(cx, JS_ARGV(cx, vp)[0], &count)))
-            THROW_ERROR(cx, "Invalid arguments");
+    if (!fdata)
+        return JS_TRUE;
+    if (!fdata->fptr)
+        THROW_ERROR(cx, "File is not open");
 
-        if (fdata->mode > 2) {
-            // binary mode
-            int* result = new int[count + 1];
-            memset(result, 0, (count + 1) * sizeof(int));
-            uint32 size = 0;
-            if (fdata->locked)
-                size = fread(result, sizeof(int), count, fdata->fptr);
-            else
-                size = _fread_nolock(result, sizeof(int), count, fdata->fptr);
+    clearerr(fdata->fptr);
+    int32 count = 0;
+    // JS_ValueToInt32 rounds to nearest and fails on NaN or a value outside int32
+    if (argc < 1 || !JS_ValueToInt32(cx, JS_ARGV(cx, vp)[0], &count) || count <= 0)
+        THROW_ERROR(cx, "Invalid arguments");
+    // The count's valueOf can run script that closes this File.
+    if (!fdata->fptr)
+        THROW_ERROR(cx, "File is not open");
 
-            if (size != (uint32)count && ferror(fdata->fptr)) {
-                const char* error = _strerror("Read failed");
+    // An update stream needs a seek between a write and a read; a seek to the current position does that
+    // and keeps buffered read-ahead, which fflush on a reading stream discards in msvcr100. _IOWRT is the
+    // VS2010 CRT's public FILE flag (stdio.h) for "the last operation was a write".
+    if (fdata->fptr->_flag & _IOWRT) {
+        if (fdata->locked)
+            _fseeki64(fdata->fptr, 0, SEEK_CUR);
+        else
+            _fseeki64_nolock(fdata->fptr, 0, SEEK_CUR);
+    }
+
+    // A count past the end of the file would only size the buffer; bounding it keeps a huge count from
+    // ending the process in new[] (no C++ exceptions in this build). 64-bit so a file past 2 GB still reads.
+    __int64 len = _filelengthi64(_fileno(fdata->fptr));
+    if (len < 0)
+        len = 0;
+
+    if (fdata->mode > 2) {
+        // binary mode
+        __int64 pos = fdata->locked ? _ftelli64(fdata->fptr) : _ftelli64_nolock(fdata->fptr);
+        __int64 left = (pos >= 0 && len >= pos) ? len - pos : 0;
+        __int64 cap = (left + 3) / 4;
+        int32 want = ((__int64)count < cap) ? count : (int32)cap;
+        // A read at the end must still ask fread for an element, or EOF is never set and eof stays false.
+        if (want < 1)
+            want = 1;
+
+        int* result = new (std::nothrow) int[(size_t)want + 1];
+        if (!result) {
+            JS_ReportOutOfMemory(cx);
+            return JS_FALSE;
+        }
+        memset(result, 0, (want + 1) * sizeof(int));
+        uint32 size = 0;
+        if (fdata->locked)
+            size = fread(result, sizeof(int), want, fdata->fptr);
+        else
+            size = _fread_nolock(result, sizeof(int), want, fdata->fptr);
+
+        if (size != (uint32)want && ferror(fdata->fptr)) {
+            const char* error = _strerror("Read failed");
+            delete[] result;
+            THROW_ERROR(cx, error);
+        }
+        // fread leaves a partial trailing element in result[0] without counting it; no whole int reads as 0.
+        if (count == 1)
+            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(size ? result[0] : 0));
+        else {
+            JS_BeginRequest(cx);
+            JSObject* arr = JS_NewArrayObject(cx, 0, NULL);
+            if (!arr) {
+                JS_EndRequest(cx);
                 delete[] result;
-                THROW_ERROR(cx, error);
+                return JS_FALSE;
             }
-            if (count == 1)
-                JS_SET_RVAL(cx, vp, INT_TO_JSVAL(result[0]));
-            else {
-                JS_BeginRequest(cx);
-                JSObject* arr = JS_NewArrayObject(cx, 0, NULL);
-                if (!arr) {
+            JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
+            for (uint32 i = 0; i < size; i++) {
+                jsval val = INT_TO_JSVAL(result[i]);
+                if (!JS_SetElement(cx, arr, i, &val)) {
                     JS_EndRequest(cx);
                     delete[] result;
                     return JS_FALSE;
                 }
-                JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
-                for (int i = 0; i < count; i++) {
-                    jsval val = INT_TO_JSVAL(result[i]);
-                    if (!JS_SetElement(cx, arr, i, &val)) {
-                        JS_EndRequest(cx);
-                        delete[] result;
-                        return JS_FALSE;
-                    }
-                }
-                JS_EndRequest(cx);
             }
-            delete[] result;
-        } else {
-            uint size = 0;
-            int offset = 0;
-            bool begin = false;
-
-            if (fdata->locked)
-                size = ftell(fdata->fptr);
-            else
-                size = _ftell_nolock(fdata->fptr);
-
-            if (size == 0)
-                begin = true;
-            // text mode
-            if (fdata->locked)
-                fflush(fdata->fptr);
-            else
-                _fflush_nolock(fdata->fptr);
-
-            char* result = new char[count + 1];
-            memset(result, 0, count + 1);
-            size = 0;
-            if (fdata->locked)
-                size = fread(result, sizeof(char), count, fdata->fptr);
-            else
-                size = _fread_nolock(result, sizeof(char), count, fdata->fptr);
-
-            if (size != (uint32)count && ferror(fdata->fptr)) {
-                const char* error = _strerror("Read failed");
-                delete[] result;
-                THROW_ERROR(cx, error);
-            }
-
-            if (begin && size > 2 && result[0] == (char)0xEF && result[1] == (char)0xBB && result[2] == (char)0xBF) { // skip BOM
-                offset = 3;
-            }
-            wchar_t* wresult = AnsiToUnicode(result + offset);
-            JSString* str = JS_NewUCStringCopyZ(cx, wresult);
-            delete[] wresult;
-            delete[] result;
-            if (!str)
-                return JS_FALSE;
-            JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(str));
+            JS_EndRequest(cx);
         }
+        delete[] result;
+    } else {
+        uint size = 0;
+        int offset = 0;
+        bool begin = false;
+
+        if (fdata->locked)
+            size = ftell(fdata->fptr);
+        else
+            size = _ftell_nolock(fdata->fptr);
+
+        if (size == 0)
+            begin = true;
+
+        // text mode: bounded by the whole file length, because msvcr100's text-mode ftell miscounts lone-LF
+        // files and a too-small bound would truncate the read; text never yields more chars than bytes
+        int32 want = ((__int64)count < len) ? count : (int32)len;
+        // An empty file still needs one fread element so EOF is set and eof turns true.
+        if (want < 1)
+            want = 1;
+        char* result = new (std::nothrow) char[(size_t)want + 1];
+        if (!result) {
+            JS_ReportOutOfMemory(cx);
+            return JS_FALSE;
+        }
+        memset(result, 0, want + 1);
+        size = 0;
+        if (fdata->locked)
+            size = fread(result, sizeof(char), want, fdata->fptr);
+        else
+            size = _fread_nolock(result, sizeof(char), want, fdata->fptr);
+
+        if (size != (uint32)want && ferror(fdata->fptr)) {
+            const char* error = _strerror("Read failed");
+            delete[] result;
+            THROW_ERROR(cx, error);
+        }
+
+        if (begin && size > 2 && result[0] == (char)0xEF && result[1] == (char)0xBB && result[2] == (char)0xBF) { // skip BOM
+            offset = 3;
+        }
+        wchar_t* wresult = AnsiToUnicode(result + offset);
+        JSString* str = JS_NewUCStringCopyZ(cx, wresult);
+        delete[] wresult;
+        delete[] result;
+        if (!str)
+            return JS_FALSE;
+        JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(str));
     }
     return JS_TRUE;
 }
 
 JSAPI_FUNC(file_readLine) {
+    // Not a File: the nothing value. Setting rval before JS_THIS_OBJECT is safe (it reads only vp[1]).
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
-    if (fdata && fdata->fptr) {
+    if (!fdata)
+        return JS_TRUE;
+    if (!fdata->fptr)
+        THROW_ERROR(cx, "File is not open");
+
+    uint size = 0;
+    int offset = 0;
+    bool begin = false;
+
+    if (fdata->locked)
+        size = ftell(fdata->fptr);
+    else
+        size = _ftell_nolock(fdata->fptr);
+
+    if (size == 0)
+        begin = true;
+
+    char* line = readLine(fdata->fptr, fdata->locked);
+    if (!line)
+        THROW_ERROR(cx, _strerror("Read failed"));
+
+    if (begin && strlen(line) > 2 && line[0] == (char)0xEF && line[1] == (char)0xBB && line[2] == (char)0xBF) { // skip BOM
+        offset = 3;
+    }
+
+    wchar_t* wline = AnsiToUnicode(line + offset);
+    bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, wline));
+    delete[] wline;
+    free(line);
+    if (!stored)
+        return JS_FALSE;
+    return JS_TRUE;
+}
+
+JSAPI_FUNC(file_readAllLines) {
+    FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
+    if (!fdata) {
+        JSObject* empty = JS_NewArrayObject(cx, 0, NULL);
+        if (!empty)
+            return JS_FALSE;
+        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(empty));
+        return JS_TRUE;
+    }
+    if (!fdata->fptr)
+        THROW_ERROR(cx, "File is not open");
+
+    JSObject* arr = JS_NewArrayObject(cx, 0, NULL);
+    if (!arr)
+        return JS_FALSE;
+    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
+    int i = 0;
+    JS_BeginRequest(cx);
+    while (!feof(fdata->fptr)) {
         uint size = 0;
         int offset = 0;
         bool begin = false;
@@ -392,129 +496,92 @@ JSAPI_FUNC(file_readLine) {
             begin = true;
 
         char* line = readLine(fdata->fptr, fdata->locked);
-        if (!line)
-            THROW_ERROR(cx, _strerror("Read failed"));
+        if (!line) {
+            // readLine fails only when _strdup does; the loop already stops at EOF
+            JS_ReportOutOfMemory(cx); // report inside the request, then close it
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
 
         if (begin && strlen(line) > 2 && line[0] == (char)0xEF && line[1] == (char)0xBB && line[2] == (char)0xBF) { // skip BOM
             offset = 3;
         }
 
         wchar_t* wline = AnsiToUnicode(line + offset);
-        bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, wline));
+        JSString* str = JS_NewUCStringCopyZ(cx, wline);
         delete[] wline;
         free(line);
-        if (!stored)
+        if (!str) {
+            JS_EndRequest(cx);
             return JS_FALSE;
-    }
-    return JS_TRUE;
-}
-
-JSAPI_FUNC(file_readAllLines) {
-    FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
-    if (fdata && fdata->fptr) {
-        JSObject* arr = JS_NewArrayObject(cx, 0, NULL);
-        if (!arr)
-            return JS_FALSE;
-        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arr));
-        int i = 0;
-        JS_BeginRequest(cx);
-        while (!feof(fdata->fptr)) {
-            uint size = 0;
-            int offset = 0;
-            bool begin = false;
-
-            if (fdata->locked)
-                size = ftell(fdata->fptr);
-            else
-                size = _ftell_nolock(fdata->fptr);
-
-            if (size == 0)
-                begin = true;
-
-            char* line = readLine(fdata->fptr, fdata->locked);
-            if (!line)
-                THROW_ERROR(cx, _strerror("Read failed"));
-
-            if (begin && strlen(line) > 2 && line[0] == (char)0xEF && line[1] == (char)0xBB && line[2] == (char)0xBF) { // skip BOM
-                offset = 3;
-            }
-
-            wchar_t* wline = AnsiToUnicode(line + offset);
-            JSString* str = JS_NewUCStringCopyZ(cx, wline);
-            delete[] wline;
-            free(line);
-            if (!str) {
-                JS_EndRequest(cx);
-                return JS_FALSE;
-            }
-            jsval val = STRING_TO_JSVAL(str);
-            if (!JS_SetElement(cx, arr, i++, &val)) {
-                JS_EndRequest(cx);
-                return JS_FALSE;
-            }
         }
-        JS_EndRequest(cx);
+        // Define an own element: a [[Set]] could run an Array.prototype setter that closes this File mid-loop.
+        if (!JS_DefineElement(cx, arr, i++, STRING_TO_JSVAL(str), NULL, NULL, JSPROP_ENUMERATE)) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
     }
+    JS_EndRequest(cx);
     return JS_TRUE;
 }
 
 JSAPI_FUNC(file_readAll) {
+    // Not a File: the nothing value. Setting rval before JS_THIS_OBJECT is safe (it reads only vp[1]).
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
-    if (fdata && fdata->fptr) {
-        uint size = 0;
-        int offset = 0;
-        bool begin = false;
+    if (!fdata)
+        return JS_TRUE;
+    if (!fdata->fptr)
+        THROW_ERROR(cx, "File is not open");
 
-        if (fdata->locked)
-            size = ftell(fdata->fptr);
-        else
-            size = _ftell_nolock(fdata->fptr);
+    uint size = 0;
+    int offset = 0;
 
-        if (size == 0) {
-            begin = true;
-        }
+    long end;
+    if (fdata->locked)
+        end = (fseek(fdata->fptr, 0, SEEK_END) == 0) ? ftell(fdata->fptr) : -1;
+    else
+        end = (_fseek_nolock(fdata->fptr, 0, SEEK_END) == 0) ? _ftell_nolock(fdata->fptr) : -1;
 
-        if (fdata->locked)
-            fseek(fdata->fptr, 0, SEEK_END);
-        else
-            _fseek_nolock(fdata->fptr, 0, SEEK_END);
+    int rewound = fdata->locked ? fseek(fdata->fptr, 0, SEEK_SET) : _fseek_nolock(fdata->fptr, 0, SEEK_SET);
 
-        size = 0;
-        if (fdata->locked)
-            size = ftell(fdata->fptr);
-        else
-            size = _ftell_nolock(fdata->fptr);
+    // ftell is -1 past 2 GB, so the size stays signed and is checked before it sizes a buffer
+    if (end < 0 || end > kMaxTextFileBytes)
+        THROW_ERROR(cx, "File is too large to read as text");
+    // A failed rewind would read from the end and return "" as if the file were empty.
+    if (rewound != 0)
+        THROW_ERROR(cx, _strerror("Read failed"));
+    size = (uint)end;
 
-        if (fdata->locked)
-            fseek(fdata->fptr, 0, SEEK_SET);
-        else
-            _fseek_nolock(fdata->fptr, 0, SEEK_SET);
-
-        char* contents = new char[size + 1];
-        memset(contents, 0, size + 1);
-        uint count = 0;
-        if (fdata->locked)
-            count = fread(contents, sizeof(char), size, fdata->fptr);
-        else
-            count = _fread_nolock(contents, sizeof(char), size, fdata->fptr);
-
-        if (count != size && ferror(fdata->fptr)) {
-            const char* error = _strerror("Read failed");
-            delete[] contents;
-            THROW_ERROR(cx, error);
-        }
-        JS_BeginRequest(cx);
-        if (begin && count > 2 && contents[0] == (char)0xEF && contents[1] == (char)0xBB && contents[2] == (char)0xBF) { // skip BOM
-            offset = 3;
-        }
-        wchar_t* wcontents = AnsiToUnicode(contents + offset);
-        bool stored = StoreString(vp, JS_NewUCStringCopyN(cx, wcontents, wcslen(wcontents)));
-        JS_EndRequest(cx);
-        delete[] wcontents;
-        delete[] contents;
-        if (!stored)
-            return JS_FALSE;
+    char* contents = new (std::nothrow) char[size + 1];
+    if (!contents) {
+        JS_ReportOutOfMemory(cx);
+        return JS_FALSE;
     }
+    memset(contents, 0, size + 1);
+    uint count = 0;
+    if (fdata->locked)
+        count = fread(contents, sizeof(char), size, fdata->fptr);
+    else
+        count = _fread_nolock(contents, sizeof(char), size, fdata->fptr);
+
+    if (count != size && ferror(fdata->fptr)) {
+        const char* error = _strerror("Read failed");
+        delete[] contents;
+        THROW_ERROR(cx, error);
+    }
+    JS_BeginRequest(cx);
+    // The read always starts at offset 0, so the BOM test needs no cursor check.
+    if (count > 2 && contents[0] == (char)0xEF && contents[1] == (char)0xBB && contents[2] == (char)0xBF) { // skip BOM
+        offset = 3;
+    }
+    wchar_t* wcontents = AnsiToUnicode(contents + offset);
+    bool stored = StoreString(vp, JS_NewUCStringCopyN(cx, wcontents, wcslen(wcontents)));
+    JS_EndRequest(cx);
+    delete[] wcontents;
+    delete[] contents;
+    if (!stored)
+        return JS_FALSE;
     return JS_TRUE;
 }
 

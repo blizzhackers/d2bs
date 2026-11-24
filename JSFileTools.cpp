@@ -16,11 +16,13 @@
 
 #include <cstdio>
 #include <io.h>
+#include <fcntl.h>
+#include <share.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <windows.h>
 #include <Shlwapi.h>
-
-#include <assert.h>
+#include <new>
 
 #include "JSFileTools.h"
 #include "D2BS.h"
@@ -36,12 +38,15 @@ JSAPI_FUNC(filetools_remove) {
         THROW_ERROR(cx, "You must supply a file name");
 
     const wchar_t* file = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (!file)
+        return JS_FALSE; // JS_GetStringCharsZ reported the OOM
     wchar_t fullpath[_MAX_PATH + _MAX_FNAME];
 
     if (getPathRelScript(file, _MAX_PATH + _MAX_FNAME, fullpath) == NULL)
         THROW_ERROR(cx, "Invalid file name");
 
-    _wremove(fullpath);
+    // A missing file is a normal outcome here, so failure is a false result rather than an exception.
+    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(_wremove(fullpath) == 0));
     return JS_TRUE;
 }
 
@@ -53,6 +58,8 @@ JSAPI_FUNC(filetools_rename) {
 
     const wchar_t* orig = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
     const wchar_t* newName = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[1]));
+    if (!orig || !newName)
+        return JS_FALSE; // JS_GetStringCharsZ reported the OOM
 
     wchar_t porig[_MAX_PATH + _MAX_FNAME];
     wchar_t pnewName[_MAX_PATH + _MAX_FNAME];
@@ -63,7 +70,7 @@ JSAPI_FUNC(filetools_rename) {
     if (getPathRelScript(newName, _MAX_PATH + _MAX_FNAME, pnewName) == NULL)
         THROW_ERROR(cx, "Invalid new file name");
 
-    _wrename(porig, pnewName);
+    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(_wrename(porig, pnewName) == 0));
     return JS_TRUE;
 }
 
@@ -75,52 +82,66 @@ JSAPI_FUNC(filetools_copy) {
 
     const wchar_t* orig = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
     const wchar_t* newName = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[1]));
+    if (!orig || !newName)
+        return JS_FALSE; // JS_GetStringCharsZ reported the OOM
+    wchar_t porig[_MAX_PATH + _MAX_FNAME];
     wchar_t pnewName[_MAX_PATH + _MAX_FNAME];
     bool overwrite = false;
 
     if (argc > 2 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[2]))
         overwrite = !!JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[2]);
 
+    if (getPathRelScript(orig, _MAX_PATH + _MAX_FNAME, porig) == NULL)
+        THROW_ERROR(cx, "Invalid original file name");
     if (getPathRelScript(newName, _MAX_PATH + _MAX_FNAME, pnewName) == NULL)
         THROW_ERROR(cx, "Invalid new file name");
 
-    if (overwrite && _waccess(pnewName, 0) == 0)
+    // Filesystem failures return false instead of throwing: scripts copy files that may be missing.
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+
+    // Defense in depth: the source's read-share mode already refuses a write open of the same file, but a
+    // self-copy must never reach _O_TRUNC. Both paths are GetFullPathNameW-normalized.
+    if (_wcsicmp(porig, pnewName) == 0)
         return JS_TRUE;
 
-    FILE* fptr1 = fileOpenRelScript(orig, L"r", cx);
-    FILE* fptr2 = fileOpenRelScript(newName, L"w", cx);
+    FILE* src = NULL;
+    if (_wfopen_s(&src, porig, L"rb") != 0 || src == NULL)
+        return JS_TRUE;
 
-    // If fileOpenRelScript failed, it already reported the error
-    if (fptr1 == NULL || fptr2 == NULL)
-        return JS_FALSE;
+    // _O_EXCL makes "keep an existing target" atomic; _O_TRUNC replaces it only when the script asked.
+    // Deny-all sharing, as master's _wfopen_s had: a second copy to the same target fails instead of interleaving.
+    int fd = -1;
+    if (_wsopen_s(&fd, pnewName, _O_WRONLY | _O_CREAT | _O_BINARY | (overwrite ? _O_TRUNC : _O_EXCL), _SH_DENYRW,
+                  _S_IREAD | _S_IWRITE) != 0) {
+        fclose(src);
+        return JS_TRUE;
+    }
+    FILE* dst = _wfdopen(fd, L"wb");
+    if (dst == NULL) {
+        _close(fd);
+        fclose(src);
+        _wremove(pnewName);
+        return JS_TRUE;
+    }
 
-    while (!feof(fptr1)) {
-        int ch = fgetc(fptr1);
-        if (ferror(fptr1)) {
-            THROW_ERROR(cx, _strerror("Read Error"));
+    char buf[4096];
+    bool ok = true;
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), src)) > 0) {
+        if (fwrite(buf, 1, n, dst) != n) {
+            ok = false;
             break;
-        } else {
-            if (!feof(fptr1))
-                fputc(ch, fptr2);
-            if (ferror(fptr2)) {
-                THROW_ERROR(cx, _strerror("Write Error"));
-                break;
-            }
         }
     }
-    if (ferror(fptr1) || ferror(fptr2)) {
-        clearerr(fptr1);
-        clearerr(fptr2);
-        fflush(fptr2);
-        fclose(fptr2);
-        fclose(fptr1);
-        _wremove(pnewName); // delete the partial file so it doesnt look like we succeeded
-        THROW_ERROR(cx, _strerror("File copy failed"));
-    }
+    if (ferror(src))
+        ok = false;
+    if (fclose(dst) != 0) // fclose flushes; a failed flush means the target is incomplete
+        ok = false;
+    fclose(src);
 
-    fflush(fptr2);
-    fclose(fptr2);
-    fclose(fptr1);
+    if (!ok)
+        _wremove(pnewName); // a partial target must not look like a finished copy
+    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(ok));
     return JS_TRUE;
 }
 
@@ -142,25 +163,32 @@ JSAPI_FUNC(filetools_readText) {
     if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
         THROW_ERROR(cx, "You must supply a file name");
     const wchar_t* fname = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (!fname)
+        return JS_FALSE; // JS_GetStringCharsZ reported the OOM
     FILE* fptr = fileOpenRelScript(fname, L"r", cx);
 
     // If fileOpenRelScript failed, it already reported the error
     if (fptr == NULL)
         return JS_FALSE;
 
-    uint size, readCount;
+    long size;
+    size_t readCount;
     char* contents;
 
-    // Determine file size
-    fseek(fptr, 0, SEEK_END);
-    size = ftell(fptr);
+    // ftell is -1 past 2 GB, so the size stays signed and is checked before it sizes a buffer
+    if (fseek(fptr, 0, SEEK_END) != 0 || (size = ftell(fptr)) < 0 || size > kMaxTextFileBytes) {
+        fclose(fptr);
+        THROW_ERROR(cx, "File is too large to read as text");
+    }
     rewind(fptr);
 
-    // Allocate and read the string. Need to set last char to \0 since fread
-    // doesn't.
-    contents = new char[size + 1];
+    contents = new (std::nothrow) char[size + 1];
+    if (!contents) {
+        fclose(fptr);
+        JS_ReportOutOfMemory(cx);
+        return JS_FALSE;
+    }
     readCount = fread(contents, sizeof(char), size, fptr);
-    assert(readCount <= size); // Avoid SEGFAULT
     contents[readCount] = 0;
 
     // Check to see if we had an error; ferror needs the stream open, so it comes before fclose, and the

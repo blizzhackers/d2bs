@@ -350,34 +350,59 @@ JSAPI_FUNC(my_debugLog) {
     return JS_TRUE;
 }
 JSAPI_FUNC(my_copy) {
-    char* data = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "copy: the argument must be a string");
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
-    JS_ValueToString(cx, JS_ARGV(cx, vp)[0]);
-    HGLOBAL hText;
-    char* pText;
-    hText = GlobalAlloc(GMEM_DDESHARE | GMEM_MOVEABLE, strlen(data) + 1);
-    pText = (char*)GlobalLock(hText);
+    size_t len = 0;
+    const jschar* chars = JS_GetStringCharsAndLength(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]), &len);
+    if (!chars)
+        return JS_FALSE;
 
-    strcpy_s(pText, strlen(data) + 1, data);
+    HGLOBAL hText = GlobalAlloc(GMEM_MOVEABLE, (len + 1) * sizeof(wchar_t));
+    if (!hText)
+        return JS_TRUE;
+    wchar_t* pText = (wchar_t*)GlobalLock(hText);
+    if (!pText) {
+        GlobalFree(hText);
+        return JS_TRUE;
+    }
+    memcpy(pText, chars, len * sizeof(wchar_t));
+    pText[len] = 0;
     GlobalUnlock(hText);
 
-    OpenClipboard(NULL);
+    // An owner window is required: EmptyClipboard after OpenClipboard(NULL) leaves no owner and SetClipboardData fails.
+    if (!OpenClipboard(D2GFX_GetHwnd())) {
+        GlobalFree(hText);
+        return JS_TRUE;
+    }
     EmptyClipboard();
-    SetClipboardData(CF_TEXT, hText);
+    // CF_UNICODETEXT keeps non-ASCII text intact; Windows synthesizes CF_TEXT for ANSI readers.
+    bool ok = SetClipboardData(CF_UNICODETEXT, hText) != NULL;
     CloseClipboard();
-    JS_free(cx, data);
+    if (!ok)
+        GlobalFree(hText); // the system owns the handle only after SetClipboardData succeeds
+    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(ok));
     return JS_TRUE;
 }
 JSAPI_FUNC(my_paste) {
-    OpenClipboard(NULL);
-    HANDLE foo = GetClipboardData(CF_TEXT);
-    CloseClipboard();
-    LPVOID lptstr = GlobalLock(foo);
-    //   (char*)lptstr;
-    wchar_t* cpy = AnsiToUnicode((const char*)lptstr);
-    bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, cpy));
-    delete[] cpy;
-    if (!stored)
+    JSString* str = NULL;
+    // The clipboard handle is valid only while the clipboard is open, so the string is built before CloseClipboard.
+    if (OpenClipboard(NULL)) {
+        HANDLE h = GetClipboardData(CF_UNICODETEXT);
+        const wchar_t* p = h ? (const wchar_t*)GlobalLock(h) : NULL;
+        if (p) {
+            // Bounded by the handle size: clipboard text from another process is not guaranteed to be terminated.
+            str = JS_NewUCStringCopyN(cx, p, wcsnlen(p, GlobalSize(h) / sizeof(wchar_t)));
+            GlobalUnlock(h);
+            CloseClipboard();
+            if (!StoreString(vp, str))
+                return JS_FALSE;
+            return JS_TRUE;
+        }
+        CloseClipboard();
+    }
+    if (!StoreString(vp, JS_GetEmptyString(JS_GetRuntime(cx))))
         return JS_FALSE;
     return JS_TRUE;
 }
@@ -437,37 +462,34 @@ JSAPI_FUNC(my_sendCopyData) {
 
 JSAPI_FUNC(my_sendDDE) {
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-    jsint mode;
-    char *pszDDEServer = "\"\"", *pszTopic = "\"\"", *pszItem = "\"\"", *pszData = "\"\"";
-    JS_BeginRequest(cx);
+    if (argc < 2)
+        THROW_ERROR(cx, "sendDDE: mode and server are required");
+    if (!JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "sendDDE: mode must be an integer");
+    jsint mode = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
 
-    if (JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
-        JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], (uint32*)&mode);
+    // Arguments that are missing or not strings use the "\"\"" default; only encoded strings are freed.
+    static char kDefault[] = "\"\"";
+    char* args[4] = {NULL, NULL, NULL, NULL}; // server, topic, item, data
+    for (uint i = 0; i < 4; i++) {
+        if (i + 1 < argc && JSVAL_IS_STRING(JS_ARGV(cx, vp)[i + 1])) {
+            args[i] = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[i + 1]));
+            if (!args[i]) {
+                for (uint j = 0; j < i; j++)
+                    JS_free(cx, args[j]);
+                return JS_FALSE;
+            }
+        }
+    }
 
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[1]))
-        pszDDEServer = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[1]));
-
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[2]))
-        pszTopic = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[2]));
-
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[3]))
-        pszItem = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[3]));
-
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[4]))
-        pszData = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[4]));
-
-    JS_EndRequest(cx);
-    char buffer[255] = "";
-    BOOL result = SendDDE(mode, pszDDEServer, pszTopic, pszItem, pszData, (char**)&buffer, sizeof(buffer));
-
-    JS_free(cx, pszDDEServer);
-    JS_free(cx, pszTopic);
-    JS_free(cx, pszItem);
-    JS_free(cx, pszData);
-
+    char buffer[256] = "";
+    // One byte short of the buffer so the reply is always terminated.
+    BOOL result = SendDDE(mode, args[0] ? args[0] : kDefault, args[1] ? args[1] : kDefault, args[2] ? args[2] : kDefault,
+                          args[3] ? args[3] : kDefault, buffer, sizeof(buffer) - 1);
+    for (uint i = 0; i < 4; i++)
+        JS_free(cx, args[i]); // JS_free(NULL) is a no-op
     if (!result)
         THROW_ERROR(cx, "DDE Failed! Check the log for the error message.");
-
     if (mode == 0) {
         wchar_t* buf = AnsiToUnicode(buffer);
         bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, buf));

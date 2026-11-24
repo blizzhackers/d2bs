@@ -1,0 +1,1 @@
+- **Exact socket host list.** `Socket.open()` accepts a host only when it equals a whole entry of the d2bs.ini `Hosts` setting (case-insensitive; separate entries with commas, semicolons, spaces or tabs), and the setting is now documented in the README.

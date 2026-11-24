@@ -320,7 +320,7 @@ public:
 	 *
 	 * \param nState The state id.
 	 *
-	 * Throws "Invalid arguments" if no state id is passed for a unit that is still in the game.
+	 * Throws "Invalid arguments" if no state id is passed.
 	 *
 	 * \return Whether or not the unit has the state.
 	 */

@@ -143,12 +143,12 @@ On an up-to-date `master` with no uncommitted changes, the script:
    minor or major version (e.g. `1.6.5-rc.1` after `1.6.4`), or that version's final; after a release candidate, the
    next one (`1.6.5-rc.2`) or the final (`1.6.5`), and the final of its own code (above) when its tag is the latest
    release tag, names the same commit as `origin`'s, and `master` has commits past it; that option takes no other
-   version. The default is the same version again when that is offered;
-   otherwise the patch release candidate after a final, and the next release candidate after one, or the final when
-   nothing new is under `[Unreleased]`. You can type another version; one that isn't newer than `VERSION` or the
-   latest release tag (release candidates included) needs a confirmation (except when it offers the same version
-   again, below). A release candidate needs entries under `[Unreleased]`; a final needs them there or in its release
-   candidates' sections. A final warns about commits made since the last release candidate, which no tester has run.
+   version. The default is the same version again when that is offered; otherwise the patch release candidate after
+   a final, and the next release candidate after one, or the final when nothing new is under `[Unreleased]`. You can
+   type another version; one that isn't newer than `VERSION` or the latest release tag (release candidates included)
+   needs a confirmation (except when it offers the same version again, below). A release candidate needs entries
+   under `[Unreleased]`; a final needs them there or in its release candidates' sections. A final warns about commits
+   made since the last release candidate, which no tester has run.
 3. Shows the plan with the release notes. Notes the tag build would refuse (a missing section, no entries, or an
    HTML comment or code fence that never closes) stop it there instead, as do problems in `changelog.d`. After you
    confirm (it stops if `VERSION`, `CHANGELOG.md`, the commit or, for a new version, `changelog.d` changed during

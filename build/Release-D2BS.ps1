@@ -767,11 +767,12 @@ if ($bump) {
 }
 
 # === 6. Commit, tag, push ===========================================================================================
-# The tag's runs before this push: a release commit tagged again has the same tag and commit as its failed run. Listed
-# before anything is committed, so a slow GitHub API never holds up the steps between the commit and the push.
+# The tag's runs before this push: a release commit tagged again has the same tag and commit as its failed run. Only a
+# re-tag needs them (a new version's tag names a new commit), and it writes nothing before its tag, so a slow GitHub
+# API never leaves a half-made release.
 $earlierRuns = @()
 $earlierKnown = $false
-if ($slug -and $hasGh -and -not $DryRun) {
+if ($slug -and $hasGh -and -not $DryRun -and -not $bump) {
   $listed = & gh run list --repo $slug --workflow build.yml --limit 50 --json databaseId,headBranch 2>$null
   if (-not $LASTEXITCODE) {
     $earlierKnown = $true

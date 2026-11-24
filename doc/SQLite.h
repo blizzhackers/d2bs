@@ -8,7 +8,8 @@ public:
 	 *
 	 * \param path The path to the database to open.
 	 *
-	 * \param autoOpen Whether to open the database immediately or not.
+	 * \param autoOpen Whether to open the database immediately (default true; only a boolean is read). A failed
+	 * open throws "Could not open database: " followed by SQLite's message.
 	 */
 	SQLite(String path = ":memory:", bool autoOpen = true);
 
@@ -20,26 +21,27 @@ public:
 	 */
 	bool execute(String queryString);
 
-	/** Do a sqlite3_prepare_v2 on the database with sql, then call the
-	 * appropriate sqlite3_bind_ functions on the remaining parameters.
+	/** Prepare sql on the database and bind the remaining arguments to its parameters in order: strings as text,
+	 * numbers as integers or reals, true/false as 1/0, and null or undefined as NULL.
 	 *
-	 * \param sql The query to pass to sqlite3_prepare v2.
+	 * \param sql The SQL to prepare.
 	 *
-	 * \todo Determine what this function does (better documenation).
-	 *
-	 * \return The resulting DBStatement.
+	 * \return The resulting DBStatement. Throws when sql does not prepare or holds no statement, when an argument
+	 * is an object or a function, or when there are more arguments than sql has parameters (an explicit undefined
+	 * counts as an argument).
 	 */
 	DBStatement query(String sql, ...);
 
-	/** Open the database.
+	/** Open the database. Opening an open database does nothing. After close(), it opens the same path again;
+	 * statements from before the close stay closed, and a ":memory:" database starts empty.
 	 *
-	 * \return true
+	 * \return true. Throws "Could not open database: " followed by SQLite's message when SQLite cannot open the path.
 	 */
 	bool open();
 
-	/** Close the database.
+	/** Close the database and every statement from query(). Closing a closed database does nothing.
 	 *
-	 * \return true
+	 * \return true. Throws "Could not close database: " followed by SQLite's message when SQLite cannot close it.
 	 */
 	bool close();
 
@@ -47,7 +49,8 @@ public:
 	 */
 	String path;
 
-	/** Get the statements from query() that haven't been closed with close() or by closing the database.
+	/** Get the statements from query() that are still open, from index 0. A statement finished by go(), closed with
+	 * close() or closed by closing the database is left out.
 	 */
 	DBStatement[] statements;
 
@@ -55,11 +58,11 @@ public:
 	 */
 	bool isOpen;
 
-	/** Get the row id of the last inserted row.
+	/** Get the row id of the last inserted row (exact up to 2^53), or 0 when the database is not open.
 	 */
-	int lastRowId;
+	double lastRowId;
 
-	/** Get the number of rows modified/inserted/deleted by the last statement.
+	/** Get the number of rows modified/inserted/deleted by the last statement, or 0 when the database is not open.
 	 */
 	double changes;
 };

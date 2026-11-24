@@ -93,7 +93,10 @@ JSAPI_FUNC(script_stop) {
     DWORD scriptId = ScriptIdOf(cx, self);
     ScriptEngine::LockScriptList("script.stop");
     Script* script = ScriptEngine::FindScriptById(scriptId);
-    bool wait = script && script->IsRunning() && script->SignalStop() && script->GetThreadId() != GetCurrentThreadId();
+    // A not-started copy counts too: a reload's new copy is listed while its thread waits for the old copy and
+    // compiles, and Run honours a stop set before it starts.
+    bool notStarted = script && !script->hasActiveCX && script->GetExecutionCount() == 0 && script->GetState() != Command;
+    bool wait = script && (script->IsRunning() || notStarted) && script->SignalStop() && script->GetThreadId() != GetCurrentThreadId();
     ScriptEngine::UnLockScriptList("script.stop");
     // Waits like Script::Stop (up to 500 ms) for the other script's context to end, finding it again each time: it
     // may be deleted whenever the list lock is free.

@@ -47,13 +47,14 @@ public:
 	 */
 	int type;
 
-	/** Whether or not the script is running. False while the script is
-	 * paused, after stop(), and after the script has ended. A stopped or
-	 * ended script stays listed until its thread ends (with
-	 * DisableCache=false, until the cache is flushed or the file is loaded
-	 * again). Once it is no longer listed, its name is an empty string,
-	 * running stays false, its other members are undefined and its methods do
-	 * nothing.
+	/** Whether or not the script is running. False before the script has
+	 * started (while it compiles and, after a reload, while it waits up to
+	 * half a second for the old copy to end), while it is paused, after
+	 * stop(), and after it has ended. A stopped or ended script stays listed
+	 * until its thread ends (with DisableCache=false, until the cache is
+	 * flushed or the file is loaded again). Once it is no longer listed, its
+	 * name is an empty string, running stays false, its other members are
+	 * undefined and its methods do nothing.
 	 */
 	bool running;
 

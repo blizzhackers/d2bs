@@ -42,7 +42,6 @@ Script::Script(const wchar_t* file, ScriptState state, uint argc, JSAutoStructur
         free(tmpName);
     }
 
-    // moved the runtime initilization to thread start
     LastGC = 0;
     hasActiveCX = false;
     eventSignal = CreateEvent(nullptr, true, false, nullptr);
@@ -241,9 +240,9 @@ bool Script::Run(void) {
         return true;
     }
     // A stop or replacement that landed while the thread was starting stands: each Script runs at most once, so
-    // clearing the flag here would only lose it. ScriptThread disposes the copy once it is unlisted. Published before
-    // the flag is read, pairing with SignalStop's store-then-read: a stop either is seen here or finds hasActiveCX set
-    // and interrupts the runtime.
+    // clearing the flag here would only lose it. ScriptThread then treats the copy as an ended one: disposed with
+    // DisableCache or once unlisted, otherwise kept in the cache. Published before the flag is read, pairing with
+    // SignalStop's store-then-read: a stop either is seen here or finds hasActiveCX set and interrupts the runtime.
     hasActiveCX = true;
     MemoryBarrier();
     if (isAborted) {

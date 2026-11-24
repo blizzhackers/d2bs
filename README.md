@@ -2382,7 +2382,7 @@ The type of script.
 
 Whether or not the script is running.
 
-False while the script is paused, after stop(), and after the script has ended. A stopped or ended script stays listed until its thread ends (with DisableCache=false, until the cache is flushed or the file is loaded again). Once it is no longer listed, its name is an empty string, running stays false, its other members are undefined and its methods do nothing.
+False before the script has started (while it compiles and, after a reload, while it waits up to half a second for the old copy to end), while it is paused, after stop(), and after it has ended. A stopped or ended script stays listed until its thread ends (with DisableCache=false, until the cache is flushed or the file is loaded again). Once it is no longer listed, its name is an empty string, running stays false, its other members are undefined and its methods do nothing.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`threadid`](#classD2BSScript_1a85c1a8f5ec4bef0563d07209a1f1d2a1) 
 

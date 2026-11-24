@@ -1,0 +1,1 @@
+- **No `Sandbox` class.** D2BS no longer defines `Sandbox`; share code with `include()` and run isolated work in its own script with `load()`, talking through `scriptBroadcast()` / `script.send()` and `scriptmsg` events.

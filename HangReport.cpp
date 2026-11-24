@@ -1326,7 +1326,6 @@ void ResolveAtStart(void) {
                          (os.dwMajorVersion == 5 && os.dwMinorVersion == 2 && os.wServicePackMajor == 0 && os.wProductType != VER_NT_WORKSTATION);
 
     g_gameLock = AddLock("game", &Vars.cGameLoopSection);
-    AddLock("script engine", &ScriptEngine::lock);
     AddLock("script list", ScriptEngine::ListLockForReport());
     AddLock("event", &Vars.cEventSection);
     AddLock("print", &Vars.cPrintSection);

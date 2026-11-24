@@ -18,7 +18,8 @@ public:
 	 */
 	void resume();
 
-	/** Wait for other script to finish.
+	/** Wait for the script to finish. Returns at once when it has already
+	 * ended. Throws an error when called on the calling script itself.
 	 */
 	void join();
 
@@ -26,8 +27,10 @@ public:
 	 */
 	void stop();
 
-	/** Send some values to the script. Has the effect of calling the any
-	 * listeners to scriptmsg with the parameters provided.
+	/** Send some values to the script. Has the effect of calling any
+	 * listeners to scriptmsg with the parameters provided. A value that can't
+	 * be copied (a function, or a game object such as a Unit) throws an error
+	 * and nothing is sent.
 	 */
 	void send(...);
 
@@ -44,7 +47,13 @@ public:
 	 */
 	int type;
 
-	/** Whether or not the script is running.
+	/** Whether or not the script is running. False while the script is
+	 * paused, after stop(), and after the script has ended. A stopped or
+	 * ended script stays listed until its thread ends (with
+	 * DisableCache=false, until the cache is flushed or the file is loaded
+	 * again). Once it is no longer listed, its name is an empty string,
+	 * running stays false, its other members are undefined and its methods do
+	 * nothing.
 	 */
 	bool running;
 

@@ -241,7 +241,14 @@ bool StartScript(const wchar_t* scriptname, ScriptState state) {
     wchar_t file[_MAX_FNAME + _MAX_PATH];
     swprintf_s(file, _countof(file), L"%s\\%s", Vars.szScriptPath, scriptname);
     Script* script = ScriptEngine::CompileFile(file, state);
-    return (script && script->BeginThread(ScriptThread));
+    if (!script)
+        return false;
+    // A Script whose thread never started has no thread of its own to dispose of it.
+    if (!script->BeginThread(ScriptThread)) {
+        ScriptEngine::DisposeScript(script);
+        return false;
+    }
+    return true;
 }
 
 void Reload(void) {

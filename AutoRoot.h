@@ -17,7 +17,6 @@ class AutoRoot {
     AutoRoot() : var(JSVAL_NULL), count(0) {
     }
     AutoRoot(JSContext* cx, jsval var);
-    AutoRoot(jsval var);
     ~AutoRoot();
     void Take();
     void Release();

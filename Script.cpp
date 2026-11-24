@@ -13,15 +13,16 @@
 
 using namespace std;
 
-Script::Script(const wchar_t* file, ScriptState state, uint argc, JSAutoStructuredCloneBuffer** argv)
-    : context(NULL), globalObject(NULL), scriptObject(NULL), script(NULL), execCount(0), isAborted(false), isPaused(false), isReallyPaused(false), scriptState(state),
-      threadHandle(INVALID_HANDLE_VALUE), threadId(0), argc(argc), argv(argv) {
-    InitializeCriticalSection(&lock);
-    // moved the runtime initilization to thread start
-    LastGC = 0;
-    hasActiveCX = false;
-    eventSignal = CreateEvent(nullptr, true, false, nullptr);
+static volatile LONG lastScriptId = 0;
 
+// Up to this long for a replaced script's thread to end: Script::Stop's normal budget.
+static const DWORD kReplaceWaitMs = 500;
+
+Script::Script(const wchar_t* file, ScriptState state, uint argc, JSAutoStructuredCloneBuffer** argv)
+    : context(NULL), globalObject(NULL), scriptObject(NULL), script(NULL), runtime(NULL), me(NULL), execCount(0), isAborted(false), isPaused(false), isReallyPaused(false), scriptState(state),
+      threadHandle(INVALID_HANDLE_VALUE), threadId(0), id((DWORD)InterlockedIncrement(&lastScriptId)), argc(argc), argv(argv), startFailed(false),
+      predecessor(NULL) {
+    // Everything that can throw runs before the event and the lock exist: a throwing constructor runs no destructor.
     if (scriptState == Command && wcslen(file) < 1) {
         fileName = wstring(L"Command Line");
     } else {
@@ -40,31 +41,50 @@ Script::Script(const wchar_t* file, ScriptState state, uint argc, JSAutoStructur
         replace(fileName.begin(), fileName.end(), L'/', L'\\');
         free(tmpName);
     }
+
+    // moved the runtime initilization to thread start
+    LastGC = 0;
+    hasActiveCX = false;
+    eventSignal = CreateEvent(nullptr, true, false, nullptr);
+    if (!eventSignal)
+        throw std::exception("Could not create the script's event");
+    InitializeCriticalSection(&lock);
 }
 
 Script::~Script(void) {
     isAborted = true;
     hasActiveCX = false;
     // JS_SetPendingException(context, JSVAL_NULL);
-    if (JS_IsInRequest(runtime))
+    if (context && runtime && JS_IsInRequest(runtime))
         JS_EndRequest(context);
 
     EnterCriticalSection(&lock);
     //    JS_SetRuntimeThread(rt);
-    JS_DestroyContext(context);
+    if (context)
+        JS_DestroyContext(context);
     // JS_ClearRuntimeThread(rt);
-    JS_DestroyRuntime(runtime);
+    if (runtime)
+        JS_DestroyRuntime(runtime);
 
     context = NULL;
     scriptObject = NULL;
     globalObject = NULL;
     script = NULL;
+    FreeArgs();
     CloseHandle(eventSignal);
     includes.clear();
     if (threadHandle != INVALID_HANDLE_VALUE)
         CloseHandle(threadHandle);
+    if (predecessor)
+        CloseHandle(predecessor);
     LeaveCriticalSection(&lock);
     DeleteCriticalSection(&lock);
+}
+
+void Script::FreeArgs(void) {
+    FreeCloneBuffers(argv, argc);
+    argv = NULL;
+    argc = 0;
 }
 
 int Script::GetExecutionCount(void) {
@@ -106,19 +126,37 @@ bool Script::BeginThread(LPTHREAD_START_ROUTINE ThreadFunc) {
     EnterCriticalSection(&lock);
     DWORD dwExitCode = STILL_ACTIVE;
 
-    if ((!GetExitCodeThread(threadHandle, &dwExitCode) || dwExitCode != STILL_ACTIVE) && (threadHandle = CreateThread(0, 0, ThreadFunc, this, 0, &threadId)) != NULL) {
+    if (GetExitCodeThread(threadHandle, &dwExitCode) && dwExitCode == STILL_ACTIVE) {
+        LeaveCriticalSection(&lock);
+        return false;
+    }
+
+    threadHandle = CreateThread(0, 0, ThreadFunc, this, 0, &threadId);
+    if (threadHandle) {
         LeaveCriticalSection(&lock);
         return true;
     }
 
     threadHandle = INVALID_HANDLE_VALUE;
+    startFailed = true;
     LeaveCriticalSection(&lock);
     return false;
 }
 
-void Script::Run(void) {
+bool Script::Run(void) {
+    // A reload starts its new copy once the replaced one has ended, or after this bound: waited here on the new copy's
+    // thread, so load() returns at once and the replacement is listed but not yet running meanwhile.
+    if (predecessor) {
+        WaitForSingleObject(predecessor, kReplaceWaitMs);
+        CloseHandle(predecessor);
+        predecessor = NULL;
+    }
+
+    bool inRequest = false;
     try {
         runtime = JS_NewRuntime(Vars.dwMemUsage, JS_NO_HELPER_THREADS);
+        if (!runtime)
+            throw std::exception("Couldn't create the runtime");
         JS_SetNativeStackQuota(runtime, (size_t)50000);
         // JS_SetRuntimeThread(runtime);
         JS_SetContextCallback(runtime, contextCallback);
@@ -136,6 +174,7 @@ void Script::Run(void) {
         JS_SetContextPrivate(context, this);
 
         JS_BeginRequest(context);
+        inRequest = true;
 
         globalObject = JS_GetGlobalObject(context);
         jsval meVal = JSVAL_VOID;
@@ -151,31 +190,70 @@ void Script::Run(void) {
                 char* cmd = "function main() {print('ÿc2D2BSÿc0 :: Started Console'); while (true){delay(10000)};}  ";
                 script = JS_CompileScript(context, globalObject, cmd, strlen(cmd), "Command Line", 1);
             }
-            JS_AddNamedScriptRoot(context, &script, "console script");
         } else
             script = JS_CompileFile(context, globalObject, fileName);
 
-        if (!script)
+        if (!script) {
+            JS_ReportPendingException(context);
             throw std::exception("Couldn't compile the script");
+        }
+        // Rooted until JS_ExecuteScript holds it: reading the load() arguments below can run the GC, which scans the
+        // stack but not this member. The console's root lasts as long as the console.
+        if (!JS_AddNamedScriptRoot(context, &script, scriptState == Command ? "console script" : "script")) {
+            script = NULL;
+            throw std::exception("Couldn't root the script");
+        }
 
         JS_EndRequest(context);
-        // JS_RemoveScriptRoot(context, &script);
-
-    } catch (std::exception&) {
-        if (scriptObject)
-            JS_RemoveRoot(context, &scriptObject);
+        inRequest = false;
+    } catch (std::exception& e) {
+        // Leaves no context or runtime behind: ScriptThread disposes this Script next (the console stays listed), and ~Script skips NULL members.
+        Log(L"Script %s: %hs", GetShortFilename(), e.what());
+        // Cleared under the list lock before the context that owns it is destroyed: UpdatePlayerGid writes through it
+        // under that lock.
+        ScriptEngine::LockScriptList("Run failure");
+        me = NULL;
+        ScriptEngine::UnLockScriptList("Run failure");
         if (context) {
-            JS_EndRequest(context);
+            if (inRequest)
+                JS_EndRequest(context);
             JS_DestroyContext(context);
+            context = NULL;
         }
-        LeaveCriticalSection(&lock);
-        throw;
+        if (runtime) {
+            JSRuntime* rt = runtime;
+            // Unpublished under the list lock first: script.memory reads the runtime while it holds that lock.
+            ScriptEngine::LockScriptList("Run failure");
+            runtime = NULL;
+            ScriptEngine::UnLockScriptList("Run failure");
+            JS_DestroyRuntime(rt);
+        }
+        globalObject = NULL;
+        script = NULL;
+        return false;
     }
     // only let the script run if it's not already running
-    if (IsRunning())
-        return;
+    if (IsRunning()) {
+        if (scriptState != Command) {
+            JS_RemoveScriptRoot(context, &script);
+            script = NULL;
+        }
+        return true;
+    }
+    // A stop or replacement that landed while the thread was starting stands: each Script runs at most once, so
+    // clearing the flag here would only lose it. ScriptThread disposes the copy once it is unlisted. Published before
+    // the flag is read, pairing with SignalStop's store-then-read: a stop either is seen here or finds hasActiveCX set
+    // and interrupts the runtime.
     hasActiveCX = true;
-    isAborted = false;
+    MemoryBarrier();
+    if (isAborted) {
+        hasActiveCX = false;
+        if (scriptState != Command) {
+            JS_RemoveScriptRoot(context, &script);
+            script = NULL;
+        }
+        return true;
+    }
 
     jsval main = INT_TO_JSVAL(1), dummy = INT_TO_JSVAL(1);
     JS_BeginRequest(GetContext());
@@ -184,31 +262,54 @@ void Script::Run(void) {
     JS::AutoValueVector argvalue(context);
     bool haveArgs = argvalue.resize(argc);
     for (uint i = 0; haveArgs && i < argc; i++)
-        argv[i]->read(context, &argvalue[i]);
+        haveArgs = argv[i]->read(context, &argvalue[i]);
+
+    if (!haveArgs) {
+        // The arguments can't be held, so the script never starts, as with a compile failure.
+        JS_ReportPendingException(context); // a failed resize has already reported its out-of-memory error
+        if (scriptState != Command) {
+            JS_RemoveScriptRoot(context, &script);
+            script = NULL;
+        }
+        JS_EndRequest(GetContext());
+        hasActiveCX = false;
+        return false;
+    }
 
     JS_AddValueRoot(GetContext(), &main);
     JS_AddValueRoot(GetContext(), &dummy);
-    if (haveArgs && JS_ExecuteScript(GetContext(), globalObject, script, &dummy) != JS_FALSE &&
-        JS_GetProperty(GetContext(), globalObject, "main", &main) != JS_FALSE && JSVAL_IS_FUNCTION(GetContext(), main)) {
+    JSBool executed = JS_ExecuteScript(GetContext(), globalObject, script, &dummy);
+    if (scriptState != Command) {
+        JS_RemoveScriptRoot(context, &script);
+        script = NULL;
+    }
+    if (executed != JS_FALSE && JS_GetProperty(GetContext(), globalObject, "main", &main) != JS_FALSE &&
+        JSVAL_IS_FUNCTION(GetContext(), main)) {
         JS_CallFunctionValue(GetContext(), globalObject, main, this->argc, argvalue.begin(), &dummy);
     }
     JS_RemoveValueRoot(GetContext(), &main);
     JS_RemoveValueRoot(GetContext(), &dummy);
 
-    /*for(uint i = 0; i < argc; i++)  //crashes spidermonkey cleans itself up?
-    {
-            argv[i]->clear();
-            delete argv[i];
-    }*/
+    // The buffers are freed on this thread once main() returns: main's values are copies read into argvalue.
+    FreeArgs();
 
     JS_EndRequest(GetContext());
+    // Nothing runs on this context any more: running reads false and no event queues for a cached, ended script.
+    hasActiveCX = false;
 
     execCount++;
     // Stop();
+    return true;
 }
 
 void Script::UpdatePlayerGid(void) {
-    me->dwUnitId = (D2CLIENT_GetPlayerUnit() == NULL ? NULL : D2CLIENT_GetPlayerUnit()->dwUnitId);
+    UnitAny* player = D2CLIENT_GetPlayerUnit();
+    // Under the list lock: Run's failure path clears `me` under it before the context that owns it is destroyed. `me`
+    // is NULL until the script's context exists, and again after a failed start.
+    ScriptEngine::LockScriptList("UpdatePlayerGid");
+    if (me)
+        me->dwUnitId = player ? player->dwUnitId : 0;
+    ScriptEngine::UnLockScriptList("UpdatePlayerGid");
 }
 
 void Script::Pause(void) {
@@ -218,13 +319,12 @@ void Script::Pause(void) {
     SetEvent(eventSignal);
 }
 
-void Script::Join() {
-    EnterCriticalSection(&lock);
+bool Script::DuplicateThreadHandle(HANDLE* out) {
+    *out = NULL;
     HANDLE hThread = threadHandle;
-    LeaveCriticalSection(&lock);
-
-    if (hThread != INVALID_HANDLE_VALUE)
-        WaitForSingleObject(hThread, INFINITE);
+    if (hThread == INVALID_HANDLE_VALUE || hThread == NULL)
+        return true;
+    return !!DuplicateHandle(GetCurrentProcess(), hThread, GetCurrentProcess(), out, SYNCHRONIZE, FALSE, 0);
 }
 
 void Script::Resume(void) {
@@ -245,24 +345,30 @@ const wchar_t* Script::GetShortFilename() {
         return (fileName.c_str() + wcslen(Vars.szScriptPath) + 1);
 }
 
-void Script::Stop(bool force, bool reallyForce) {
-    // if we've already stopped, just return
+bool Script::SignalStop(void) {
     if (isAborted)
-        return;
-    EnterCriticalSection(&lock);
-    // tell everyone else that the script is aborted FIRST
+        return false;
     isAborted = true;
+    // Pairs with Run's publish of hasActiveCX: the flag is visible before hasActiveCX is read below.
+    MemoryBarrier();
     isPaused = false;
     isReallyPaused = false;
     if (GetState() != Command) {
         const wchar_t* displayName = fileName.c_str() + wcslen(Vars.szScriptPath) + 1;
         Print(L"Script %s ended", displayName);
     }
-
     // trigger call back so script ends
     TriggerOperationCallback();
     SetEvent(eventSignal);
+    return true;
+}
 
+void Script::Stop(bool force, bool reallyForce) {
+    // if we've already stopped, just return
+    if (isAborted)
+        return;
+    EnterCriticalSection(&lock);
+    SignalStop();
     // normal wait: 500ms, forced wait: 300ms, really forced wait: 100ms
     int maxCount = (force ? (reallyForce ? 10 : 30) : 50);
     if (GetCurrentThreadId() != GetThreadId()) {
@@ -291,11 +397,11 @@ bool Script::IsIncluded(const wchar_t* file) {
 }
 
 bool Script::Include(const wchar_t* file) {
-    // since includes will happen on the same thread, locking here is acceptable
-    EnterCriticalSection(&lock);
     wchar_t* fname = _wcsdup(file);
     if (!fname)
         return false;
+    // since includes will happen on the same thread, locking here is acceptable
+    EnterCriticalSection(&lock);
     _wcslwr_s(fname, wcslen(fname) + 1);
     StringReplace(fname, L'/', L'\\', wcslen(fname));
 
@@ -469,6 +575,14 @@ DWORD WINAPI RunCommandThread(void* data) {
     return 0;
 }
 
+void FreeCloneBuffers(JSAutoStructuredCloneBuffer** buffers, uint count) {
+    if (!buffers)
+        return;
+    for (uint i = 0; i < count; i++)
+        delete buffers[i];
+    delete[] buffers;
+}
+
 DWORD WINAPI ScriptThread(void* data) {
     Script* script = (Script*)data;
     if (script) {
@@ -476,9 +590,17 @@ DWORD WINAPI ScriptThread(void* data) {
         SetThreadName(0xFFFFFFFF, script->GetShortFilename());
 #endif
         HangNameThread(script->GetShortFilename());
-        script->Run();
+        bool started = script->Run();
         HangForgetThread();
-        if (Vars.bDisableCache)
+        if (!started) {
+            // Hex escapes, split so the colour digit isn't read as hex: a universal-character-name raises C4428 here.
+            Print(L"\xFF" L"c2D2BS\xFF" L"c0 :: Script %s failed to start", script->GetShortFilename());
+            // The console stays: ScriptEngine::console and the map's "console" key keep pointing at it.
+            if (script->GetState() != Command)
+                ScriptEngine::DisposeScript(script);
+        } else if ((Vars.bDisableCache || !ScriptEngine::IsListed(script)) && script->GetState() != Command)
+            // A console whose main() returned stays listed, not running, like a failed one: ScriptEngine::console keeps
+            // pointing at it.
             ScriptEngine::DisposeScript(script);
     }
     return 0;

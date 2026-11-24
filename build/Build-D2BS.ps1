@@ -144,7 +144,7 @@ try {
     'sqlite3.c', 'StackWalker.cpp', 'HangReport.cpp', 'stringhash.cpp', 'Control.cpp', 'Core.cpp', 'dde.cpp', 'File.cpp', 'Game.cpp',
     'Hash.cpp', 'MPQStats.cpp', 'Room.cpp', 'ScreenHook.cpp', 'Unit.cpp', 'JSArea.cpp', 'JSControl.cpp', 'JSCore.cpp',
     'JSDirectory.cpp', 'JSExits.cpp', 'JSFile.cpp', 'JSFileTools.cpp', 'JSGame.cpp', 'JSGlobalClasses.cpp', 'JSHash.cpp',
-    'JSMenu.cpp', 'JSParty.cpp', 'JSPresetUnit.cpp', 'JSRoom.cpp', 'JSSandbox.cpp', 'JSScreenHook.cpp', 'JSScript.cpp',
+    'JSMenu.cpp', 'JSParty.cpp', 'JSPresetUnit.cpp', 'JSRoom.cpp', 'JSScreenHook.cpp', 'JSScript.cpp',
     'JSSQLite.cpp', 'JSUnit.cpp', 'AutoRoot.cpp', 'Script.cpp', 'ScriptEngine.cpp', 'Map\Diablo_II\ActMap.cpp',
     'Map\Diablo_II\LevelMap.cpp'
   $objs = @()

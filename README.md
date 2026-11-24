@@ -44,7 +44,7 @@
 `public `[`Unit`](#classUnit)` `[`getInteractedNPC`](#group__globalFunctions_1ga3338c7af7db3773f41edb61bf9c5873c)`()`            | Get the [Unit](#classUnit) that the controlled [Unit](#classUnit) is currently interacting with.
 `public void `[`print`](#group__globalFunctions_1ga428513e838de3670e09b242cde1f0f6b)`(...)`            | Print the String representation of the arguments to the console.
 `public void `[`delay`](#group__globalFunctions_1ga95cd2552eeef0300ab5bae0ee284f82d)`(uint32_t nDelay)`            | Delay for nDelay milliseconds.
-`public `[`D2BSScript`](#classD2BSScript)` `[`load`](#group__globalFunctions_1gabb55e1126cb1e7626356bd529f6bc965)`(String file,...)`            | Load file and create a thread with it's main function.
+`public bool `[`load`](#group__globalFunctions_1gabb55e1126cb1e7626356bd529f6bc965)`(String file,...)`            | Load file and start a new thread that runs its main function.
 `public bool `[`isIncluded`](#group__globalFunctions_1gae9d2eb16bc4dc333da24e3d968897f67)`(String file)`            | Determine whether a file has been included yet or not.
 `public bool `[`include`](#group__globalFunctions_1ga41df84bb09ce63ef47fd30ddf980294b)`(String file)`            | Include file from the scriptDir\libs directory.
 `public void `[`stop`](#group__globalFunctions_1ga8c8dfb6d9bcdee82b208da3033068b81)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` stop)`            | Conditionally stop current script.
@@ -156,7 +156,6 @@
 `class `[`PresetUnit`](#classPresetUnit) | Represents a [PresetUnit](#classPresetUnit) (a type of [Unit](#classUnit) that is available as soon as the [Area](#classArea) data is available).
 `class `[`Profile`](#classProfile) | This class represents the details needed to get a player to a game or lobby.
 `class `[`Room`](#classRoom) | Represents a "Room" in the game.
-`class `[`Sandbox`](#classSandbox) | A separate context to run scripts in.
 `class `[`Socket`](#classSocket) | A TCP connection to a host listed in d2bs.ini `Hosts`.
 `class `[`SQLite`](#classSQLite) | Class for dealing with an [SQLite](#classSQLite) database.
 `class `[`Text`](#classText) | A [Text](#classText) screen hook.
@@ -838,17 +837,17 @@ This is done by suspending the context, sleeping, then resuming the context for 
 #### Parameters
 * `nDelay` Milliseconds to sleep.
 
-#### `public `[`D2BSScript`](#classD2BSScript)` `[`load`](#group__globalFunctions_1gabb55e1126cb1e7626356bd529f6bc965)`(String file,...)` 
+#### `public bool `[`load`](#group__globalFunctions_1gabb55e1126cb1e7626356bd529f6bc965)`(String file,...)` 
 
-Load file and create a thread with it's main function.
+Load file and start a new thread that runs its main function.
 
-[File](#classFile) taken from scriptDir\file. All remaining parameters are passed to the script.
+[File](#classFile) taken from scriptDir\file. All remaining parameters are copied to the new script's main function; a value that can't be copied (a function, or a game object such as a Unit) throws an error and starts nothing. Loading a script that is already running ends the running copy; the new copy starts once that copy has ended, or after half a second (at once when a script loads its own file), and getScript() and getScripts() then list only the new copy.
 
 #### Parameters
 * `file` The filename of the script.
 
 #### Returns
-If successful returns the new script object representing the thread of the thread. Otherwise it returns null.
+true when the script's thread started, false when the file was not found or the thread could not start. A syntax error in the file still ends that script on its own thread after load() returned true; the calling script and the game keep running. A missing, empty, non-string or too-long file name throws an error.
 
 #### `public bool `[`isIncluded`](#group__globalFunctions_1gae9d2eb16bc4dc333da24e3d968897f67)`(String file)` 
 
@@ -2359,7 +2358,7 @@ Represents a script (a thread), created by either loading a file, or typing some
 `public bool `[`getNext`](#classD2BSScript_1a9f47bf9a5ebd40e20561a133f9594b7b)`()` | Get the next script.
 `public void `[`pause`](#classD2BSScript_1af541fc2916b40774e2af4eaf947b0c85)`()` | Pause the script.
 `public void `[`resume`](#classD2BSScript_1ae16e135f6467d23dfb8a67582c817485)`()` | Resume the script.
-`public void `[`join`](#classD2BSScript_1a943c172af9bbbc4eedecb74653e1d146)`()` | Wait for other script to finish.
+`public void `[`join`](#classD2BSScript_1a943c172af9bbbc4eedecb74653e1d146)`()` | Wait for the script to finish.
 `public void `[`stop`](#classD2BSScript_1ab4933bbbe30752c142be6df995226967)`()` | Stop the script.
 `public void `[`send`](#classD2BSScript_1ab615c8319b0575b135a8f127a3cf61cf)`(...)` | Send some values to the script.
 
@@ -2383,6 +2382,8 @@ The type of script.
 
 Whether or not the script is running.
 
+False while the script is paused, after stop(), and after the script has ended. A stopped or ended script stays listed until its thread ends (with DisableCache=false, until the cache is flushed or the file is loaded again). Once it is no longer listed, its name is an empty string, running stays false, its other members are undefined and its methods do nothing.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`threadid`](#classD2BSScript_1a85c1a8f5ec4bef0563d07209a1f1d2a1) 
 
 The thread id.
@@ -2404,7 +2405,9 @@ Resume the script.
 
 #### `public void `[`join`](#classD2BSScript_1a943c172af9bbbc4eedecb74653e1d146)`()` 
 
-Wait for other script to finish.
+Wait for the script to finish.
+
+Returns at once when it has already ended. Throws an error when called on the calling script itself.
 
 #### `public void `[`stop`](#classD2BSScript_1ab4933bbbe30752c142be6df995226967)`()` 
 
@@ -2414,7 +2417,7 @@ Stop the script.
 
 Send some values to the script.
 
-Has the effect of calling the any listeners to scriptmsg with the parameters provided.
+Has the effect of calling any listeners to scriptmsg with the parameters provided. A value that can't be copied (a function, or a game object such as a Unit) throws an error and nothing is sent.
 
 # class `DBStatement` 
 
@@ -4811,64 +4814,6 @@ Determine whether or not the [Unit](#classUnit) is in the [Room](#classRoom).
 
 #### Returns
 Whether or not the [Unit](#classUnit) is in the [Room](#classRoom).
-
-# class `Sandbox` 
-
-A separate context to run scripts in.
-
-## Summary
-
- Members                        | Descriptions                                
---------------------------------|---------------------------------------------
-`public  `[`Sandbox`](#classSandbox_1a414860b7f66f97746dfda9564bdbf2eb)`()` | Create a [Sandbox](#classSandbox).
-`public Object `[`evaluate`](#classSandbox_1ab2c4416ba21800e25b626beff623a5f5)`(String code)` | Evaluate the code passed in and return the result.
-`public Object `[`include`](#classSandbox_1a76b0fc82176f61c0ae48d21af80060a0)`(String file)` | Include a file from ScriptPath\libs\file.
-`public bool `[`isInclude`](#classSandbox_1ad924329aeb26651647f7423187541c53)`(String file)` | Determine whether a file has been included yet or not.
-`public void `[`clearScope`](#classSandbox_1a103663ab48c1deef0714995e58deab83)`()` | Clear the scope of the [Sandbox](#classSandbox)'s global object.
-
-## Members
-
-#### `public  `[`Sandbox`](#classSandbox_1a414860b7f66f97746dfda9564bdbf2eb)`()` 
-
-Create a [Sandbox](#classSandbox).
-
-This creates a separate context to run things in.
-
-#### `public Object `[`evaluate`](#classSandbox_1ab2c4416ba21800e25b626beff623a5f5)`(String code)` 
-
-Evaluate the code passed in and return the result.
-
-#### Parameters
-* `code` The code to run, literally JavaScript code to run.
-
-#### Returns
-The result of the last expression statement.
-
-#### `public Object `[`include`](#classSandbox_1a76b0fc82176f61c0ae48d21af80060a0)`(String file)` 
-
-Include a file from ScriptPath\libs\file.
-
-#### Parameters
-* `file` The filename relative to ScriptPath\libs to include.
-
-#### Returns
-The result of the last expression statement.
-
-#### `public bool `[`isInclude`](#classSandbox_1ad924329aeb26651647f7423187541c53)`(String file)` 
-
-Determine whether a file has been included yet or not.
-
-#### Parameters
-* `file` The filename relative to ScriptPath\libs to include.
-
-#### Returns
-Whether or not the file has been included.
-
-#### `public void `[`clearScope`](#classSandbox_1a103663ab48c1deef0714995e58deab83)`()` 
-
-Clear the scope of the [Sandbox](#classSandbox)'s global object.
-
-> Todo: Clarify what this means (i.e. post-conditions).
 
 # class `Socket` 
 

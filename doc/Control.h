@@ -28,6 +28,8 @@ public:
 	/** Set the Control's text.
 	 *
 	 * \param text The text to set the Control's text field to.
+	 *
+	 * Throws "Invalid arguments" if no text is passed to a control that is still on screen.
 	 */
 	void setText(String text);
 

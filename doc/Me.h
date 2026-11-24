@@ -211,6 +211,9 @@ public:
 	String getParent();
 
 	/** Puts the string equivalent of message over the unit.
+	 *
+	 * Throws "Invalid arguments" if no message is passed for a unit that is still in the game; a null or
+	 * undefined message shows nothing.
 	 */
 	void overhead(Object message);
 
@@ -308,6 +311,8 @@ public:
 	/** Return whether or not the unit has a given state.
 	 *
 	 * \param nState The state id.
+	 *
+	 * Throws "Invalid arguments" if no state id is passed for a unit that is still in the game.
 	 *
 	 * \return Whether or not the unit has the state.
 	 */

@@ -1210,6 +1210,8 @@ bool keystate(int vKey);
  *
  * \param eventHandler A function with the signature listed above that handles
  * the event.
+ *
+ * Throws "Invalid arguments" if fewer than two arguments are passed.
  */
 void addEventListener(String event, Function eventHandler);
 
@@ -1220,6 +1222,8 @@ void addEventListener(String event, Function eventHandler);
  * \param event The event name (the one used to add the event).
  *
  * \param eventHandler The handler to remove.
+ *
+ * Throws "Invalid arguments" if fewer than two arguments are passed.
  */
 void removeEventListener(String event, Function eventHandler);
 
@@ -1228,6 +1232,8 @@ void removeEventListener(String event, Function eventHandler);
  * \ingroup globalFunctions
  *
  * \param event The name of the event to clear the handler list for.
+ *
+ * Throws "Invalid arguments" if no event is passed.
  */
 void clearEvent(String event);
 

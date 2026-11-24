@@ -1050,6 +1050,8 @@ mode:
 #### Parameters
 * `eventHandler` A function with the signature listed above that handles the event.
 
+Throws "Invalid arguments" if fewer than two arguments are passed.
+
 #### `public void `[`removeEventListener`](#group__globalFunctions_1gaee02cb255ac39d16c7035fb1b58c70ed)`(String event,Function eventHandler)` 
 
 Removes a previously added event from the listener list.
@@ -1059,12 +1061,16 @@ Removes a previously added event from the listener list.
 
 * `eventHandler` The handler to remove.
 
+Throws "Invalid arguments" if fewer than two arguments are passed.
+
 #### `public void `[`clearEvent`](#group__globalFunctions_1ga185f0dafe7fd58fd565b8ce3b460541b)`(String event)` 
 
 Clear the event handler list for given event.
 
 #### Parameters
 * `event` The name of the event to clear the handler list for.
+
+Throws "Invalid arguments" if no event is passed.
 
 #### `public void `[`clearAllEvents`](#group__globalFunctions_1ga229f0f1b263c13dc1a2c5bdcb51a5320)`()` 
 
@@ -2319,6 +2325,8 @@ Set the [Control](#classControl)'s text.
 #### Parameters
 * `text` The text to set the [Control](#classControl)'s text field to.
 
+Throws "Invalid arguments" if no text is passed to a control that is still on screen.
+
 #### `public String[] `[`getText`](#classControl_1afab7c6e5349104c77cf2f6b91bf1461a)`()` 
 
 Get the texts from a label [Control](#classControl).
@@ -2887,6 +2895,8 @@ Create a new directory.
 
 #### Parameters
 * `name` The name of the directory to create under the current directory.
+
+Throws "No path passed to dir.create()" if name is not a string, and "Invalid folder name" if it is invalid or too long.
 
 #### Returns
 The new [Folder](#classFolder) created.
@@ -3971,6 +3981,8 @@ The parent's name.
 
 Puts the string equivalent of message over the unit.
 
+Throws "Invalid arguments" if no message is passed for a unit that is still in the game; a null or undefined message shows nothing.
+
 #### `public void `[`revive`](#classMe_1a7e53744fc9cd8233451fa8562e4ce7e9)`()` 
 
 Revive the character.
@@ -4068,6 +4080,8 @@ Return whether or not the unit has a given state.
 
 #### Parameters
 * `nState` The state id.
+
+Throws "Invalid arguments" if no state id is passed for a unit that is still in the game.
 
 #### Returns
 Whether or not the unit has the state.
@@ -5637,6 +5651,8 @@ The parent's name.
 
 Puts the string equivalent of message over the unit.
 
+Throws "Invalid arguments" if no message is passed for a unit that is still in the game; a null or undefined message shows nothing.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getFlags`](#classUnit_1a01704c64338a7818f03ea9fdb0205ee6)`()` 
 
 Returns the item flags.
@@ -5740,6 +5756,8 @@ Return whether or not the unit has a given state.
 
 #### Parameters
 * `nState` The state id.
+
+Throws "Invalid arguments" if no state id is passed for a unit that is still in the game.
 
 #### Returns
 Whether or not the unit has the state.

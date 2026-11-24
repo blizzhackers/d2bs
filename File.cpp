@@ -222,32 +222,40 @@ FILE* fileOpenRelScript(const wchar_t* filename, const wchar_t* mode, JSContext*
  */
 wchar_t* getPathRelScript(const wchar_t* filename, int bufLen, wchar_t* fullPath) {
     wchar_t fullScriptPath[_MAX_PATH + _MAX_FNAME];
-    wchar_t* relPath;
-    int strLenScript;
-    DWORD scrPathLen;
+    size_t strLenScript = wcslen(Vars.szScriptPath);
+    size_t nameLen = wcslen(filename);
 
-    strLenScript = wcslen(Vars.szScriptPath);
+    fullPath[0] = L'\0';
+    // The joined path must fit the caller's buffer anyway; refusing it first also bounds the _alloca.
+    if (strLenScript + nameLen + 2 > (size_t)bufLen)
+        return NULL;
 
     // Make the filename relative to the script path
-    relPath = (wchar_t*)_alloca((strLenScript + wcslen(filename) + 2) * 2); // *2 for wide chars
-    wcscpy_s(relPath, strLenScript + wcslen(filename) + 2, Vars.szScriptPath);
+    wchar_t* relPath = (wchar_t*)_alloca((strLenScript + nameLen + 2) * sizeof(wchar_t));
+    wcscpy_s(relPath, strLenScript + nameLen + 2, Vars.szScriptPath);
     relPath[strLenScript] = L'\\';
-    wcscpy_s(relPath + strLenScript + 1, wcslen(filename) + 1, filename);
+    wcscpy_s(relPath + strLenScript + 1, nameLen + 1, filename);
 
-    // Transform to the full pathname
-    GetFullPathNameW(relPath, bufLen, fullPath, NULL);
-
-    // Get the full path of the script path, check it is the prefix of fullPath
-    scrPathLen = GetFullPathNameW(Vars.szScriptPath, _MAX_PATH + _MAX_FNAME, fullScriptPath, NULL);
+    // GetFullPathNameW writes nothing when the result does not fit, so 0 and >= bufLen both mean failure
+    DWORD fullLen = GetFullPathNameW(relPath, bufLen, fullPath, NULL);
+    if (fullLen == 0 || fullLen >= (DWORD)bufLen) {
+        fullPath[0] = L'\0';
+        return NULL;
+    }
+    DWORD scrPathLen = GetFullPathNameW(Vars.szScriptPath, _countof(fullScriptPath), fullScriptPath, NULL);
+    if (scrPathLen == 0 || scrPathLen >= _countof(fullScriptPath)) {
+        fullPath[0] = L'\0';
+        return NULL;
+    }
 
     // Check that fullScriptPath is the prefix of fullPath
     // As GetFullPathName seems to not add a trailing \, if there is not a
     // trailing \ in fullScriptPath check for it in fullPath
-    if (wcsncmp(fullPath, fullScriptPath, scrPathLen) != 0 || (fullScriptPath[scrPathLen - 1] != '\\' && fullPath[scrPathLen] != '\\')) {
-        fullPath[0] = '\0';
+    if (wcsncmp(fullPath, fullScriptPath, scrPathLen) != 0 ||
+        (fullScriptPath[scrPathLen - 1] != L'\\' && fullPath[scrPathLen] != L'\\')) {
+        fullPath[0] = L'\0';
         return NULL;
     }
-
     return fullPath;
 }
 

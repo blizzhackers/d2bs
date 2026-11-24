@@ -29,7 +29,6 @@ JSAPI_PROP(socket_getProperty) {
     if (sdata) {
         jsval ID;
         JS_IdToValue(cx, id, &ID);
-        JS_BeginRequest(cx);
         switch (JSVAL_TO_INT(ID)) {
             struct timeval timeout;
             int result;
@@ -66,52 +65,92 @@ JSAPI_STRICT_PROP(socket_setProperty) {
     return JS_TRUE;
 }
 
-JSAPI_FUNC(socket_open) {
-
-    if (argc < 2) {
-        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-        return JS_TRUE;
+// Every exit after WSAStartup releases what was taken; the object owns one WSAStartup reference until close/finalize.
+static void ReleaseSocketData(SocketData* sData) {
+    if (sData->socket != INVALID_SOCKET) {
+        closesocket(sData->socket);
+        WSACleanup();
+        sData->socket = INVALID_SOCKET;
     }
-    char* hostName = NULL;
-    int32 port = 0;
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
-        hostName = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+}
 
-    if (!strstr(Vars.szHosts, hostName))
+static SocketData* GetSocketThis(JSContext* cx, jsval* vp) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    return self ? (SocketData*)JS_GetInstancePrivate(cx, self, &socket_class, NULL) : NULL;
+}
+
+// A host is allowed only when it equals one whole Hosts entry (case-insensitive); entries are separated by
+// , ; space or tab. An empty host is refused outright.
+static bool IsAllowedHost(const char* host) {
+    if (host[0] == '\0')
+        return false;
+    char hosts[sizeof(Vars.szHosts)];
+    strcpy_s(hosts, sizeof(hosts), Vars.szHosts);
+    char* context = NULL;
+    for (char* entry = strtok_s(hosts, ",; \t", &context); entry; entry = strtok_s(NULL, ",; \t", &context)) {
+        if (_stricmp(entry, host) == 0)
+            return true;
+    }
+    return false;
+}
+
+JSAPI_FUNC(socket_open) {
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+    if (argc < 2)
+        return JS_TRUE;
+    if (!JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
         THROW_ERROR(cx, "Invalid hostname specified");
-
-    if (JS_ValueToInt32(cx, JS_ARGV(cx, vp)[1], &port) == JS_FALSE)
+    char* hostName = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (!hostName)
+        return JS_FALSE;
+    // Host check before the port conversion, so a refused host reports the host error first.
+    if (!IsAllowedHost(hostName)) {
+        JS_free(cx, hostName);
+        THROW_ERROR(cx, "Invalid hostname specified");
+    }
+    int32 port = 0;
+    if (!JS_ValueToInt32(cx, JS_ARGV(cx, vp)[1], &port)) {
+        JS_free(cx, hostName);
         THROW_ERROR(cx, "Could not convert parameter 2");
+    }
 
     WSADATA wsaData;
-
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        return JS_TRUE;
+        JS_free(cx, hostName);
+        return JS_TRUE; // rval false
+    }
+    SocketData* Sdata = new SocketData;
+    Sdata->mode = 0;
+    Sdata->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (Sdata->socket == INVALID_SOCKET) {
+        WSACleanup();
+        delete Sdata;
+        JS_free(cx, hostName);
+        THROW_ERROR(cx, "Failed to create the socket");
     }
 
-    SocketData* Sdata = new SocketData;
-
-    Sdata->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-    struct hostent* host;
-    host = gethostbyname(hostName);
+    struct hostent* host = gethostbyname(hostName);
     JS_free(cx, hostName);
+    const char* error = NULL;
     if (host == NULL)
-        THROW_ERROR(cx, "Cannot find host");
-    SOCKADDR_IN SockAddr;
-    SockAddr.sin_port = htons(port);
-    SockAddr.sin_family = AF_INET;
-    SockAddr.sin_addr.s_addr = *((unsigned long*)host->h_addr);
-    Sdata->mode = Sdata->socket;
-
-    if (connect(Sdata->socket, (SOCKADDR*)(&SockAddr), sizeof(SockAddr)) != 0) {
-        THROW_ERROR(cx, "Failed to connect");
+        error = "Cannot find host";
+    else {
+        SOCKADDR_IN SockAddr;
+        SockAddr.sin_port = htons((u_short)port);
+        SockAddr.sin_family = AF_INET;
+        SockAddr.sin_addr.s_addr = *((unsigned long*)host->h_addr);
+        if (connect(Sdata->socket, (SOCKADDR*)(&SockAddr), sizeof(SockAddr)) != 0)
+            error = "Failed to connect";
+    }
+    if (error) {
+        ReleaseSocketData(Sdata);
+        delete Sdata;
+        THROW_ERROR(cx, error);
     }
 
     JSObject* res = BuildObject(cx, &socket_class, socket_methods, socket_props, Sdata);
     if (!res) {
-        closesocket(Sdata->socket);
-        WSACleanup();
+        ReleaseSocketData(Sdata);
         delete Sdata;
         THROW_ERROR(cx, "Failed to define the socket object");
     }
@@ -120,47 +159,58 @@ JSAPI_FUNC(socket_open) {
 }
 
 JSAPI_FUNC(socket_close) {
-    SocketData* sData = (SocketData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &socket_class, NULL);
-
-    closesocket(sData->socket);
-    WSACleanup();
-
+    SocketData* sData = GetSocketThis(cx, vp);
+    if (!sData)
+        THROW_ERROR(cx, "Invalid socket object");
+    // Idempotent: the finalizer runs ReleaseSocketData again, and each WSAStartup gets exactly one WSACleanup.
+    ReleaseSocketData(sData);
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     return JS_TRUE;
 }
 
 JSAPI_FUNC(socket_send) {
-    SocketData* sData = (SocketData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &socket_class, NULL);
-    char* msg = NULL;
-
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
-        msg = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
-
-    send(sData->socket, msg, strlen(msg), 0);
-
+    SocketData* sData = GetSocketThis(cx, vp);
+    if (!sData)
+        THROW_ERROR(cx, "Invalid socket object");
+    if (sData->socket == INVALID_SOCKET)
+        THROW_ERROR(cx, "Socket is closed");
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "send: the argument must be a string");
+    char* msg = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (!msg)
+        return JS_FALSE;
+    // send may accept fewer bytes than asked, so loop until the whole message is out.
+    int total = (int)strlen(msg), sent = 0;
+    while (sent < total) {
+        int n = send(sData->socket, msg + sent, total - sent, 0);
+        if (n == SOCKET_ERROR)
+            break;
+        sent += n;
+    }
+    JS_free(cx, msg);
+    if (sent < total)
+        THROW_ERROR(cx, "Socket Error");
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     return JS_TRUE;
 }
 
 JSAPI_FUNC(socket_read) {
-    SocketData* sData = (SocketData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &socket_class, NULL);
-
-    char buffer[10000] = {0};
-    std::string returnVal;
-    int nDataLength;
-
-    int iResult = 0;
-    do {
-
-        iResult = recv(sData->socket, buffer, 10000, 0);
-        if (iResult > 0)
-            returnVal.append(buffer);
-        if (iResult == -1) {
-            THROW_ERROR(cx, "Socket Error");
-        }
-
-    } while (iResult > 10000);
-
-    wchar_t* wret = AnsiToUnicode(returnVal.c_str());
-    bool stored = StoreString(vp, JS_InternUCString(cx, wret));
+    SocketData* sData = GetSocketThis(cx, vp);
+    if (!sData)
+        THROW_ERROR(cx, "Invalid socket object");
+    if (sData->socket == INVALID_SOCKET)
+        THROW_ERROR(cx, "Socket is closed");
+    char buffer[10000];
+    // One recv per call: a second recv would block the script until more data arrives.
+    int iResult = recv(sData->socket, buffer, sizeof(buffer), 0);
+    if (iResult == SOCKET_ERROR)
+        THROW_ERROR(cx, "Socket Error");
+    // Converted by length so a full buffer has no terminator to find and an embedded NUL is kept.
+    int wlen = iResult > 0 ? MultiByteToWideChar(CP_UTF8, 0, buffer, iResult, NULL, 0) : 0;
+    wchar_t* wret = new wchar_t[wlen + 1];
+    if (wlen > 0)
+        MultiByteToWideChar(CP_UTF8, 0, buffer, iResult, wret, wlen);
+    bool stored = StoreString(vp, JS_NewUCStringCopyN(cx, wret, wlen));
     delete[] wret;
     if (!stored)
         return JS_FALSE;
@@ -170,7 +220,8 @@ JSAPI_FUNC(socket_read) {
 void socket_finalize(JSFreeOp* fop, JSObject* obj) {
     SocketData* sData = (SocketData*)JS_GetPrivate(obj);
     if (sData) {
-        closesocket(sData->socket);
-        WSACleanup();
+        ReleaseSocketData(sData);
+        delete sData;
+        JS_SetPrivate(obj, NULL);
     }
 }

@@ -362,34 +362,59 @@ JSAPI_FUNC(my_debugLog) {
     return JS_TRUE;
 }
 JSAPI_FUNC(my_copy) {
-    char* data = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "copy: the argument must be a string");
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
-    JS_ValueToString(cx, JS_ARGV(cx, vp)[0]);
-    HGLOBAL hText;
-    char* pText;
-    hText = GlobalAlloc(GMEM_DDESHARE | GMEM_MOVEABLE, strlen(data) + 1);
-    pText = (char*)GlobalLock(hText);
+    size_t len = 0;
+    const jschar* chars = JS_GetStringCharsAndLength(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]), &len);
+    if (!chars)
+        return JS_FALSE;
 
-    strcpy_s(pText, strlen(data) + 1, data);
+    HGLOBAL hText = GlobalAlloc(GMEM_MOVEABLE, (len + 1) * sizeof(wchar_t));
+    if (!hText)
+        return JS_TRUE;
+    wchar_t* pText = (wchar_t*)GlobalLock(hText);
+    if (!pText) {
+        GlobalFree(hText);
+        return JS_TRUE;
+    }
+    memcpy(pText, chars, len * sizeof(wchar_t));
+    pText[len] = 0;
     GlobalUnlock(hText);
 
-    OpenClipboard(NULL);
+    // An owner window is required: EmptyClipboard after OpenClipboard(NULL) leaves no owner and SetClipboardData fails.
+    if (!OpenClipboard(D2GFX_GetHwnd())) {
+        GlobalFree(hText);
+        return JS_TRUE;
+    }
     EmptyClipboard();
-    SetClipboardData(CF_TEXT, hText);
+    // CF_UNICODETEXT keeps non-ASCII text intact; Windows synthesizes CF_TEXT for ANSI readers.
+    bool ok = SetClipboardData(CF_UNICODETEXT, hText) != NULL;
     CloseClipboard();
-    JS_free(cx, data);
+    if (!ok)
+        GlobalFree(hText); // the system owns the handle only after SetClipboardData succeeds
+    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(ok));
     return JS_TRUE;
 }
 JSAPI_FUNC(my_paste) {
-    OpenClipboard(NULL);
-    HANDLE foo = GetClipboardData(CF_TEXT);
-    CloseClipboard();
-    LPVOID lptstr = GlobalLock(foo);
-    //   (char*)lptstr;
-    wchar_t* cpy = AnsiToUnicode((const char*)lptstr);
-    bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, cpy));
-    delete[] cpy;
-    if (!stored)
+    JSString* str = NULL;
+    // The clipboard handle is valid only while the clipboard is open, so the string is built before CloseClipboard.
+    if (OpenClipboard(NULL)) {
+        HANDLE h = GetClipboardData(CF_UNICODETEXT);
+        const wchar_t* p = h ? (const wchar_t*)GlobalLock(h) : NULL;
+        if (p) {
+            // Bounded by the handle size: clipboard text from another process is not guaranteed to be terminated.
+            str = JS_NewUCStringCopyN(cx, p, wcsnlen(p, GlobalSize(h) / sizeof(wchar_t)));
+            GlobalUnlock(h);
+            CloseClipboard();
+            if (!StoreString(vp, str))
+                return JS_FALSE;
+            return JS_TRUE;
+        }
+        CloseClipboard();
+    }
+    if (!StoreString(vp, JS_GetEmptyString(JS_GetRuntime(cx))))
         return JS_FALSE;
     return JS_TRUE;
 }
@@ -449,37 +474,34 @@ JSAPI_FUNC(my_sendCopyData) {
 
 JSAPI_FUNC(my_sendDDE) {
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-    jsint mode;
-    char *pszDDEServer = "\"\"", *pszTopic = "\"\"", *pszItem = "\"\"", *pszData = "\"\"";
-    JS_BeginRequest(cx);
+    if (argc < 2)
+        THROW_ERROR(cx, "sendDDE: mode and server are required");
+    if (!JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "sendDDE: mode must be an integer");
+    jsint mode = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
 
-    if (JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
-        JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], (uint32*)&mode);
+    // Arguments that are missing or not strings use the "\"\"" default; only encoded strings are freed.
+    static char kDefault[] = "\"\"";
+    char* args[4] = {NULL, NULL, NULL, NULL}; // server, topic, item, data
+    for (uint i = 0; i < 4; i++) {
+        if (i + 1 < argc && JSVAL_IS_STRING(JS_ARGV(cx, vp)[i + 1])) {
+            args[i] = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[i + 1]));
+            if (!args[i]) {
+                for (uint j = 0; j < i; j++)
+                    JS_free(cx, args[j]);
+                return JS_FALSE;
+            }
+        }
+    }
 
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[1]))
-        pszDDEServer = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[1]));
-
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[2]))
-        pszTopic = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[2]));
-
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[3]))
-        pszItem = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[3]));
-
-    if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[4]))
-        pszData = JS_EncodeStringToUTF8(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[4]));
-
-    JS_EndRequest(cx);
-    char buffer[255] = "";
-    BOOL result = SendDDE(mode, pszDDEServer, pszTopic, pszItem, pszData, (char**)&buffer, sizeof(buffer));
-
-    JS_free(cx, pszDDEServer);
-    JS_free(cx, pszTopic);
-    JS_free(cx, pszItem);
-    JS_free(cx, pszData);
-
+    char buffer[256] = "";
+    // One byte short of the buffer so the reply is always terminated.
+    BOOL result = SendDDE(mode, args[0] ? args[0] : kDefault, args[1] ? args[1] : kDefault, args[2] ? args[2] : kDefault,
+                          args[3] ? args[3] : kDefault, buffer, sizeof(buffer) - 1);
+    for (uint i = 0; i < 4; i++)
+        JS_free(cx, args[i]); // JS_free(NULL) is a no-op
     if (!result)
         THROW_ERROR(cx, "DDE Failed! Check the log for the error message.");
-
     if (mode == 0) {
         wchar_t* buf = AnsiToUnicode(buffer);
         bool stored = StoreString(vp, JS_NewUCStringCopyZ(cx, buf));
@@ -626,6 +648,87 @@ JSAPI_FUNC(my_loadMpq) {
     return JS_TRUE;
 }
 
+namespace {
+// The largest packet the game takes in either direction: its incoming append halts on a larger size (and on 0), and
+// its single-player send halts on a larger one.
+const DWORD kMaxPacketSize = 0x204;
+// Zero bytes kept after a copied packet and never passed on: the game's size reader measures a chat packet's (0x26)
+// strings with an unbounded strlen that reads aligned dwords, so the pad keeps that read inside the copy.
+const DWORD kPacketPad = 4;
+
+// getPacket's limit: an ArrayBuffer may hold any number of whole packets.
+const DWORD kNoPacketLimit = 0xFFFFFFFF;
+
+enum PacketArgs { PacketArgsBuilt, PacketArgsInvalid, PacketArgsTooLong, PacketArgsFailed };
+
+// Builds the script's packet into `packet` (len bytes, then kPacketPad zero bytes): one ArrayBuffer, or (size, value)
+// pairs, each adding the value's low `size` bytes (exactly 1 to 4) little endian. A packet longer than maxLen returns
+// TooLong before its bytes are copied. Invalid input is reported as a warning; Failed means a conversion threw and its
+// exception is pending.
+PacketArgs ReadPacketArgs(JSContext* cx, uint argc, jsval* argv, DWORD maxLen, std::vector<BYTE>& packet, DWORD& len) {
+    if (argc > 0 && !JSVAL_IS_PRIMITIVE(argv[0])) {
+        JSObject* obj = JSVAL_TO_OBJECT(argv[0]);
+        if (!JS_IsArrayBufferObject(obj)) {
+            JS_ReportWarning(cx, "invalid ArrayBuffer parameter");
+            return PacketArgsInvalid;
+        }
+        if (argc != 1) {
+            JS_ReportWarning(cx, "invalid packet format");
+            return PacketArgsInvalid;
+        }
+        uint32_t bytes = JS_GetArrayBufferByteLength(obj);
+        if (bytes > maxLen)
+            return PacketArgsTooLong;
+        const BYTE* data = JS_GetArrayBufferData(obj);
+        packet.assign(data, data + bytes);
+    } else {
+        if (argc == 0 || argc % 2 != 0) {
+            JS_ReportWarning(cx, "invalid packet format");
+            return PacketArgsInvalid;
+        }
+        for (uint i = 0; i < argc; i += 2) {
+            double width;
+            uint32_t value;
+            if (!JS_ValueToNumber(cx, argv[i], &width))
+                return PacketArgsFailed;
+            if (width != 1 && width != 2 && width != 3 && width != 4) {
+                JS_ReportWarning(cx, "invalid packet format");
+                return PacketArgsInvalid;
+            }
+            uint32_t size = (uint32_t)width;
+            if (size > maxLen - packet.size())
+                return PacketArgsTooLong;
+            if (!JS_ValueToECMAUint32(cx, argv[i + 1], &value))
+                return PacketArgsFailed;
+            for (uint32_t b = 0; b < size; b++)
+                packet.push_back((BYTE)(value >> (8 * b)));
+        }
+    }
+    len = (DWORD)packet.size();
+    packet.resize(packet.size() + kPacketPad, 0);
+    return PacketArgsBuilt;
+}
+
+// Finds the first packet of buf[0, len) the game can't take whole: one its size reader refuses, of size 0 or above
+// kMaxPacketSize (both halt the append), longer than the bytes left (copied anyway), or one the reader refuses given
+// only its own bytes. The append reads each packet against the rest of the buffer; the dispatcher then reads the
+// queued packet again with its own size alone (0x45F802) and drops it on a failure. Returns len when every packet
+// fits. `buf` must hold kPacketPad zero bytes after len.
+DWORD FindUnreadablePacket(BYTE* buf, DWORD len) {
+    DWORD off = 0;
+    while (off < len) {
+        DWORD size = 0;
+        if (!D2NET_GetPacketSize(buf + off, len - off, &size) || size < 1 || size > kMaxPacketSize || size > len - off)
+            return off;
+        DWORD own = 0;
+        if (size < len - off && (!D2NET_GetPacketSize(buf + off, size, &own) || own != size))
+            return off;
+        off += size;
+    }
+    return len;
+}
+} // namespace
+
 JSAPI_FUNC(my_sendPacket) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
 
@@ -633,41 +736,24 @@ JSAPI_FUNC(my_sendPacket) {
         THROW_WARNING(cx, vp, "sendPacket requires EnableUnsupported = true in d2bs.ini");
     }
 
-    BYTE* aPacket;
-    uint32 len = 0;
+    std::vector<BYTE> packet;
+    DWORD len = 0;
     JS_BeginRequest(cx);
-
-    if (JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[0])) {
-        JSObject* obj;
-        JS_ValueToObject(cx, JS_ARGV(cx, vp)[0], &obj);
-
-        if (!JS_IsArrayBufferObject(obj)) {
-            JS_EndRequest(cx);
-            THROW_WARNING(cx, vp, "invalid ArrayBuffer parameter");
-        }
-
-        len = JS_GetArrayBufferByteLength(obj);
-        aPacket = new BYTE[len];
-        memcpy(aPacket, JS_GetArrayBufferData(obj), len);
-    } else {
-        if (argc % 2 != 0) {
-            JS_EndRequest(cx);
-            THROW_WARNING(cx, vp, "invalid packet format");
-        }
-
-        aPacket = new BYTE[2 * argc];
-        uint32 size = 0;
-
-        for (uint i = 0; i < argc; i += 2, len += size) {
-            JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[i], &size);
-            JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[i + 1], (uint32_t*)&aPacket[len]);
-        }
+    PacketArgs built = ReadPacketArgs(cx, argc, JS_ARGV(cx, vp), kMaxPacketSize, packet, len);
+    JS_EndRequest(cx);
+    if (built == PacketArgsFailed)
+        return JS_FALSE;
+    if (built == PacketArgsInvalid) {
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
+    if (built == PacketArgsTooLong || len < 1) {
+        JS_ReportWarning(cx, "sendPacket: a packet must be 1 to %u bytes", kMaxPacketSize);
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
     }
 
-    JS_EndRequest(cx);
-    D2NET_SendPacket(len, 1, aPacket);
-    delete[] aPacket;
-    JS_SET_RVAL(cx, vp, JSVAL_TRUE);
+    JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(D2NET_SendPacket(len, 1, &packet[0]) != 0));
     return JS_TRUE;
 }
 
@@ -678,38 +764,28 @@ JSAPI_FUNC(my_getPacket) {
         THROW_WARNING(cx, vp, "getPacket requires EnableUnsupported = true in d2bs.ini");
     }
 
+    std::vector<BYTE> packet;
+    DWORD len = 0;
     JS_BeginRequest(cx);
-    BYTE* aPacket;
-    uint32 len = 0;
-
-    if (JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[0])) {
-        JSObject* obj;
-        JS_ValueToObject(cx, JS_ARGV(cx, vp)[0], &obj);
-
-        if (!JS_IsArrayBufferObject(obj)) {
-            JS_EndRequest(cx);
-            THROW_WARNING(cx, vp, "invalid ArrayBuffer parameter");
-        }
-
-        len = JS_GetArrayBufferByteLength(obj);
-        aPacket = new BYTE[len];
-        memcpy(aPacket, JS_GetArrayBufferData(obj), len);
-    } else {
-        if (argc % 2 != 0) {
-            JS_EndRequest(cx);
-            THROW_WARNING(cx, vp, "invalid packet format");
-        }
-
-        aPacket = new BYTE[2 * argc];
-        uint32 size = 0;
-
-        for (uint i = 0; i < argc; i += 2, len += size) {
-            JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[i], &size);
-            JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[i + 1], (uint32_t*)&aPacket[len]);
-        }
-    }
-
+    PacketArgs built = ReadPacketArgs(cx, argc, JS_ARGV(cx, vp), kNoPacketLimit, packet, len);
     JS_EndRequest(cx);
+    if (built == PacketArgsFailed)
+        return JS_FALSE;
+    if (built != PacketArgsBuilt) {
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
+    if (len == 0) {
+        JS_ReportWarning(cx, "getPacket: the packet is empty");
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
+    DWORD bad = FindUnreadablePacket(&packet[0], len);
+    if (bad != len) {
+        JS_ReportWarning(cx, "getPacket: packet 0x%02X at byte %u is incomplete or not one the game can read", (unsigned)packet[bad], (unsigned)bad);
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
 
     bool queued = false;
     {
@@ -721,13 +797,12 @@ JSAPI_FUNC(my_getPacket) {
         AutoCriticalRoom cRoom;
         if (Vars.bGameLoopEntered && *p_D2NET_Session && ClientState() != ClientStateMenu) {
             EnterCriticalSection(p_D2NET_CriticalPacketSection);
-            D2NET_ReceivePacket(aPacket, len);
+            D2NET_ReceivePacket(&packet[0], len);
             LeaveCriticalSection(p_D2NET_CriticalPacketSection);
             queued = true;
         }
     }
 
-    delete[] aPacket;
     JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(queued));
     return JS_TRUE;
 }

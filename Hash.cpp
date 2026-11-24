@@ -11,14 +11,15 @@ char* HashString(char* dataIn, ALG_ID algo) {
     HCRYPTHASH hash;
     DWORD lenOut = 0;
 
-    if (!CryptAcquireContext(&provider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
+    // PROV_RSA_AES is the general-purpose provider type with SHA-256/384/512 (the PROV_RSA_FULL providers stop at
+    // SHA-1); a verify context needs no key container, which hashing never uses.
+    if (!CryptAcquireContext(&provider, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT))
         return NULL;
     if (!CryptCreateHash(provider, algo, 0, 0, &hash)) {
         CryptReleaseContext(provider, 0);
         return NULL;
     }
 
-    // now we have a working crypto environment, let's encrypt
     if (!CryptHashData(hash, (BYTE*)dataIn, strlen(dataIn), 0)) {
         CryptDestroyHash(hash);
         CryptReleaseContext(provider, 0);
@@ -55,45 +56,44 @@ char* HashString(char* dataIn, ALG_ID algo) {
 }
 
 char* HashFile(wchar_t* file, ALG_ID algo) {
-    // set up the crypto environment
+    FILE* fp = NULL;
+    // Binary mode: a text-mode read collapses CRLF and the digest would not be the file's bytes.
+    if (_wfopen_s(&fp, file, L"rb") != 0 || !fp)
+        return NULL;
+
     HCRYPTPROV provider;
     HCRYPTHASH hash;
     DWORD lenOut = 0;
-    if (!CryptAcquireContext(&provider, NULL, NULL, PROV_RSA_FULL, 0))
+    // PROV_RSA_AES is the general-purpose provider type with SHA-256/384/512 (the PROV_RSA_FULL providers stop at
+    // SHA-1); a verify context needs no key container, which hashing never uses.
+    if (!CryptAcquireContext(&provider, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) {
+        fclose(fp);
         return NULL;
+    }
     if (!CryptCreateHash(provider, algo, 0, 0, &hash)) {
         CryptReleaseContext(provider, 0);
-        return NULL;
-    }
-
-    // now we have a working crypto environment, let's encrypt
-    // open the file
-    FILE* fp = NULL;
-    _wfopen_s(&fp, file, L"r");
-    if (!fp)
-        return NULL;
-
-    // read it to end, adding it to the hash stream
-    fseek(fp, 0, SEEK_END);
-    unsigned int size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    char* contents = new char[size];
-    if (fread(contents, sizeof(char), size, fp) != size && ferror(fp)) {
         fclose(fp);
-        delete[] contents;
-        CryptDestroyHash(hash);
-        CryptReleaseContext(provider, 0);
         return NULL;
     }
+
+    // Fixed-size chunks: the file's size never sizes an allocation, so a file of any length hashes.
+    BYTE chunk[4096];
+    size_t got;
+    bool ok = true;
+    while ((got = fread(chunk, 1, sizeof(chunk), fp)) > 0) {
+        if (!CryptHashData(hash, chunk, (DWORD)got, 0)) {
+            ok = false;
+            break;
+        }
+    }
+    if (ferror(fp))
+        ok = false;
     fclose(fp);
-    if (!CryptHashData(hash, (BYTE*)contents, size, 0)) {
-        delete[] contents;
+    if (!ok) {
         CryptDestroyHash(hash);
         CryptReleaseContext(provider, 0);
         return NULL;
     }
-    delete[] contents;
 
     if (!CryptGetHashParam(hash, HP_HASHVAL, NULL, &lenOut, 0)) {
         CryptDestroyHash(hash);

@@ -22,27 +22,34 @@ public:
 	 * \param count The number of characters to read.
 	 *
 	 * \return The characters that were read.
+	 * Throws if the file is not open (it was closed).
 	 */
 	String read(int count);
 
-	/** Read count bytes from the file. Used when the file was opened in binary
-	 * mode.
+	/** Read count 32-bit integers from the file. Used when the file was opened in
+	 * binary mode.
 	 *
-	 * \param count The number of bytes to read.
+	 * \param count The number of 4-byte little-endian integers to read.
 	 *
-	 * \return An array of the bytes read.
+	 * \return One integer when count is 1 (0 at the end of the file), otherwise an
+	 * array of the integers read, which is shorter than count at the end of the
+	 * file. Binary write stores integers as 4 bytes but other numbers as 8-byte
+	 * doubles and booleans as 1 byte, so only integers read back unchanged.
+	 * Throws if the file is not open (it was closed).
 	 */
-	byte[] read(int count);
+	int[] read(int count);
 
 	/** Read a line from the file and return it.
 	 *
 	 * \return The line.
+	 * Throws if the file is not open (it was closed).
 	 */
 	String readLine();
 
 	/** Read all the lines from the file into a String array.
 	 *
 	 * \return An array of all the lines in the file.
+	 * Throws if the file is not open (it was closed).
 	 */
 	String[] readAllLines();
 
@@ -51,6 +58,8 @@ public:
 	 * was.
 	 *
 	 * \return The entire file in a String.
+	 * Throws if the file is 256 MB or larger.
+	 * Throws if the file is not open (it was closed).
 	 */
 	String readAll();
 

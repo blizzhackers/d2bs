@@ -85,13 +85,22 @@ DWORD HPMPUpdateHandler(BYTE* pPacket, DWORD dwSize) {
 }
 
 DWORD ChatEventHandler(BYTE* pPacket, DWORD dwSize) {
-    char* pName = (char*)pPacket + 10;
-    char* pMessage = (char*)pPacket + strlen(pName) + 11;
-    wchar_t* uc = AnsiToUnicode(pMessage, CP_ACP);
-    //   char* enc = UnicodeToAnsi(uc); // convert d2 string to unicode to utf-8 for js compatibility
-
     if (Vars.bDontCatchNextMsg)
         Vars.bDontCatchNextMsg = FALSE;
+
+    // A chat packet is 10 header bytes, then the name and the message, each ending in a NUL inside the packet; one
+    // that doesn't fit (only a bad server sends one) passes to the game without a chat event.
+    if (dwSize < 12)
+        return TRUE;
+    char* pName = (char*)pPacket + 10;
+    const char* nameEnd = (const char*)memchr(pName, 0, dwSize - 10);
+    if (!nameEnd)
+        return TRUE;
+    char* pMessage = (char*)nameEnd + 1;
+    if (!memchr(pMessage, 0, dwSize - (DWORD)(pMessage - (char*)pPacket)))
+        return TRUE;
+    wchar_t* uc = AnsiToUnicode(pMessage, CP_ACP);
+    //   char* enc = UnicodeToAnsi(uc); // convert d2 string to unicode to utf-8 for js compatibility
 
     DWORD result = !(ChatEvent(pName, uc));
     //    delete[] enc;
@@ -112,12 +121,15 @@ DWORD NPCTransactionHandler(BYTE* pPacket, DWORD dwSize) {
 
 DWORD EventMessagesHandler(BYTE* pPacket, DWORD dwSize) {
     // packet breakdown: http://www.edgeofnowhere.cc/viewtopic.php?t=392307
+    // A 0x5A is always 40 bytes; a shorter one (only a script or a bad server sends one) passes with no gameevent.
+    if (dwSize < 40)
+        return TRUE;
     BYTE mode = pPacket[1];
     DWORD param1 = *(DWORD*)(pPacket + 3);
     BYTE param2 = pPacket[7];
     char name1[16] = "", name2[28] = "";
-    strcpy_s(name1, 16, (char*)pPacket + 8);
-    strcpy_s(name2, 16, (char*)pPacket + 24);
+    strncpy_s(name1, sizeof(name1), (char*)pPacket + 8, 15);
+    strncpy_s(name2, sizeof(name2), (char*)pPacket + 24, 15);
     wchar_t* wname2 = NULL;
 
     char* tables[3] = {"", "monstats", "objects"};
@@ -190,31 +202,46 @@ void RelinkOrphanedBeltItem(BYTE* pPacket, DWORD dwSize) {
 }
 
 DWORD ItemActionHandler(BYTE* pPacket, DWORD dwSize) {
+    // Reads stay inside the packet: one too short for the event's fields (only a script or a bad server sends one)
+    // raises no event, and an item code that doesn't end inside the packet is left empty.
+    if (dwSize < 14)
+        return TRUE;
     // TODO: fix this code later by changing the way it's parsed
     INT64 icode = 0;
     char code[5] = "";
     BYTE mode = pPacket[1];
     DWORD gid = *(DWORD*)&pPacket[4];
     BYTE dest = ((pPacket[13] & 0x1C) >> 2);
+    // The code is bits shift..shift+31 of the little-endian INT64 at off, and codeEnd is the byte after its last bit.
+    // Real 20- and 22-byte packets end right after their code, so the guard is codeEnd, not the INT64's own end.
+    DWORD off = 0, shift = 0, codeEnd = 0;
 
     switch (dest) {
     case 0:
     case 2:
-        icode = *(INT64*)(pPacket + 15) >> 0x04;
+        off = 15, shift = 0x04, codeEnd = 20;
         break;
     case 3:
     case 4:
     case 6:
         if (!((mode == 0 || mode == 2) && dest == 3)) {
             if (mode != 0xF && mode != 1 && mode != 12)
-                icode = *(INT64*)(pPacket + 17) >> 0x1C;
+                off = 17, shift = 0x1C, codeEnd = 25;
             else
-                icode = *(INT64*)(pPacket + 15) >> 0x04;
-        } else
-            icode = *(INT64*)(pPacket + 17) >> 0x05;
+                off = 15, shift = 0x04, codeEnd = 20;
+        } else {
+            off = 17, shift = 0x05, codeEnd = 22;
+        }
         break;
     default:
         break;
+    }
+
+    // Bytes past the packet stay zero; they only reach bits above the code, which the 4-byte copy below drops.
+    if (codeEnd != 0 && dwSize >= codeEnd) {
+        DWORD n = dwSize - off;
+        memcpy(&icode, pPacket + off, n < 8 ? n : 8);
+        icode >>= shift;
     }
 
     // Converting and Cleaning

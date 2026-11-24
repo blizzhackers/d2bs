@@ -2109,28 +2109,33 @@ void takeScreenshot();
  */
 bool moveNPC(Unit npc, uint32_t x, uint32_t y);
 
-/** Send a packet to the client.
- * Params are length, val, length, val, ...
- * Length is the number of bytes in the following value.
- * Value is an integer, put in the packet little endian.
- * Maximum packet length is 20.
+/** Pass packets to the client as if the server had sent them.
+ * Takes either one ArrayBuffer holding one or more whole packets, or pairs of arguments: size, value, size, value,
+ * ... where each size (1 to 4) is the number of bytes its value (an integer) adds to the packet, little endian.
+ * Every packet must be one the game can read, 1 to 516 bytes long and complete. An empty ArrayBuffer is refused.
+ * Pass a typed array's `.buffer`, not the typed array; the whole buffer is used, so for a typed array that covers
+ * only part of its buffer pass `view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)`. The packets
+ * are checked together: if one fails, none is passed on.
  *
  * \warning This is an exploit function.
  *
- * \return true when the packet was passed to the game's incoming packet queue, otherwise false (outside a game, for
- * example)
+ * \return true when the packets were passed to the game's incoming packet queue; false outside a game, and false
+ * with a warning when the input is refused. A value that throws while it is converted stops the call with its error.
  */
 bool getPacket(...);
 
 /** Send a packet to the server.
- * Params are length, val, length, val, ...
- * Length is the number of bytes in the following value.
- * Value is an integer, put in the packet little endian.
- * Maximum packet length is 20.
+ * Takes either one ArrayBuffer holding the packet, or pairs of arguments: size, value, size, value, ... where each
+ * size (1 to 4) is the number of bytes its value (an integer) adds to the packet, little endian. The packet must be
+ * 1 to 516 bytes long. Pass a typed array's `.buffer`, not the typed array; the whole buffer is used, so for a typed
+ * array that covers only part of its buffer pass
+ * `view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)`.
  *
  * \warning This is an exploit function.
  *
- * \returns true
+ * \return true when the game took the packet; false when it did not (outside a game, for example, or a
+ * `gamepacketsent` listener blocked it, with no warning), and false with a warning when the input is refused.
+ * A value that throws while it is converted stops the call with its error.
  */
 bool sendPacket(...);
 

@@ -292,9 +292,13 @@ JSAPI_FUNC(file_reopen) {
 }
 
 JSAPI_FUNC(file_read) {
-    // Not a File: the nothing value. Setting rval before JS_THIS_OBJECT is safe (it reads only vp[1]).
+    // this is read before rval is set: JS_THIS_OBJECT may need the callee in vp[0] (CallArgs.h). Not a File:
+    // the nothing value.
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
+    FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, self, &file_class, NULL);
     if (!fdata)
         return JS_TRUE;
     if (!fdata->fptr)
@@ -427,9 +431,13 @@ JSAPI_FUNC(file_read) {
 }
 
 JSAPI_FUNC(file_readLine) {
-    // Not a File: the nothing value. Setting rval before JS_THIS_OBJECT is safe (it reads only vp[1]).
+    // this is read before rval is set: JS_THIS_OBJECT may need the callee in vp[0] (CallArgs.h). Not a File:
+    // the nothing value.
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
+    FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, self, &file_class, NULL);
     if (!fdata)
         return JS_TRUE;
     if (!fdata->fptr)
@@ -526,9 +534,13 @@ JSAPI_FUNC(file_readAllLines) {
 }
 
 JSAPI_FUNC(file_readAll) {
-    // Not a File: the nothing value. Setting rval before JS_THIS_OBJECT is safe (it reads only vp[1]).
+    // this is read before rval is set: JS_THIS_OBJECT may need the callee in vp[0] (CallArgs.h). Not a File:
+    // the nothing value.
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &file_class, NULL);
+    FileData* fdata = (FileData*)JS_GetInstancePrivate(cx, self, &file_class, NULL);
     if (!fdata)
         return JS_TRUE;
     if (!fdata->fptr)

@@ -12,7 +12,8 @@
   version's CHANGELOG.md section.
   When master has moved on since the last release candidate, it also offers that candidate's final made from the
   candidate's own code: the release commit goes on the candidate's commit and takes the tag, and master gets the same
-  VERSION and CHANGELOG.md as a merge of it, its [Unreleased] entries kept for the next release.
+  VERSION and final section as a merge of it, its [Unreleased] entries kept for the next release (the release
+  commit's CHANGELOG.md has [Unreleased] empty).
 
     pwsh -File build\Release-D2BS.ps1             interactive
     pwsh -File build\Release-D2BS.ps1 -DryRun     rehearse: prints every step that would change something, changes no
@@ -77,33 +78,68 @@ function Invoke-GitStep([string[]]$GitArgs, [string[]]$Undo = @()) {
     exit 1
   }
 }
-# A commit of $Base's tree with these files' contents in it, on these parents, made in a private index so the index,
-# the working tree and every ref stay as they are. Each file is hashed as git would check it in at its path (line
-# endings included). Returns its SHA; a failure prints how to undo and stops.
-function New-ReleaseCommit([string]$Base, [string[]]$Parents, [hashtable]$Files, [string]$Message, [string[]]$Undo) {
-  function Get-GitOutput([string[]]$GitArgs) {
-    $out = @(& git -C $repo @GitArgs 2>&1)
-    if ($LASTEXITCODE) {
-      Bad "git $($GitArgs[0]) failed ($LASTEXITCODE): $(@($out | ForEach-Object { "$_" }) -join ' ')"
-      if ($Undo) { Say 'To undo:'; $Undo | ForEach-Object { Say "  $_" } }
-      exit 1
-    }
-    (@($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n").Trim()
+# A commit's parents and subject from the commit object itself, or $null when the object is missing: a shallow clone
+# shows a merge at its boundary with no parents, and a message body can quote another commit's subject.
+function Get-CommitInfo([string]$Commit) {
+  $raw = Read-Git @('cat-file', 'commit', $Commit)
+  if ($null -eq $raw) { return $null }
+  $header, $message = "$raw" -split "`n`n", 2
+  [pscustomobject]@{
+    Parents = @([regex]::Matches($header, '(?m)^parent ([0-9a-f]+)$') | ForEach-Object { $_.Groups[1].Value })
+    # As git log's %s reads it: the message's first paragraph, its lines joined with spaces.
+    Subject = (@(("$message" -split "`n`n", 2)[0] -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ' ')
   }
-  $savedIndex = $env:GIT_INDEX_FILE
-  $env:GIT_INDEX_FILE = Join-Path ([IO.Path]::GetTempPath()) "d2bs-release-index-$PID"
+}
+# What is wrong with a promotion's commit, or $null: it must sit on these parents with this subject (the "again"
+# lookup finds it by that subject), change CHANGELOG.md and VERSION from $Base and nothing else, and hold those files
+# exactly as approved. A commit hook may stage, rewrite or rename; this checks what was committed, in git's own terms,
+# against the working files, and those files against the approved bytes.
+function Get-ReleaseCommitProblem([string]$Dir, [string]$Commit, [string]$Base, [string[]]$Parents, [string]$Message, [byte[]]$Changelog, [byte[]]$Version) {
+  $info = Get-CommitInfo $Commit
+  if (-not $info -or ($info.Parents -join ' ') -cne ($Parents -join ' ')) { return 'it is not on the expected parents' }
+  if ($info.Subject -cne $Message) { return "its subject is '$($info.Subject)', not '$Message' (a commit-msg hook?)" }
+  $changed = ((Read-Git @('diff', '--name-only', $Base, $Commit)) -split "`n" | Sort-Object) -join ','
+  if ($changed -cne 'CHANGELOG.md,VERSION') { return "it changes $changed, not just CHANGELOG.md and VERSION (a commit hook?)" }
+  if (-not (Test-SameBytes (Join-Path $Dir 'CHANGELOG.md') $Changelog) -or -not (Test-SameBytes (Join-Path $Dir 'VERSION') $Version)) {
+    return 'CHANGELOG.md or VERSION changed during the commit (a commit hook?)'
+  }
+  & git -C $Dir diff --quiet $Commit -- VERSION CHANGELOG.md 2>$null
+  if ($LASTEXITCODE) { return 'it holds a CHANGELOG.md or VERSION other than the one approved (a commit hook?)' }
+  $null
+}
+# The release commit of a final made from a release candidate's code: VERSION and CHANGELOG.md committed on the
+# candidate's commit with plain git add and git commit (signing, hooks and line endings as any commit gets them), in a
+# temporary worktree checked out at the candidate, so its own .gitattributes, hooks and files apply. Returns its SHA;
+# a failure prints how to undo and stops.
+function New-CandidateReleaseCommit([string]$Candidate, [string]$Version, [string]$Changelog, [string]$Message, [string[]]$Undo) {
+  $dir = Join-Path ([IO.Path]::GetTempPath()) "d2bs-release-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
+  function Stop-Here([string]$Why) { Bad $Why; Say 'To undo:'; $Undo | ForEach-Object { Say "  $_" }; exit 1 }
+  $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Changelog)
   try {
-    Get-GitOutput @('read-tree', $Base) | Out-Null
-    foreach ($path in $Files.Keys) {
-      $mode = if ((Get-GitOutput @('ls-tree', $Base, '--', $path)) -match '^(\d+) ') { $Matches[1] } else { '100644' }
-      $blob = Get-GitOutput @('hash-object', '-w', "--path=$path", '--', $Files[$path])
-      Get-GitOutput @('update-index', '--add', '--cacheinfo', "$mode,$blob,$path") | Out-Null
+    # Inside the try: git keeps a worktree whose post-checkout hook failed. Out-Host: git's own output must not join
+    # the SHA this function returns.
+    Invoke-GitStep @('worktree', 'add', '--quiet', '--detach', $dir, $Candidate) $Undo | Out-Host
+    $versionBytes = [Text.UTF8Encoding]::new($false).GetBytes("$Version`n")
+    [IO.File]::WriteAllBytes((Join-Path $dir 'VERSION'), $versionBytes)
+    [IO.File]::WriteAllBytes((Join-Path $dir 'CHANGELOG.md'), $bytes)
+    foreach ($step in @(@('add', '--', 'VERSION', 'CHANGELOG.md'), @('commit', '--quiet', '-m', $Message))) {
+      Say ('  > git -C <temporary worktree> ' + (($step | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }) -join ' '))
+      & git -C $dir @step | Out-Host
+      if ($LASTEXITCODE) { Stop-Here "git $($step[0]) failed ($LASTEXITCODE)" }
     }
-    $tree = Get-GitOutput @('write-tree')
-    Get-GitOutput (@('commit-tree', $tree, '-m', $Message) + @($Parents | ForEach-Object { '-p', $_ }))
+    $sha = Read-Git @('-C', $dir, 'rev-parse', 'HEAD')
+    $problem = if ($sha) { Get-ReleaseCommitProblem $dir $sha $Candidate @($Candidate) $Message $bytes $versionBytes } else { 'git made no commit' }
+    if ($problem) { Stop-Here "the release commit is wrong: $problem" }
+    $sha
   } finally {
-    Remove-Item -LiteralPath $env:GIT_INDEX_FILE -ErrorAction SilentlyContinue
-    if ($null -eq $savedIndex) { Remove-Item Env:GIT_INDEX_FILE -ErrorAction SilentlyContinue } else { $env:GIT_INDEX_FILE = $savedIndex }
+    & git -C $repo worktree remove --force $dir 2>$null | Out-Null
+    $removed = -not $LASTEXITCODE
+    # git can drop the registration and still fail to delete a folder Windows holds open.
+    if (Test-Path -LiteralPath $dir) {
+      $registered = "$(Read-Git @('worktree', 'list', '--porcelain'))".Contains($dir.Replace('\', '/'))
+      $how = if ($removed -or -not $registered) { 'delete that folder, then run git worktree prune' } else { "run git worktree remove --force `"$dir`"" }
+      Warn "could not remove the temporary worktree at ${dir}: $how"
+    }
   }
 }
 
@@ -140,6 +176,10 @@ else { Ok 'fetched origin and its tags' }
 $branch = Read-Git @('rev-parse', '--abbrev-ref', 'HEAD')
 if ($branch -eq 'master') { Ok 'on branch master' } else { Fail "on branch '$branch', not master: releases ship only from master" }
 $headAtStart = Read-Git @('rev-parse', 'HEAD')
+# The branch too: a switch to another branch at the same commit would take the release commit there, while the push
+# names master.
+$refAtStart = Read-Git @('symbolic-ref', '--quiet', 'HEAD')
+function Test-HeadMoved { (Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart -or (Read-Git @('symbolic-ref', '--quiet', 'HEAD')) -cne $refAtStart }
 
 $status = @((Read-Git @('status', '--porcelain', '--untracked-files=all')) -split "`n" | Where-Object { $_ })
 $tracked = @($status | Where-Object { -not $_.StartsWith('??') })
@@ -148,6 +188,9 @@ $untracked = @($status | Where-Object { $_.StartsWith('??') } | ForEach-Object {
 if ($tracked.Count) { Fail "the working tree has $($tracked.Count) tracked change(s); the release commit must hold only VERSION, CHANGELOG.md and the changelog.d files it folds in" }
 else { Ok 'no tracked changes' }
 if ($untracked.Count) { Warn "untracked files (left out of the release): $(($untracked | Select-Object -First 5) -join ', ')$(if ($untracked.Count -gt 5) { ', ...' })" }
+# A merge whose tree equals HEAD leaves git status clean, yet no release commit belongs inside it (git commit refuses
+# paths during a merge, and a promotion's own merge would replace it).
+if ($null -ne (Read-Git @('rev-parse', '--quiet', '--verify', 'MERGE_HEAD'))) { Fail 'a merge is in progress: commit it or run git merge --abort first' }
 
 $behind = Read-Git @('rev-list', '--count', 'master..origin/master')
 $ahead = Read-Git @('rev-list', '--count', 'origin/master..master')
@@ -162,6 +205,11 @@ elseif ([int]$ahead -gt 0) {
 # Get-Content -Raw outputs nothing for an empty file, which even a [string] cast leaves $null (unlike [string]$null),
 # so check for it. (No ??: Windows PowerShell must parse this file to show #Requires' own message.)
 function Read-TextFile([string]$Path) { $text = Get-Content -LiteralPath $Path -Raw -Encoding utf8; if ($null -eq $text) { '' } else { $text } }
+# Bytes read as Read-TextFile reads a file: UTF-8, without a byte order mark.
+function ConvertFrom-Utf8Bytes([byte[]]$Bytes) {
+  $text = [Text.UTF8Encoding]::new($false).GetString($Bytes)
+  if ($text.Length -and $text[0] -eq [char]0xFEFF) { $text.Substring(1) } else { $text }
+}
 $current = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
 $currentVersion = ConvertTo-Version $current
 if (-not $currentVersion -or $currentVersion.ToString() -cne $current) {
@@ -337,13 +385,29 @@ if ($latestTag) {
 # is a release candidate's.
 $untested = @($log | Where-Object { $_ -notmatch '^\S+ chore\(release\): ' })
 # A final can also be made from the last release candidate's own commit, leaving out what master gained since: only
-# while VERSION is that candidate, its tag is the latest and on master's history, and master has moved on.
+# while VERSION is that candidate, its tag is the latest and on master's history, and master has moved on. Counted by
+# commit, merges included, since a subject can't tell what a commit changed.
 $promoteFrom = $null
-if ((Test-Candidate $currentVersion) -and $latestTag -ceq "v$current" -and $untested.Count) {
+if ((Test-Candidate $currentVersion) -and $latestTag -ceq "v$current") {
   $rcCommit = Read-Git @('rev-parse', '--verify', '--quiet', "$latestTag^{commit}")
-  if ($rcCommit -and $null -ne (Read-Git @('merge-base', '--is-ancestor', $rcCommit, 'HEAD')) -and
+  $past = if ($rcCommit) { Read-Git @('rev-list', '--count', "$rcCommit..HEAD") } else { $null }
+  if ($past -match '^\d+$' -and [int]$past -gt 0 -and $null -ne (Read-Git @('merge-base', '--is-ancestor', $rcCommit, 'HEAD')) -and
       (Read-Git @('show', "${rcCommit}:VERSION")) -ceq $current) {
-    $promoteFrom = [pscustomobject]@{ Tag = $latestTag; Commit = $rcCommit; Short = (Read-Git @('rev-parse', '--short', $rcCommit)) }
+    $promoteFrom = [pscustomobject]@{ Tag = $latestTag; Commit = $rcCommit; Short = (Read-Git @('rev-parse', '--short', $rcCommit)); Count = [int]$past }
+  }
+  # The candidate testers have is origin's tag: git fetch won't move a local tag that differs (the candidate released
+  # again from another clone), so a stale one here would promote other code.
+  if ($promoteFrom -and $NoFetch) { Warn "-NoFetch: $latestTag is not compared with origin's" }
+  elseif ($promoteFrom) {
+    $remoteTag = Read-Git @('ls-remote', '--tags', 'origin', "refs/tags/$latestTag", "refs/tags/$latestTag^{}")
+    $remoteLines = @("$remoteTag" -split "`n" | Where-Object { $_ })
+    $peeled = @($remoteLines | Where-Object { $_.EndsWith('^{}') }) + @($remoteLines | Where-Object { -not $_.EndsWith('^{}') })
+    $remoteCommit = if ($peeled.Count) { ($peeled[0] -split '\s+')[0] } else { $null }
+    if ($remoteCommit -cne $rcCommit) {
+      $why = if ($null -eq $remoteTag) { 'could not ask origin about it' } elseif (-not $remoteCommit) { 'origin has no such tag' } else { "origin's names $($remoteCommit.Substring(0, 7)): git fetch --tags --force, then run this again" }
+      Warn "no final of $latestTag's code is offered: $why"
+      $promoteFrom = $null
+    }
   }
 }
 # The entries per group, e.g. "Added 2, Fixed 5": Semantic Versioning makes an Added entry a minor version.
@@ -393,18 +457,34 @@ $options = @()
 $finalChoice = $null
 # The same version again only when its release commit exists but its tag is gone (deleted after a failed build).
 $currentTag = "v$current"
-# On master's own line: a final made from a release candidate's code has a release commit there (the merge) and
-# another off it (the merge's second parent, which the tag names).
-$releaseCommit = Read-Git @('log', '-1', '--first-parent', '--format=%h', '--extended-regexp', "--grep=^chore\(release\): v$($current -replace '\.', '\.')$")
+# Release commits by their exact subject (a merge message can quote one in its body). A final made from a release
+# candidate's code has two: the one off master, which the tag names, and master's merge of it, which --topo-order
+# lists first.
+$releaseSubject = "chore(release): v$current"
+$releaseShas = @(@((Read-Git @('log', '--topo-order', '--format=%H %s', '--extended-regexp', "--grep=^chore\(release\): v$($current -replace '\.', '\.')$")) -split "`n") |
+    Where-Object { $_ -and ($_ -split ' ', 2)[1] -ceq $releaseSubject } | ForEach-Object { ($_ -split ' ', 2)[0] })
+$releaseCommit = if ($releaseShas.Count) { Read-Git @('rev-parse', '--short', $releaseShas[0]) } else { $null }
 $sameAgain = [bool]($releaseCommit -and -not (Test-LocalTag $currentTag) -and -not (Test-RemoteTag $currentTag))
-# What "again" tags: HEAD, or the release commit off master when the one on master is the merge of it.
+# What "again" tags: HEAD, or the release commit off master when the one on master is the merge of it, read from the
+# commit objects themselves.
 $againTarget = $null
+$againBlocked = $false
 if ($sameAgain) {
-  $second = Read-Git @('rev-parse', '--verify', '--quiet', "$releaseCommit^2")
-  if ($second -and (Read-Git @('log', '-1', '--format=%s', $second)) -ceq "chore(release): v$current") {
-    $againTarget = [pscustomobject]@{ Commit = $second; Short = (Read-Git @('rev-parse', '--short', $second)) }
+  $info = Get-CommitInfo $releaseShas[0]
+  # Only a final is ever made from a candidate's code, so a release candidate's merge is an ordinary one.
+  if ($info -and $info.Parents.Count -ge 2 -and -not (Test-Candidate $currentVersion)) {
+    $second = Get-CommitInfo $info.Parents[1]
+    if ($null -eq $second) {
+      # Tagging HEAD here would publish master's code under the final of a release candidate's, so only "again" goes;
+      # a new version needs nothing from that commit.
+      Warn "the release commit $releaseCommit is a merge whose second parent is missing here (a shallow clone?): to release $current again, fetch the whole history first"
+      $sameAgain = $false
+      $againBlocked = $true
+    } elseif ($second.Subject -ceq $releaseSubject) {
+      $againTarget = [pscustomobject]@{ Commit = $info.Parents[1]; Short = (Read-Git @('rev-parse', '--short', $info.Parents[1])) }
+    }
   }
-  $options += [pscustomobject]@{ Label = "$current again (release commit $releaseCommit, tag deleted)"; Version = $current; Promote = $false }
+  if ($sameAgain) { $options += [pscustomobject]@{ Label = "$current again (release commit $releaseCommit, tag deleted)"; Version = $current; Promote = $false } }
 }
 if (Test-Candidate $currentVersion) {
   # Inside a release candidate cycle: the next candidate, or the final of the version they lead to.
@@ -414,7 +494,7 @@ if (Test-Candidate $currentVersion) {
   $options += [pscustomobject]@{ Label = 'final'; Version = $final; Promote = $false }
   $finalChoice = $options.Count
   if ($promoteFrom) {
-    $options += [pscustomobject]@{ Label = "final of $($promoteFrom.Tag)'s code (leaves out the $($untested.Count) commit(s) since)"; Version = $final; Promote = $true }
+    $options += [pscustomobject]@{ Label = "final of $($promoteFrom.Tag)'s code (leaves out the $($promoteFrom.Count) commit(s) since)"; Version = $final; Promote = $true }
   }
 } else {
   $next = [ordered]@{
@@ -445,6 +525,7 @@ while (-not $chosen) {
   # Tags and VERSION use the normalized form, so a leading-zero spelling can't duplicate an existing release.
   $candidate = $candidateVersion.ToString()
   if ($pick.Promote -and $candidate -cne $pick.Version) { Warn "the final of $($promoteFrom.Tag)'s code is $($pick.Version)"; continue }
+  if ($againBlocked -and $candidate -ceq $current) { Warn "$current again needs its release commit off master, which is missing here: fetch the whole history first"; continue }
   if (Test-LocalTag "v$candidate") { Warn "tag v$candidate already exists here"; continue }
   $remote = Test-RemoteTag "v$candidate"
   if ($remote) { Warn "tag v$candidate already exists on origin"; continue }
@@ -458,6 +539,8 @@ while (-not $chosen) {
 }
 $tag = "v$chosen"
 $bump = $chosen -ne $current
+# The "again" target belongs to the version offered again; a new version chosen beside it makes its own commit.
+if ($bump) { $againTarget = $null }
 $isCandidate = Test-Candidate (ConvertTo-Version $chosen)
 # A final made from the last release candidate's code: two commits (see the plan), and [Unreleased] stays on master.
 $promote = [bool]$pick.Promote
@@ -468,8 +551,10 @@ $date = Get-Date -Format 'yyyy-MM-dd'
 # A block left open inside the version's section takes the rest of the file into its notes.
 $unclosedNotes = "an HTML comment or a code fence in the [$chosen] notes never closes, so they would run to the end of CHANGELOG.md"
 $newChangelog = $null
-# A promotion's release commit's CHANGELOG.md, as approved at the review.
+# A promotion's release commit's CHANGELOG.md, and master's as bytes, as approved at the review.
 $releaseChangelog = $null
+$approvedBytes = $null
+$approvedVersion = $null
 # A re-release commits nothing, so it leaves changelog.d alone, and so does a promotion, whose entries describe code
 # the release leaves out.
 $folded = @(if ($bump -and -not $promote) { $fragments.Entries })
@@ -525,7 +610,7 @@ if ($promote) {
   $taken = if ($merging.Count -gt 1) { "merge CHANGELOG.md's $mergedNames sections into" } else { "rename CHANGELOG.md's $mergedNames section to" }
   Step "$taken [$chosen] - $date, below [Unreleased], whose entries stay for the next release"
   Step 'review the change; CHANGELOG.md can be edited there'
-  Step "commit VERSION and CHANGELOG.md (its [Unreleased] emptied) on $($promoteFrom.Tag)'s commit $($promoteFrom.Short) as `"chore(release): $tag`": the code its testers ran, without the $($untested.Count) commit(s) since"
+  Step "commit VERSION and CHANGELOG.md (its [Unreleased] emptied) on $($promoteFrom.Tag)'s commit $($promoteFrom.Short) as `"chore(release): $tag`": the code its testers ran, without the $($promoteFrom.Count) commit(s) since"
   Step "commit VERSION and CHANGELOG.md on master as `"chore(release): $tag`", a merge of that commit"
 } elseif ($bump) {
   Step "write VERSION: $current -> $chosen"
@@ -555,7 +640,7 @@ if (-not (Confirm-Step 'Proceed?' $true)) { Stop-Release }
 # The new CHANGELOG.md was made from the file as read at the start, and the plan named the commit to tag: an edit or
 # a commit made during the prompts would be lost or published unseen.
 if (-not $DryRun -and ((Read-Changelog) -cne $changelog -or (Read-Git @('status', '--porcelain', '--', 'VERSION', 'CHANGELOG.md')) -or
-    (Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart -or ($bump -and -not $promote -and @(Get-FragmentChanges).Count))) {
+    (Test-HeadMoved) -or ($bump -and -not $promote -and @(Get-FragmentChanges).Count))) {
   Stop-Release 'VERSION, CHANGELOG.md, changelog.d or HEAD changed during the prompts: run this again'
 }
 
@@ -592,13 +677,21 @@ if ($bump) {
         $answer = (Ask '(y) commit + tag + push  (d) show the diff  (n) abort: ').ToLower()
         if ($answer -in 'y', 'yes') {
           # A commit made while this prompt waited would go out on top of the release unseen.
-          if ((Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart) { Stop-Release 'HEAD changed during the review: run this again' }
+          if (Test-HeadMoved) { Stop-Release 'HEAD changed during the review: run this again' }
           # The commit takes the files as they are now, edits included; the tag build needs the version's notes.
           $versionNow = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
           if ($versionNow -cne $chosen) { Warn "VERSION no longer says ${chosen}: put it back, or answer n"; continue }
           $changelogNow = if (Test-Path -LiteralPath $changelogFile) { Read-Changelog } else { '' }
           # A promotion's tag build reads the release commit's CHANGELOG.md, which is this one with [Unreleased] emptied.
+          # Its commits take these bytes, read once here, so an edit saved after this answer reaches neither commit.
           if ($promote) {
+            # Plain assignments: an if expression would hand an empty file's empty array back as $null.
+            $approvedBytes = [byte[]]@()
+            if (Test-Path -LiteralPath $changelogFile) { $approvedBytes = [IO.File]::ReadAllBytes($changelogFile) }
+            $approvedVersion = [byte[]]@()
+            if (Test-Path -LiteralPath $versionFile) { $approvedVersion = [IO.File]::ReadAllBytes($versionFile) }
+            if ((ConvertFrom-Utf8Bytes $approvedVersion).Trim() -cne $chosen) { Warn "VERSION no longer says ${chosen}: put it back, or answer n"; continue }
+            $changelogNow = ConvertFrom-Utf8Bytes $approvedBytes
             # Master's copy keeps [Unreleased], and a block left open there would hide [$chosen] on master alone.
             if ($null -eq (Get-ChangelogSection -Text $changelogNow -Name $chosen) -and (Test-ChangelogHeadingHidden $changelogNow $chosen)) {
               Warn "CHANGELOG.md's [$chosen] heading is inside an HTML comment or a code fence now (on master's copy): close it, or answer n"; continue
@@ -679,25 +772,54 @@ Say 'Committing, tagging, pushing'
 $tagTarget = @()
 if ($promote) {
   $undoFiles = @('git restore --staged --worktree -- VERSION CHANGELOG.md')
-  if (-not $DryRun) { Say "  Should these steps stop before master moves, this undoes them: $($undoFiles[0])" }
-  Say "  > commit VERSION and CHANGELOG.md on $($promoteFrom.Tag)'s commit $($promoteFrom.Short) as `"chore(release): $tag`""
-  Say "  > commit VERSION and CHANGELOG.md on master as `"chore(release): $tag`", a merge of it"
-  $tagTarget = @('<the release commit>')
+  # --quit, not --abort: abort's reset would also undo anything else staged meanwhile, which the check below reports.
+  $undoMerge = @('git merge --quit') + $undoFiles
   if (-not $DryRun) {
-    # Both commits are built as objects first, and master moves once, after both exist, so a failure leaves only
-    # unreferenced objects behind. The working tree is never switched to the candidate's code.
-    $releaseFile = Join-Path ([IO.Path]::GetTempPath()) "d2bs-release-CHANGELOG-$PID.md"
-    try {
-      [IO.File]::WriteAllText($releaseFile, $releaseChangelog)
-      $promotedSha = New-ReleaseCommit $promoteFrom.Commit @($promoteFrom.Commit) @{ 'VERSION' = $versionFile; 'CHANGELOG.md' = $releaseFile } "chore(release): $tag" $undoFiles
-      $mergeSha = New-ReleaseCommit $headAtStart @($headAtStart, $promotedSha) @{ 'VERSION' = $versionFile; 'CHANGELOG.md' = $changelogFile } "chore(release): $tag" $undoFiles
-    } finally { Remove-Item -LiteralPath $releaseFile -ErrorAction SilentlyContinue }
-    # Moves master only if it is still the commit the release started from.
-    Invoke-GitStep @('update-ref', '-m', "chore(release): $tag", 'HEAD', $mergeSha, $headAtStart) $undoFiles
-    # The index still holds the files as the old master had them.
-    Invoke-GitStep @('reset', '--quiet', '--', 'VERSION', 'CHANGELOG.md') @('git reset --keep HEAD~1')
-    $tagTarget = @($promotedSha)
+    Say "  Should these steps stop before master's commit, this undoes them: git merge --quit (if a merge is under way), then $($undoFiles[0])"
+    Say "  After master's commit: git reset --keep HEAD~1, and git tag -d $tag once the tag exists"
   }
+  # Stops the promotion. A CHANGELOG.md that is no longer what the review approved is copied out first, since the undo
+  # puts back the committed one.
+  function Stop-Changed([string]$Message, [string[]]$Undo) {
+    if ((Test-Path -LiteralPath $changelogFile) -and -not (Test-SameBytes $changelogFile $approvedBytes)) {
+      $kept = Join-Path ([IO.Path]::GetTempPath()) "d2bs-CHANGELOG-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$PID.md"
+      Copy-Item -LiteralPath $changelogFile -Destination $kept
+      Write-Host "Your edits to CHANGELOG.md are kept in $kept"
+    }
+    Bad $Message; Say 'To undo:'; $Undo | ForEach-Object { Say "  $_" }; exit 1
+  }
+  function Get-Changed {
+    if (Test-HeadMoved) { 'HEAD' } elseif (-not (Test-SameBytes $changelogFile $approvedBytes)) { 'CHANGELOG.md' }
+    elseif (-not (Test-SameBytes $versionFile $approvedVersion)) { 'VERSION' }
+  }
+  $promotedSha = '<the release commit>'
+  if ($DryRun) {
+    Say "  > commit VERSION and CHANGELOG.md (its [Unreleased] emptied) on $($promoteFrom.Tag)'s commit $($promoteFrom.Short), in a temporary worktree, as `"chore(release): $tag`""
+  } else {
+    $promotedSha = New-CandidateReleaseCommit $promoteFrom.Commit $chosen $releaseChangelog "chore(release): $tag" $undoFiles
+    # master's commit takes the files from the disk, which must still be what the review approved, on the branch and
+    # commit it checked. The release commit made so far is only an object nothing names yet.
+    $moved = Get-Changed
+    if ($moved) { Stop-Changed "$moved changed after the review's answer: run this again" $undoFiles }
+  }
+  # master's commit: a merge that keeps master's tree (-s ours), then VERSION and CHANGELOG.md, committed as any commit.
+  # --no-autostash: merge.autoStash would stash the reviewed files and stage the old ones.
+  Invoke-GitStep @('merge', '--quiet', '--no-ff', '--no-commit', '--no-autostash', '-s', 'ours', $promotedSha) $undoMerge
+  Invoke-GitStep @('add', '--', 'VERSION', 'CHANGELOG.md') $undoMerge
+  if (-not $DryRun) {
+    # The merge commit takes the whole index (git commit refuses paths in a merge): exactly the two files, as approved.
+    $staged = ((Read-Git @('diff', '--cached', '--name-only')) -split "`n" | Where-Object { $_ } | Sort-Object) -join ','
+    if ($staged -cne 'CHANGELOG.md,VERSION') { Bad "master's commit would hold $(if ($staged) { $staged } else { 'no change' }), not just CHANGELOG.md and VERSION"; Say 'To undo:'; $undoMerge | ForEach-Object { Say "  $_" }; exit 1 }
+    $moved = Get-Changed
+    if ($moved) { Stop-Changed "$moved changed after the review's answer: run this again" $undoMerge }
+  }
+  Invoke-GitStep @('commit', '--quiet', '-m', "chore(release): $tag") $undoMerge
+  if (-not $DryRun) {
+    $problem = Get-ReleaseCommitProblem $repo (Read-Git @('rev-parse', 'HEAD')) $headAtStart @($headAtStart, $promotedSha) "chore(release): $tag" $approvedBytes $approvedVersion
+    # The restore first: git reset --keep refuses while a file it resets has edits (a post-commit hook's, say).
+    if ($problem) { Stop-Changed "master's release commit is wrong: $problem" @('git restore -- VERSION CHANGELOG.md', 'git reset --keep HEAD~1') }
+  }
+  $tagTarget = @($promotedSha)
 } elseif ($againTarget) {
   $tagTarget = @($againTarget.Commit)
 } elseif ($bump) {
@@ -713,6 +835,16 @@ if ($promote) {
 # --keep (not --hard) drops the release commit but keeps any edits made to other files during the prompts.
 $undoCommit = @(if ($bump) { 'git reset --keep HEAD~1' })
 Invoke-GitStep (@('tag', '-a', $tag, '-m', "D2BS $tag") + $tagTarget) $undoCommit
+# The tag's runs before this push: a release commit tagged again has the same tag and commit as its failed run.
+$earlierRuns = @()
+$earlierKnown = $false
+if ($slug -and $hasGh -and -not $DryRun) {
+  $listed = & gh run list --repo $slug --workflow build.yml --limit 50 --json databaseId,headBranch 2>$null
+  if (-not $LASTEXITCODE) {
+    $earlierKnown = $true
+    if ($listed) { $earlierRuns = @($listed | ConvertFrom-Json | Where-Object { $_.headBranch -eq $tag } | ForEach-Object { $_.databaseId }) }
+  }
+}
 Say "  > git push --atomic origin master $tag"
 if (-not $DryRun) {
   # One atomic push: master and the tag both land or neither does.
@@ -757,16 +889,22 @@ if ($isCandidate) {
   Say '  If the build fails on a download, re-run it from its Actions page. If the code or the DLL is at fault:'
   Say "     gh release delete $tag --repo $repoArg --yes   (if the draft exists)"
 }
-Say "     git push origin :refs/tags/$tag"
-Say "     git tag -d $tag"
-# Again re-tags a promotion's release commit, whose code a fix on master can't reach.
+# A promotion's tag stays: a fix on master can't reach its release commit, master's [Unreleased] link starts at it, and
+# the next version follows it.
 if ($promote -or $againTarget) {
-  Say "  then run this script again: it offers $chosen again, on the same release commit. A fault in the code itself"
-  Say '  is fixed on master and ships in the next version.'
-} else { Say "  then fix master and run this script again: it offers $chosen again." }
+  Say "  then keep $tag (master's [Unreleased] link starts there), fix master and release the next version."
+} else {
+  Say "     git push origin :refs/tags/$tag"
+  Say "     git tag -d $tag"
+  Say "  then fix master and run this script again: it offers $chosen again."
+}
 # Testers report against the name, so a release candidate they have keeps its one DLL.
 if ($isCandidate) { Say '  Once testers have it, cut the next release candidate instead.' }
-if ($slug -and $hasGh -and -not $DryRun -and (Confirm-Step 'Watch the release build now?' $true -EofMeansNo)) {
+# A tag pushed again can name the commit its failed run built, so without the runs from before the push the two can't
+# be told apart.
+if ($slug -and $hasGh -and -not $DryRun -and -not $bump -and -not $earlierKnown) {
+  Warn "gh could not list the earlier runs of $tag before the push, so this one can't be told from them; see $url/actions"
+} elseif ($slug -and $hasGh -and -not $DryRun -and (Confirm-Step 'Watch the release build now?' $true -EofMeansNo)) {
   # The run for this tag's commit: a tag pushed again after a failed build also has the old tag's run.
   $tagCommit = Read-Git @('rev-parse', "$tag^{commit}")
   $runId = $null
@@ -778,7 +916,7 @@ if ($slug -and $hasGh -and -not $DryRun -and (Confirm-Step 'Watch the release bu
     if ($LASTEXITCODE) { $ghFailures++; continue }
     $ghFailures = 0
     if ($runs) {
-      $runId = @($runs | ConvertFrom-Json | Where-Object { $_.headBranch -eq $tag -and $_.headSha -eq $tagCommit }) |
+      $runId = @($runs | ConvertFrom-Json | Where-Object { $_.headBranch -eq $tag -and $_.headSha -eq $tagCommit -and $_.databaseId -notin $earlierRuns }) |
         Select-Object -First 1 -ExpandProperty databaseId
     }
   }

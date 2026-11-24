@@ -128,21 +128,22 @@ release never met. A version can also skip release candidates and go straight to
 When `master` has moved on since the last release candidate and that candidate is the one to ship, the script also
 offers its final made from the candidate's own code (`final of v1.7.0-rc.2's code`). The release commit goes on the
 candidate's commit, changing only `VERSION` and `CHANGELOG.md`, and takes the tag, so the DLL is the code its testers
-ran. `master` gets the same `VERSION` and `CHANGELOG.md` as a merge of that commit: the candidates' sections become
-`[1.7.0]` there too, while the entries under `[Unreleased]` and in `changelog.d`, which describe the code left out,
-stay for the next release. The release commit's own `CHANGELOG.md` has an empty `[Unreleased]`.
+ran. `master` gets the same `VERSION` as a merge of that commit, and its `CHANGELOG.md` the same `[1.7.0]` section
+made from the candidates' sections, while the entries under `[Unreleased]` and in `changelog.d`, which describe the
+code left out, stay for the next release. The release commit's own `CHANGELOG.md` has an empty `[Unreleased]`.
 
 ### The release script
 
 On an up-to-date `master` with no uncommitted changes, the script:
 
-1. Checks the preconditions: on `master`, no tracked changes, not behind `origin/master`, a committed `CHANGELOG.md`
-   with an `## [Unreleased]` heading, and the last CI build of `master`.
+1. Checks the preconditions: on `master`, no tracked changes, no merge in progress, not behind `origin/master`, a
+   committed `CHANGELOG.md` with an `## [Unreleased]` heading, and the last CI build of `master`.
 2. Counts the entries under `[Unreleased]` (the `changelog.d` ones included) and each release candidate's section
    per group, and offers the next version: after a final release, the first release candidate of the next patch,
    minor or major version (e.g. `1.6.5-rc.1` after `1.6.4`), or that version's final; after a release candidate, the
-   next one (`1.6.5-rc.2`) or the final (`1.6.5`), and the final of its own code when `master` has commits past its
-   tag (above), which takes no other version. The default is the same version again when that is offered;
+   next one (`1.6.5-rc.2`) or the final (`1.6.5`), and the final of its own code (above) when its tag is the latest
+   release tag, names the same commit as `origin`'s, and `master` has commits past it; that option takes no other
+   version. The default is the same version again when that is offered;
    otherwise the patch release candidate after a final, and the next release candidate after one, or the final when
    nothing new is under `[Unreleased]`. You can type another version; one that isn't newer than `VERSION` or the
    latest release tag (release candidates included) needs a confirmation (except when it offers the same version
@@ -159,10 +160,13 @@ On an up-to-date `master` with no uncommitted changes, the script:
    Leaving the review any other way puts back `VERSION`, `CHANGELOG.md` and the `changelog.d` files the plan read, as
    they were, after copying an edited `CHANGELOG.md` or `changelog.d` file to your temp folder (the script prints
    where). A file added to `changelog.d` during the review stays where it is, and a renamed one leaves both names:
-   the old one put back, the new one as you left it.
+   the old one put back, the new one as you left it. A final of a candidate's code differs here: `[Unreleased]`
+   keeps its entries, `changelog.d` is neither shown nor checked, and its commits take `CHANGELOG.md` as `y` found
+   it, so an edit saved after that answer stops the release.
 4. Commits `VERSION` and `CHANGELOG.md`, deleting those `changelog.d` files, as `chore(release): v1.6.5`, unless a
-   commit was made during the review, which stops it. A final of a candidate's code makes its two commits instead,
-   both `chore(release): v1.6.5`, and moves `master` once both exist; it leaves `changelog.d` alone.
+   commit was made or the branch switched during the review, which stops it. A final of a candidate's code commits
+   twice instead, both as `chore(release): v1.6.5`: on the candidate's commit first (in a temporary worktree, so your
+   checkout never leaves `master`), then on `master` as a merge of that commit. It leaves `changelog.d` alone.
 5. Creates the annotated tag `v1.6.5` (on the release commit off `master` for a final of a candidate's code).
 6. Pushes `master` and the tag in one atomic push.
 
@@ -180,13 +184,14 @@ one DLL):
    under `[Unreleased]` or in `changelog.d`.
 4. Run the script again. It offers the same version again, for the fixed `master`.
 
-A final made from a candidate's code is offered again on its own release commit, so steps 3 and 4 apply only to a
-failed download; a fault in its code is fixed on `master` and ships in the next version.
+For a final made from a candidate's code, only step 1 applies: keep its tag, which `master`'s `[Unreleased]` link
+starts at, then fix `master` and release the next version. Running the script again would offer that version again
+only on its own release commit, which a fix on `master` doesn't reach.
 
 Run `pwsh -File build\tests\Test-ReleaseScript.ps1` after changing `Release-D2BS.ps1`, `Changelog.psm1` or
 `Get-ReleaseNotes.ps1`. It releases into a throwaway sandbox (a bare clone of this repo without its tags as `origin`,
 with your working copies of the scripts and a `CHANGELOG.md` of its own) through every path above that needs no
 GitHub, including a rejected push, a re-release, a release candidate cycle up to its final, a final of a candidate's
-code and `changelog.d` entries from several commits and a merge, and nothing reaches this repo or GitHub. The check of `master`'s CI build and the
-watch of the tag build need GitHub, so the test can't run them. Its exit code is the number of failed checks, or 1 if
-a git step in the sandbox itself fails.
+code and `changelog.d` entries from several commits and a merge, and nothing reaches this repo or GitHub. The check
+of `master`'s CI build and the watch of the tag build need GitHub, so the test can't run them. Its exit code is the
+number of failed checks, or 1 if a git step in the sandbox itself fails.

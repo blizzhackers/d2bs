@@ -1324,7 +1324,15 @@ function Invoke-Scenarios {
     $r.Text -match 'a new version needs them there first, or in changelog\.d' -and $r.Text -notmatch 'changelog\.d:') $r.Text
 
   # 16. A final made from the last release candidate's code, leaving out what master gained since.
-  # 16a. Not offered while master has nothing past the candidate, nor after a final.
+  # 16a. Not offered while master has nothing past the candidate, nor after a final. The candidate stores
+  #      CHANGELOG.md as it is (CRLF) and master later stores it as text (LF): the release commit off master must
+  #      follow the candidate's rule.
+  $attributes = Join-Path $work '.gitattributes'
+  $attributesBase = [IO.File]::ReadAllText($attributes)
+  [IO.File]::WriteAllText($attributes, $attributesBase + "CHANGELOG.md -text`n")
+  G $work @('add', '--renormalize', '--', '.gitattributes', 'CHANGELOG.md') | Out-Null
+  G $work @('commit', '--quiet', '-m', 'sandbox: CHANGELOG.md stored as it is') | Out-Null
+  G $work @('push', '--quiet', 'origin', 'master') | Out-Null
   Add-Entry '- **Candidate fix A.** One line.'
   $r = Invoke-Release @('1', '', 'y', 'y')
   Check 'the release candidate to promote exits 0' ($r.Code -eq 0 -and (G $origin @('tag', '--list', 'v1.6.9-rc.1'))) $r.Text
@@ -1332,6 +1340,19 @@ function Invoke-Scenarios {
   $rcTree = G $work @('rev-parse', 'v1.6.9-rc.1^{tree}')
   $r = Invoke-Release @('1', '', 'n') @('-DryRun')
   Check 'no promotion is offered with nothing past the candidate' ($r.Text -match '2\) final -> v1\.6\.9' -and $r.Text -notmatch "code \(leaves out") $r.Text
+  # A commit titled like a release commit still changes the code, so it counts. It also makes master store
+  # CHANGELOG.md as text.
+  Set-Content -LiteralPath (Join-Path $work 'packaging.txt') -Value 'a packaging change'
+  [IO.File]::WriteAllText($attributes, $attributesBase + "CHANGELOG.md text eol=crlf`n")
+  # --renormalize takes tracked files only, so the new file is added on its own.
+  G $work @('add', '--', 'packaging.txt') | Out-Null
+  G $work @('add', '--renormalize', '--', '.gitattributes', 'CHANGELOG.md') | Out-Null
+  G $work @('commit', '--quiet', '-m', 'chore(release): adjust packaging') | Out-Null
+  G $work @('push', '--quiet', 'origin', 'master') | Out-Null
+  $r = Invoke-Release @('', '', 'n') @('-DryRun')
+  Check 'a commit titled like a release commit makes the promotion offered' ($r.Text -match "3\) final of v1\.6\.9-rc\.1's code \(leaves out the 1 commit\(s\) since\)") $r.Text
+  Check '  and with nothing under [Unreleased], Enter still takes the ordinary final' ($r.Text -match 'Choice \[2\]: ' -and $r.Text -match 'Version \[1\.6\.9\]: ' -and
+    $r.Text -match 'merge CHANGELOG\.md''s \[1\.6\.9-rc\.1\] and \[Unreleased\] sections' -and $r.Text -notmatch 'rename CHANGELOG\.md') $r.Text
   # Code, an [Unreleased] entry and a changelog.d file, all after the candidate.
   Set-Content -LiteralPath (Join-Path $work 'later.txt') -Value 'code after the candidate'
   G $work @('add', '--', 'later.txt') | Out-Null
@@ -1339,7 +1360,7 @@ function Invoke-Scenarios {
   G $work @('push', '--quiet', 'origin', 'master') | Out-Null
   Add-Entry '- **Later fix.** One line.'
   Add-Fragments ([ordered]@{ 'later-frag.fixed.md' = "- **Later fragment.** One line.`n" }) 'a later entry'
-  $offer = "3\) final of v1\.6\.9-rc\.1's code \(leaves out the 3 commit\(s\) since\) -> v1\.6\.9"
+  $offer = "3\) final of v1\.6\.9-rc\.1's code \(leaves out the 4 commit\(s\) since\) -> v1\.6\.9"
 
   # 16b. A dry run offers it third, keeps the next candidate the default, and changes nothing.
   $head = G $work @('rev-parse', 'HEAD')
@@ -1355,6 +1376,13 @@ function Invoke-Scenarios {
   Check '  and does not warn about untested commits' ($r.Text -notmatch 'that no release candidate had') $r.Text
   Check '  and changes nothing' ((G $work @('rev-parse', 'HEAD')) -eq $head -and (Get-FileSnapshot) -ceq $before -and
     -not (G $work @('status', '--porcelain')) -and -not (G $work @('tag', '--list', 'v1.6.9'))) (G $work @('status', '--porcelain'))
+  # 16b2. A candidate released again from another clone moves origin's tag, which git fetch won't move here: no
+  #       promotion of the stale local tag is offered.
+  $originTag = G $origin @('rev-parse', 'refs/tags/v1.6.9-rc.1')
+  G $origin @('update-ref', 'refs/tags/v1.6.9-rc.1', $head) | Out-Null
+  try { $r = Invoke-Release @('1', '', 'n') @('-DryRun') } finally { G $origin @('update-ref', 'refs/tags/v1.6.9-rc.1', $originTag) | Out-Null }
+  Check 'a local candidate tag that differs from origin''s offers no promotion' ($r.Text -notmatch "code \(leaves out" -and
+    $r.Text -match "no final of v1\.6\.9-rc\.1's code is offered: origin's names $($head.Substring(0, 7))") $r.Text
 
   # 16c. Its version is the candidate's final only; n at its review puts the files back.
   $r = Invoke-Release @('3', '1.6.10', '', 'y', 'n')
@@ -1362,10 +1390,75 @@ function Invoke-Scenarios {
   Check '  and n at its review puts everything back' ($r.Code -eq 1 -and (G $work @('rev-parse', 'HEAD')) -eq $head -and (Get-FileSnapshot) -ceq $before -and
     -not (G $work @('status', '--porcelain')) -and -not (G $work @('tag', '--list', 'v1.6.9'))) $r.Text
 
+  # 16c2. A switch to another branch at the same commit during the review stops it: the release would land there.
+  $run = Start-Release
+  try {
+    Wait-Prompt $run 'Choice [1]: '
+    Send-Answer $run '3'
+    Wait-Prompt $run 'Version [1.6.9]: '
+    Send-Answer $run ''
+    Wait-Prompt $run 'Proceed? [Y/n] '
+    Send-Answer $run 'y'
+    Wait-Prompt $run $review
+    G $work @('switch', '--quiet', '-c', 'side') | Out-Null
+    Send-Answer $run 'y'
+    $r = Complete-Release $run
+  } catch {
+    $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
+  } finally {
+    if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+    if ((G $work @('branch', '--show-current')) -ceq 'side') { G $work @('switch', '--quiet', 'master') | Out-Null }
+    G $work @('branch', '--quiet', '-D', 'side') | Out-Null
+  }
+  Check 'a branch switch at the same commit during the review stops the promotion' ($r.Code -eq 1 -and $r.Text -match 'HEAD changed during the review' -and
+    (G $work @('rev-parse', 'HEAD')) -eq $head -and -not (G $work @('status', '--porcelain')) -and -not (G $work @('tag', '--list', 'v1.6.9'))) $r.Text
+
   # 16d. The promotion, with an edit at the review that both commits take. It leaves changelog.d alone, so a problem
-  #      there, which stops any other new version, only warns.
+  #      there, which stops any other new version, only warns. merge.autoStash is on and a pre-commit hook stages
+  #      every tracked change, as some formatter hooks do: neither may change what either commit holds.
   Add-Fragments ([ordered]@{ 'Bad_Name.fixed.md' = "- **Bad name.** One line.`n" }) 'a changelog.d problem'
   $head = G $work @('rev-parse', 'HEAD')
+  $hook = Join-Path $work '.git' 'hooks' 'pre-commit'
+  function Set-Hook([string]$Body) {
+    [IO.File]::WriteAllText($hook, "#!/bin/sh`n$Body")
+    if (-not $IsWindows) { & chmod +x $hook }
+  }
+  # 16d0. A hook that rewrites CHANGELOG.md during the commit stops the release before anything names that commit; the
+  #       printed undo puts the files back, and no temporary worktree stays.
+  Set-Hook "printf 'hook line\n' >> CHANGELOG.md`ngit add CHANGELOG.md`n"
+  try { $r = Invoke-Release @('3', '', 'y', 'y') } finally { Remove-Item -LiteralPath $hook -ErrorAction SilentlyContinue }
+  $undo = @($r.Text -split "`n" | Where-Object { $_ -match '^  git ' } | ForEach-Object { $_.Trim() })
+  foreach ($u in $undo) { G $work @($u.Substring(4) -split ' ') | Out-Null }
+  Check 'a hook that rewrites CHANGELOG.md during the release commit stops the promotion' ($r.Code -eq 1 -and
+    $r.Text -match 'the release commit is wrong: CHANGELOG\.md or VERSION changed during the commit' -and
+    (G $work @('rev-parse', 'HEAD')) -eq $head -and -not (G $work @('tag', '--list', 'v1.6.9'))) $r.Text
+  Check '  its printed undo leaves a clean tree, and no temporary worktree stays' ($undo.Count -ge 1 -and -not (G $work @('status', '--porcelain')) -and
+    @((G $work @('worktree', 'list', '--porcelain')) -split "`n" | Where-Object { $_ -like 'worktree *' }).Count -eq 1) "$($undo -join ' | ') $(G $work @('status', '--porcelain'))"
+  # 16d0b. One that commits altered notes but puts the file back (in the temporary worktree only, where .git is a
+  #        file) is caught by comparing the commit with the file.
+  Set-Hook "if [ -f .git ]; then cp CHANGELOG.md .kept; printf 'hook line\n' >> CHANGELOG.md; git add CHANGELOG.md; mv .kept CHANGELOG.md; fi`n"
+  try { $r = Invoke-Release @('3', '', 'y', 'y') } finally { Remove-Item -LiteralPath $hook -ErrorAction SilentlyContinue }
+  $undo = @($r.Text -split "`n" | Where-Object { $_ -match '^  git ' } | ForEach-Object { $_.Trim() })
+  foreach ($u in $undo) { G $work @($u.Substring(4) -split ' ') | Out-Null }
+  Check 'a hook that commits altered notes and restores the file stops the promotion' ($r.Code -eq 1 -and
+    $r.Text -match 'the release commit is wrong: it holds a CHANGELOG\.md or VERSION other than the one approved' -and
+    (G $work @('rev-parse', 'HEAD')) -eq $head -and -not (G $work @('status', '--porcelain'))) $r.Text
+  # 16d0c. A commit-msg hook on master only that adds a line to the subject's paragraph (git's %s joins it) stops it
+  #        after master's commit; that undo puts master back.
+  $msgHook = Join-Path $work '.git' 'hooks' 'commit-msg'
+  [IO.File]::WriteAllText($msgHook, "#!/bin/sh`nif [ -d .git ]; then printf 'line two\n' >> `"`$1`"; fi`n")
+  if (-not $IsWindows) { & chmod +x $msgHook }
+  try { $r = Invoke-Release @('3', '', 'y', 'y') } finally { Remove-Item -LiteralPath $msgHook -ErrorAction SilentlyContinue }
+  $undo = @($r.Text -split "`n" | Where-Object { $_ -match '^  git ' } | ForEach-Object { $_.Trim() })
+  foreach ($u in $undo) { G $work @($u.Substring(4) -split ' ') | Out-Null }
+  Check 'a commit-msg hook that changes master''s subject stops the promotion after master''s commit' ($r.Code -eq 1 -and
+    $r.Text -match "master's release commit is wrong: its subject is 'chore\(release\): v1\.6\.9 line two'") $r.Text
+  Check '  and its printed undo puts master back, clean and untagged' (($undo -join ' | ') -ceq 'git restore -- VERSION CHANGELOG.md | git reset --keep HEAD~1' -and
+    (G $work @('rev-parse', 'HEAD')) -eq $head -and -not (G $work @('status', '--porcelain')) -and -not (G $work @('tag', '--list', 'v1.6.9')) -and
+    (G $origin @('rev-parse', 'master')) -eq $head) "$($undo -join ' | ') $(G $work @('status', '--porcelain'))"
+  G $work @('config', 'merge.autoStash', 'true') | Out-Null
+  $ran = Join-Path $work '.git' 'hook-ran'
+  Set-Hook "echo ran >> `"`$(git rev-parse --git-common-dir)/hook-ran`"`ngit add -u`n"
   $run = Start-Release
   try {
     Wait-Prompt $run 'Choice [1]: '
@@ -1383,16 +1476,22 @@ function Invoke-Scenarios {
     $r = [pscustomobject]@{ Code = -1; Text = "the run stopped early: $_" }
   } finally {
     if (-not $run.Proc.HasExited) { $run.Proc.Kill($true) }
+    Remove-Item -LiteralPath $hook -ErrorAction SilentlyContinue
+    G $work @('config', '--unset', 'merge.autoStash') | Out-Null
   }
+  $hookRuns = if (Test-Path -LiteralPath $ran) { @(Get-Content -LiteralPath $ran).Count } else { 0 }
+  Remove-Item -LiteralPath $ran -ErrorAction SilentlyContinue
   Check 'the promotion exits 0, a changelog.d problem only warning' ($r.Code -eq 0 -and $r.Text -match '\[!!\] changelog\.d: changelog\.d/Bad_Name\.fixed\.md: not named' -and
     $r.Text -notmatch 'changelog\.d has 1 problem\(s\)' -and [bool](G $work @('ls-files', '--', 'changelog.d/Bad_Name.fixed.md'))) $r.Text
+  Check '  the pre-commit hook ran for both commits' ($hookRuns -eq 2) "hook runs: $hookRuns"
+  Check '  and leaves no temporary worktree behind' (@((G $work @('worktree', 'list', '--porcelain')) -split "`n" | Where-Object { $_ -like 'worktree *' }).Count -eq 1) (G $work @('worktree', 'list'))
   $release = G $work @('rev-parse', 'v1.6.9^{commit}')
   Check '  v1.6.9 is annotated, on origin, and tags a commit on the candidate''s' ((G $work @('cat-file', '-t', 'v1.6.9')) -eq 'tag' -and
     (G $origin @('rev-parse', 'v1.6.9^{commit}')) -eq $release -and (G $work @('rev-list', '--parents', '-n', '1', $release)) -eq "$release $rcCommit" -and
     (G $work @('log', '-1', '--format=%s', $release)) -eq 'chore(release): v1.6.9') ''
   Check '  the release commit changes only VERSION and CHANGELOG.md from the candidate''s code' (
     ((G $work @('diff', '--name-only', $rcTree, $release)) -replace "`n", ',') -ceq 'CHANGELOG.md,VERSION' -and
-    -not (G $work @('ls-tree', '--name-only', $release, '--', 'later.txt', 'changelog.d/later-frag.fixed.md'))) ''
+    -not (G $work @('ls-tree', '--name-only', $release, '--', 'later.txt', 'packaging.txt', 'changelog.d/later-frag.fixed.md'))) ''
   $releaseLog = (G $work @('show', "${release}:CHANGELOG.md")) -replace "`r`n", "`n"
   Check '  its VERSION is 1.6.9' ((G $work @('show', "${release}:VERSION")) -ceq '1.6.9') ''
   Check '  its CHANGELOG.md holds the edited final and an empty [Unreleased]' ($releaseLog.Contains("## [Unreleased]`n`n## [1.6.9] - $today`n`n### Fixed`n`n- **Candidate fix A, edited.** One line.`n`n## [1.6.8]") -and
@@ -1411,26 +1510,56 @@ function Invoke-Scenarios {
   $log = Read-Changelog
   Check '  master''s CHANGELOG.md keeps [Unreleased] above the same final' ($log.Contains("## [Unreleased]`n`n### Fixed`n`n- **Later fix.** One line.`n`n## [1.6.9] - $today`n`n### Fixed`n`n- **Candidate fix A, edited.** One line.`n`n## [1.6.8]") -and
     $log.Contains("[Unreleased]: $link/v1.6.9...HEAD`n[1.6.9]: $link/v1.6.8...v1.6.9`n") -and $log -notmatch '1\.6\.9-rc\.') $log
-  Check '  with CRLF on disk, both commits stored alike, and a clean tree' (-not ((Get-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Raw) -match '(?<!\r)\n') -and
-    ((G $work @('cat-file', '-p', "${release}:CHANGELOG.md")).Contains("`r") -eq (G $work @('cat-file', '-p', 'HEAD:CHANGELOG.md')).Contains("`r")) -and
-    -not (G $work @('status', '--porcelain', '--untracked-files=all'))) (G $work @('status', '--porcelain', '--untracked-files=all'))
+  # G hands back lines joined with LF, so a blob's line endings show only in its size against that text's.
+  $stored = @(foreach ($rev in "${release}:CHANGELOG.md", 'HEAD:CHANGELOG.md') {
+      $text = (G $work @('cat-file', '-p', $rev)) -replace "`r", ''
+      $lf = [Text.Encoding]::UTF8.GetBytes($text).Length + 1
+      $size = [int](G $work @('cat-file', '-s', $rev))
+      if ($size -eq $lf) { 'LF' } elseif ($size -eq $lf + ($text -split "`n").Count) { 'CRLF' } else { "other($size/$lf)" }
+    })
+  Check '  with CRLF on disk, each commit stored by its own tree''s rule, and a clean tree' (-not ((Get-Content -LiteralPath (Join-Path $work 'CHANGELOG.md') -Raw) -match '(?<!\r)\n') -and
+    $stored[0] -ceq 'CRLF' -and $stored[1] -ceq 'LF' -and
+    -not (G $work @('status', '--porcelain', '--untracked-files=all'))) "$($stored -join ' / ') $(G $work @('status', '--porcelain', '--untracked-files=all'))"
   Check '  and the next steps say master waits for the next release' ($r.Text -match 'master says VERSION 1\.6\.9 now' -and $r.Text -match 'draft=false --latest') $r.Text
 
   # 16e. The next cycle counts only master's own commits, and offers no promotion after a final.
   $r = Invoke-Release @('1', '', 'n') @('-DryRun')
-  Check 'after it, the next cycle counts the commits the final left out' ($r.Code -eq 1 -and $r.Text -match '4 commit\(s\) since v1\.6\.9:' -and
+  Check 'after it, the next cycle counts the commits the final left out' ($r.Code -eq 1 -and $r.Text -match '5 commit\(s\) since v1\.6\.9:' -and
     $r.Text -match '1\) patch release candidate -> v1\.6\.10-rc\.1' -and $r.Text -notmatch "code \(leaves out" -and
     $r.Text -match 'CHANGELOG\.md \[Unreleased\]: Fixed 2, changelog\.d included') $r.Text
 
-  # 16f. Again, after a failed build: the tag goes back on the release commit off master, with its own notes.
+  # 16f. Again, after a failed build: the tag goes back on the release commit off master, with its own notes. An edit
+  #      to [1.6.9] on master since tells the two copies of the notes apart.
   G $work @('push', '--quiet', 'origin', ':refs/tags/v1.6.9') | Out-Null
   G $work @('tag', '-d', 'v1.6.9') | Out-Null
+  $file = Join-Path $work 'CHANGELOG.md'
+  [IO.File]::WriteAllText($file, ((Get-Content -LiteralPath $file -Raw).Replace('- **Candidate fix A, edited.** One line.', '- **Candidate fix A, edited on master.** One line.')))
+  # Its message quotes the release subject on a line of its body, which the lookup must not take for a release commit.
+  G $work @('commit', '--quiet', '-m', 'sandbox: an edit to [1.6.9] on master', '-m', 'chore(release): v1.6.9', '--', 'CHANGELOG.md') | Out-Null
+  G $work @('push', '--quiet', 'origin', 'master') | Out-Null
+  $editHead = G $work @('rev-parse', 'HEAD')
+  # A new version chosen while "again" is offered makes its own commit and tags it, not the old release commit.
+  $r = Invoke-Release @('2', '', 'y') @('-DryRun')
+  Check 'a new version chosen beside the promoted final''s "again" commits and tags itself' ($r.Code -eq 0 -and $r.Text -match '1\) 1\.6\.9 again' -and
+    $r.Text -match '> git commit -m "chore\(release\): v1\.6\.10-rc\.1"' -and $r.Text -match '(?m)> git tag -a v1\.6\.10-rc\.1 -m "D2BS v1\.6\.10-rc\.1"\r?$') $r.Text
+  # A shallow clone that holds master's merge but not the release commit off master offers no "again", which would
+  # tag master's code, and still offers new versions.
+  $shallow = Join-Path $Sandbox 'shallow'
+  & git clone --quiet --depth 2 --branch master "file:///$($origin -replace '\\', '/')" $shallow 2>&1 | Out-Null
+  $out = ("1`n1.6.9`n`nn" | pwsh -NoProfile -File (Join-Path $shallow 'build' 'Release-D2BS.ps1') -DryRun -NoFetch 2>&1)
+  $text = @($out) -join "`n"
+  Check '  a shallow clone without the release commit off master offers no "again", only new versions' (
+    $text -match 'is a merge whose second parent is missing here \(a shallow clone\?\)' -and $text -notmatch '\) 1\.6\.9 again \(' -and
+    $text -match '1\) patch release candidate -> v1\.6\.10-rc\.1' -and $text -match 'Choice \[') $text
+  Check '  and refuses 1.6.9 typed at the version prompt' ($text -match '1\.6\.9 again needs its release commit off master, which is missing here' -and
+    $text -match 'Version: 1\.6\.10-rc\.1') $text
   $r = Invoke-Release @('1', '', 'y')
   Check 'the promoted final again exits 0' ($r.Code -eq 0 -and $r.Text -match "1\) 1\.6\.9 again \(release commit $($mergeHead.Substring(0, 7))") $r.Text
   Check '  tags the release commit off master, adding no commit' ((G $origin @('rev-parse', 'v1.6.9^{commit}')) -eq $release -and
-    (G $work @('rev-parse', 'HEAD')) -eq $mergeHead -and $r.Text -match "the tag goes on the release commit $($release.Substring(0, 7))") $r.Text
+    (G $work @('rev-parse', 'HEAD')) -eq $editHead -and $r.Text -match "the tag goes on the release commit $($release.Substring(0, 7))") $r.Text
   Check '  posts that commit''s notes, without warnings about master''s entries or commits' ($r.Text -match 'Release notes \(CHANGELOG\.md \[1\.6\.9\]\):' -and
-    $r.Text -match '    - \*\*Candidate fix A, edited\.\*\*' -and $r.Text -notmatch 're-releasing v1\.6\.9 posts only' -and $r.Text -notmatch 'that no release candidate had') $r.Text
+    $r.Text -match '    - \*\*Candidate fix A, edited\.\*\*' -and $r.Text -notmatch 'edited on master' -and
+    $r.Text -notmatch 're-releasing v1\.6\.9 posts only' -and $r.Text -notmatch 'that no release candidate had') $r.Text
   Clear-Fragments @('Bad_Name.fixed.md')
 
   # 16g. The changelog changes on their own.
@@ -1444,6 +1573,27 @@ function Invoke-Scenarios {
   Check 'Clear-ChangelogUnreleased empties [Unreleased] and keeps the rest' ((Clear-ChangelogUnreleased $out) -ceq ($want -replace '(?s)^## \[Unreleased\]\n\n### Fixed\n\n- u\n\n', "## [Unreleased]`n`n")) (Clear-ChangelogUnreleased $out)
   Check '  keeping CRLF, and a file that ends at [Unreleased]' ((Clear-ChangelogUnreleased ($out -replace "`n", "`r`n")) -ceq (($want -replace '(?s)^## \[Unreleased\]\n\n### Fixed\n\n- u\n\n', "## [Unreleased]`n`n") -replace "`n", "`r`n") -and
     (Clear-ChangelogUnreleased "# C`n`n## [Unreleased]`n`n- x`n") -ceq "# C`n`n## [Unreleased]`n") ''
+  $in = "## [Unreleased]`n`n- u [tracker]`n`n[tracker]: https://t`n<!--`n[hid]: https://h`n-->`n`n## [1.0.0] - D`n`n- old [tracker]`n"
+  Check '  keeping the link definitions [Unreleased] held, which the rest of the file may use' (
+    (Clear-ChangelogUnreleased $in) -ceq "## [Unreleased]`n`n[tracker]: https://t`n`n## [1.0.0] - D`n`n- old [tracker]`n") (Clear-ChangelogUnreleased $in)
+  $in = "## [Unreleased]`n`n[multi]:`n  https://m`n  `"Title`"`n(not a title: a body line)`n`n## [1.0.0] - D`n`n- old`n"
+  Check '  a definition whose destination and title sit on the lines after it, and nothing more' (
+    (Clear-ChangelogUnreleased $in) -ceq "## [Unreleased]`n`n[multi]:`n  https://m`n  `"Title`"`n`n## [1.0.0] - D`n`n- old`n") (Clear-ChangelogUnreleased $in)
+  $in = "## [Unreleased]`n`n[esc]: /g `"Using \`"Again\`"`n  during recovery`"`n- master only`n`n## [1.0.0] - D`n`n- old`n"
+  Check '  a title whose escaped quotes do not close it' (
+    (Clear-ChangelogUnreleased $in) -ceq "## [Unreleased]`n`n[esc]: /g `"Using \`"Again\`"`n  during recovery`"`n`n## [1.0.0] - D`n`n- old`n") (Clear-ChangelogUnreleased $in)
+  $in = "## [Unreleased]`n`n[path]: /guide `"C:\\`"`n- master only`n`n## [1.0.0] - D`n`n- old`n"
+  Check '  a title closed after an escaped backslash, the entry after it left out' (
+    (Clear-ChangelogUnreleased $in) -ceq "## [Unreleased]`n`n[path]: /guide `"C:\\`"`n`n## [1.0.0] - D`n`n- old`n") (Clear-ChangelogUnreleased $in)
+  $in = "## [Unreleased]`n`n[issue\]]: /bugs/42`n- master only`n`n## [1.0.0] - D`n`n- [ticket][issue\]]`n"
+  Check '  a label holding an escaped ]' (
+    (Clear-ChangelogUnreleased $in) -ceq "## [Unreleased]`n`n[issue\]]: /bugs/42`n`n## [1.0.0] - D`n`n- [ticket][issue\]]`n") (Clear-ChangelogUnreleased $in)
+  $in = "## [Unreleased]`n`n[long]: https://l `"A title`n  over two lines`"`n- master only`n`n## [1.0.0] - D`n`n- old`n"
+  Check '  a title that closes on a later line, and nothing after it' (
+    (Clear-ChangelogUnreleased $in) -ceq "## [Unreleased]`n`n[long]: https://l `"A title`n  over two lines`"`n`n## [1.0.0] - D`n`n- old`n") (Clear-ChangelogUnreleased $in)
+  $in = "## [Unreleased]`n`n[Unreleased]: https://h/compare/v1.0.0...HEAD`n- master only`n`n## [1.0.0] - D`n`n- old`n"
+  Check '  and a link line among the entries does not let the entries after it through' (
+    (Clear-ChangelogUnreleased $in) -ceq "## [Unreleased]`n`n[Unreleased]: https://h/compare/v1.0.0...HEAD`n`n## [1.0.0] - D`n`n- old`n") (Clear-ChangelogUnreleased $in)
   $thrown = $null
   try { Update-ChangelogForRelease -Text "## [Unreleased]`n`n- x`n" -Version '3.0.0' -Date 'D' -Tag 'v3.0.0' -KeepUnreleased | Out-Null } catch { $thrown = $_.Exception.Message }
   Check '-KeepUnreleased without a candidate section throws' ($thrown -match "no release candidate's section below \[Unreleased\]") "$thrown"

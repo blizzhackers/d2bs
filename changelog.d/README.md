@@ -20,14 +20,14 @@ One line, because GitHub shows every line break of a release's notes.
 
 At the next release, `build\Release-D2BS.ps1` adds every entry here to the `[Unreleased]` section of `CHANGELOG.md`,
 under its group's heading and in the order the files reached `master`, and its release commit deletes the files (a
-final made from a release candidate's own code leaves them for the release after it). The order follows `master`'s first-parent history as GitHub's merges leave it; in a shallow clone, the files already there
-at its oldest commit go first, by name. Any other file or folder here (this README aside), a file of no entry
-(empty, or not one `- ` list item), with more than one line, not in UTF-8 or holding a control character, a slug
-used twice, a file not yet committed, or a committed one changed since its commit or missing here (deleted, or left
-out of a sparse checkout) stops a release of a new version at its plan until it is fixed. Releasing a version again
-after its tag was deleted commits nothing, and a final made from a release candidate's code leaves this folder alone,
-so there they only warn, and a file here already edited or deleted when
-the script starts stops it sooner, at its check for tracked changes.
+final made from a release candidate's own code leaves them for the release after it). The order follows `master`'s
+first-parent history as GitHub's merges leave it; in a shallow clone, the files already there at its oldest commit go
+first, by name. Any other file or folder here (this README aside), a file of no entry (empty, or not one `- ` list
+item), with more than one line, not in UTF-8 or holding a control character, a slug used twice, a file not yet
+committed, or a committed one changed since its commit or missing here (deleted, or left out of a sparse checkout)
+stops a release of a new version at its plan until it is fixed. Releasing a version again after its tag was deleted
+commits nothing, and a final made from a release candidate's code leaves this folder alone, so there they only warn,
+and a file here already edited or deleted when the script starts stops it sooner, at its check for tracked changes.
 
 `pwsh -File build\Release-D2BS.ps1 -DryRun` shows the `[Unreleased]` section with these entries in it, changing no
 file and making no commit or tag; it still fetches `origin` and its tags unless `-NoFetch` is given as well.

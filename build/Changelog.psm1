@@ -321,15 +321,52 @@ function Update-ChangelogForRelease {
 }
 
 # The text with the Unreleased section's body taken out, its heading kept: the CHANGELOG.md a final made from the last
-# release candidate's code ships, whose Unreleased entries describe code it doesn't hold. Keeps the line endings.
+# release candidate's code ships, whose Unreleased entries describe code it doesn't hold. The body runs to the next
+# visible "## " heading, so a link line placed among its entries can't end it early and let the rest through. Its
+# visible link reference definitions ("[label]: url", with a destination or title on the following lines, a title
+# kept to the line that closes it) stay, since Markdown applies them to the whole file. Keeps the line endings.
 # Throws when there is no Unreleased heading.
 function Clear-ChangelogUnreleased([AllowEmptyString()][string]$Text) {
   $newline = if ($Text.Contains("`r`n")) { "`r`n" } else { "`n" }
   $lines = Split-ChangelogLines $Text
   $unreleased = Find-ChangelogHeading $lines 'Unreleased'
   if ($unreleased -lt 0) { throw 'CHANGELOG.md has no "## [Unreleased]" heading' }
-  $end = Find-ChangelogSectionEnd $lines $unreleased
+  $hidden = Find-ChangelogHiddenLines $lines
+  $end = $unreleased + 1
+  while ($end -lt $lines.Count -and ($hidden[$end] -or $lines[$end] -notmatch '^## ')) { $end++ }
+  # Without a heading after it, the body ends where the version links at the bottom begin.
+  if ($end -eq $lines.Count) { $end = Find-ChangelogSectionEnd $lines $unreleased }
+  $definitions = [Collections.Generic.List[string]]::new()
+  for ($i = $unreleased + 1; $i -lt $end; $i++) {
+    # A label may hold backslash-escaped characters, "]" among them.
+    if ($hidden[$i] -or $lines[$i] -notmatch '^ {0,3}\[(?:\\.|[^\]\\])+\]:(.*)$') { continue }
+    $definitions.Add($lines[$i])
+    $rest = $Matches[1].Trim()
+    $next = $i + 1
+    # The destination on the next line.
+    if (-not $rest -and $next -lt $end -and -not $hidden[$next] -and $lines[$next].Trim()) {
+      $definitions.Add($lines[$next]); $rest = $lines[$next].Trim(); $i = $next; $next++
+    }
+    # A title after the destination, or on the next line.
+    $title = if ($rest -match '^(<[^>]*>|\S+)\s+(\S.*)$') { $Matches[2] } else { '' }
+    if (-not $title -and $next -lt $end -and -not $hidden[$next] -and $lines[$next] -match '^\s*(["''(].*)$') {
+      $definitions.Add($lines[$next]); $title = $Matches[1].Trim(); $i = $next; $next++
+    }
+    # A title that doesn't close on its line runs to the line that closes it; a blank line ends it. A delimiter after
+    # an odd number of backslashes is escaped, after an even number (none included) it closes.
+    $close = if ($title.StartsWith('"')) { '"' } elseif ($title.StartsWith("'")) { "'" } elseif ($title.StartsWith('(')) { ')' } else { $null }
+    if ($close) {
+      $closer = '(?<!\\)(?:\\\\)*' + [regex]::Escape($close)
+      if ($title.Substring(1) -notmatch $closer) {
+        while ($next -lt $end -and -not $hidden[$next] -and $lines[$next].Trim()) {
+          $definitions.Add($lines[$next]); $i = $next; $next++
+          if ($lines[$i] -match $closer) { break }
+        }
+      }
+    }
+  }
   $kept = @($lines[0..$unreleased]) + @('')
+  if ($definitions.Count) { $kept += $definitions.ToArray() + @('') }
   if ($end -lt $lines.Count) { $kept += @($lines[$end..($lines.Count - 1)]) }
   $kept -join $newline
 }

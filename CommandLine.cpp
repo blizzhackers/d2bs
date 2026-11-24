@@ -55,10 +55,9 @@ VOID ParseCommandLine(LPWSTR Command) {
         if (id == -1)
             continue;
 
-        WCHAR szText[200];
+        WCHAR szText[200] = {0};
+        size_t len = 0;
         BOOL bStart = false;
-
-        memset(szText, 0x00, 100);
 
         if (!CLine[x].isBool) {
             for (unsigned int y = (id + (wcslen(CLine[x].Param))); y < wcslen(Command); y++) {
@@ -71,10 +70,12 @@ VOID ParseCommandLine(LPWSTR Command) {
                         y++;
                     }
 
-                int byt = Command[y];
-
+                // Longer values are truncated to the buffer rather than overrunning the stack.
                 if (bStart)
-                    memcpy(szText + wcslen(szText), (LPWSTR)&byt, sizeof(byt));
+                    if (len < _countof(szText) - 1) {
+                        szText[len++] = Command[y];
+                        szText[len] = 0;
+                    }
             }
         }
         sLine* sl = new sLine;

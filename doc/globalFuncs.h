@@ -1026,17 +1026,21 @@ void stop(bool stop);
  */
 int rand(int32_t low, int32_t high);
 
-/** Copy txt to clipboard.
+/** Copy txt to the clipboard as Unicode text.
  *
  * \ingroup globalFunctions
  *
- * \param txt Text to copy to the clipboard.
+ * \param txt Text to copy to the clipboard. Throws when it is missing or not a string.
+ *
+ * \return true when the text was placed on the clipboard, false otherwise.
  */
-void copy(String txt);
+bool copy(String txt);
 
 /** Get the text from the clipboard.
  *
- * \return The text from the clipboard.
+ * \ingroup globalFunctions
+ *
+ * \return The text on the clipboard, or an empty string when it holds no text.
  */
 String paste();
 
@@ -1084,20 +1088,25 @@ int sendCopyData(HWND hWnd, String dummy, int32_t nModeId, String data);
  * 0 - Do command given by pszItem with an XTYP_REQUEST and get the resulting
  * data.
  *
- * 1 - Do command given by pszItem with an XTYP_POKE sending ""
+ * 1 - Send pszData to pszItem with an XTYP_POKE.
  *
- * 2 - Do command with an XTYP_EXECUTE sending ""
+ * 2 - Send pszData as an XTYP_EXECUTE command.
  *
  * \param pszDDEServer The service name of the DDE server to connect to.
  *
  * \param pszTopic The topic with which to start the connection.
  *
- * \param pszItem Data to be sent.
+ * \param pszItem The item to request (mode 0) or poke (mode 1).
  *
- * \return Result data if mode was 0.
+ * \param pszData The data to poke (mode 1) or execute (mode 2).
+ *
+ * Arguments after the server are optional. mode must be an integer; sendDDE throws when mode or the server is missing.
+ *
+ * \return Result data (at most 255 bytes) if mode was 0, otherwise false. A server that is not running gives ""
+ * in mode 0. Apart from the argument errors, it throws only when DDE itself cannot start.
  */
 String sendDDE(int32_t mode, String pszDDEServer, String pszTopic,
-	String pszItem);
+	String pszItem, String pszData);
 
 /** Get whether or not a key is pressed. Returns the value of GetAsyncKeyState.
  *
@@ -1343,13 +1352,16 @@ String sqlite_version();
  */
 double sqlite_memusage();
 
-/** Get the Folder object for the directory scriptPath\\name
+/** Get the Folder object for the directory scriptPath\\name, creating the folder when it is missing (its parent
+ * must exist).
  *
  * \ingroup globalFunctions
  *
- * \param name The name of the Folder to open.
+ * \param name The name of the Folder to open, relative to the script folder. It can't leave the script folder or
+ * make a path longer than Windows allows.
  *
- * \return A Folder object representing the Folder name.
+ * \return A Folder object representing the Folder name, or undefined when no name, or more than one argument, is
+ * passed. A name that isn't a string or isn't a valid folder name throws an error.
  */
 Folder dopen(String name);
 
@@ -2227,7 +2239,7 @@ String sha512(String str);
  *
  * \param file Filename relative to script path.
  *
- * \return The md5 hash of the file.
+ * \return The md5 hash of the file, or null when the file can't be read.
  */
 String md5_file(String file);
 
@@ -2237,7 +2249,7 @@ String md5_file(String file);
  *
  * \param file Filename relative to script path.
  *
- * \return The sha1 hash of the file.
+ * \return The sha1 hash of the file, or null when the file can't be read.
  */
 String sha1_file(String file);
 
@@ -2247,7 +2259,7 @@ String sha1_file(String file);
  *
  * \param file Filename relative to script path.
  *
- * \return The sha256 hash of the file.
+ * \return The sha256 hash of the file, or null when the file can't be read.
  */
 String sha256_file(String file);
 
@@ -2257,7 +2269,7 @@ String sha256_file(String file);
  *
  * \param file Filename relative to script path.
  *
- * \return The sha384 hash of the file.
+ * \return The sha384 hash of the file, or null when the file can't be read.
  */
 String sha384_file(String file);
 
@@ -2267,6 +2279,6 @@ String sha384_file(String file);
  *
  * \param file Filename relative to script path.
  *
- * \return The sha512 hash of the file.
+ * \return The sha512 hash of the file, or null when the file can't be read.
  */
 String sha512_file(String file);

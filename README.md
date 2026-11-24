@@ -50,11 +50,11 @@
 `public void `[`stop`](#group__globalFunctions_1ga8c8dfb6d9bcdee82b208da3033068b81)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` stop)`            | Conditionally stop current script.
 `public void `[`stop`](#group__globalFunctions_1gaaff9311fc25289798786b3c364291a28)`(bool stop)`            | Conditionnaly stop current script.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`rand`](#group__globalFunctions_1ga6cbf7046bc4629083c0d50f6c5ce8843)`(int32_t low,int32_t high)`            | Return a random number between low and high.
-`public void `[`copy`](#group__globalFunctions_1gaca5b8f5b2f8d97182bab3979920352e4)`(String txt)`            | Copy txt to clipboard.
+`public bool `[`copy`](#group__globalFunctions_1gaca5b8f5b2f8d97182bab3979920352e4)`(String txt)`            | Copy txt to the clipboard; returns whether it was placed.
 `public String `[`paste`](#globalFuncs_8h_1a17b290203f07cb10374e5a6a9c052508)`()`            | Get the text from the clipboard.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`sendCopyData`](#group__globalFunctions_1gad4e03d1abafaa3beab0e1cbb90ca8e37)`(String windowClassName,String windowName,int32_t nModeId,String data)`            | Send data to another window by means of the WM_COPYDATA message.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`sendCopyData`](#group__globalFunctions_1ga3dc20441410e40f237213140436a68d3)`(HWND hWnd,String dummy,int32_t nModeId,String data)`            | Send data to another window by means of the WM_COPYDATA message.
-`public String `[`sendDDE`](#group__globalFunctions_1ga1b7c45afc2b2302e309c1376d3ecf83f)`(int32_t mode,String pszDDEServer,String pszTopic,String pszItem)`            | Send data to a DDE server by means of DdeClientTransaction.
+`public String `[`sendDDE`](#group__globalFunctions_1ga1b7c45afc2b2302e309c1376d3ecf83f)`(int32_t mode,String pszDDEServer,String pszTopic,String pszItem,String pszData)`            | Send data to a DDE server by means of DdeClientTransaction.
 `public bool `[`keystate`](#group__globalFunctions_1ga8758a45d0a7e6bb5c42258ea99e7da07)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` vKey)`            | Get whether or not a key is pressed.
 `public void `[`addEventListener`](#group__globalFunctions_1gaef5f2e6f72ff80cc13fd4ab84ab34810)`(String event,Function eventHandler)`            | Add an event handler to the list of listeners for the given event.
 `public void `[`removeEventListener`](#group__globalFunctions_1gaee02cb255ac39d16c7035fb1b58c70ed)`(String event,Function eventHandler)`            | Removes a previously added event from the listener list.
@@ -157,6 +157,7 @@
 `class `[`Profile`](#classProfile) | This class represents the details needed to get a player to a game or lobby.
 `class `[`Room`](#classRoom) | Represents a "Room" in the game.
 `class `[`Sandbox`](#classSandbox) | A separate context to run scripts in.
+`class `[`Socket`](#classSocket) | A TCP connection to a host listed in d2bs.ini `Hosts`.
 `class `[`SQLite`](#classSQLite) | Class for dealing with an [SQLite](#classSQLite) database.
 `class `[`Text`](#classText) | A [Text](#classText) screen hook.
 `class `[`Unit`](#classUnit) | This class represents a unit (monster, wp, npc, character, etc) in the game.
@@ -899,19 +900,22 @@ Uses C [rand()](#group__globalFunctions_1ga6cbf7046bc4629083c0d50f6c5ce8843) whe
 #### Returns
 A random integer in the range [low,high].
 
-#### `public void `[`copy`](#group__globalFunctions_1gaca5b8f5b2f8d97182bab3979920352e4)`(String txt)` 
+#### `public bool `[`copy`](#group__globalFunctions_1gaca5b8f5b2f8d97182bab3979920352e4)`(String txt)` 
 
-Copy txt to clipboard.
+Copy txt to the clipboard as Unicode text. Throws when txt is missing or not a string.
 
 #### Parameters
 * `txt` [Text](#classText) to copy to the clipboard.
+
+#### Returns
+true when the text was placed on the clipboard, false otherwise.
 
 #### `public String `[`paste`](#globalFuncs_8h_1a17b290203f07cb10374e5a6a9c052508)`()` 
 
 Get the text from the clipboard.
 
 #### Returns
-The text from the clipboard.
+The text on the clipboard, or an empty string when it holds no text.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`sendCopyData`](#group__globalFunctions_1gad4e03d1abafaa3beab0e1cbb90ca8e37)`(String windowClassName,String windowName,int32_t nModeId,String data)` 
 
@@ -949,7 +953,7 @@ Uses SendMessage to send the message to hWnd.
 #### Returns
 The result of SendMessage.
 
-#### `public String `[`sendDDE`](#group__globalFunctions_1ga1b7c45afc2b2302e309c1376d3ecf83f)`(int32_t mode,String pszDDEServer,String pszTopic,String pszItem)` 
+#### `public String `[`sendDDE`](#group__globalFunctions_1ga1b7c45afc2b2302e309c1376d3ecf83f)`(int32_t mode,String pszDDEServer,String pszTopic,String pszItem,String pszData)` 
 
 Send data to a DDE server by means of DdeClientTransaction.
 
@@ -958,19 +962,23 @@ Send data to a DDE server by means of DdeClientTransaction.
 
 0 - Do command given by pszItem with an XTYP_REQUEST and get the resulting data.
 
-1 - Do command given by pszItem with an XTYP_POKE sending ""
+1 - Send pszData to pszItem with an XTYP_POKE.
 
-2 - Do command with an XTYP_EXECUTE sending ""
+2 - Send pszData as an XTYP_EXECUTE command.
 
 #### Parameters
 * `pszDDEServer` The service name of the DDE server to connect to.
 
 * `pszTopic` The topic with which to start the connection.
 
-* `pszItem` Data to be sent.
+* `pszItem` The item to request (mode 0) or poke (mode 1).
+
+* `pszData` The data to poke (mode 1) or execute (mode 2).
+
+Arguments after the server are optional. mode must be an integer; sendDDE throws when mode or the server is missing.
 
 #### Returns
-Result data if mode was 0.
+Result data (at most 255 bytes) if mode was 0, otherwise false. A server that is not running gives "" in mode 0. Apart from the argument errors, it throws only when DDE itself cannot start.
 
 #### `public bool `[`keystate`](#group__globalFunctions_1ga8758a45d0a7e6bb5c42258ea99e7da07)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` vKey)` 
 
@@ -1159,13 +1167,13 @@ Return the sqlite memory usage.
 
 #### `public `[`Folder`](#classFolder)` `[`dopen`](#group__globalFunctions_1ga9a23806a759b9bace15e57adbdb90f91)`(String name)` 
 
-Get the [Folder](#classFolder) object for the directory scriptPath\name.
+Get the [Folder](#classFolder) object for the directory scriptPath\name, creating the folder when it is missing (its parent must exist).
 
 #### Parameters
-* `name` The name of the [Folder](#classFolder) to open.
+* `name` The name of the [Folder](#classFolder) to open, relative to the script folder. It can't leave the script folder or make a path longer than Windows allows.
 
 #### Returns
-A [Folder](#classFolder) object representing the [Folder](#classFolder) name.
+A [Folder](#classFolder) object representing the [Folder](#classFolder) name, or undefined when no name, or more than one argument, is passed. A name that isn't a string or isn't a valid folder name throws an error.
 
 #### `public void `[`debugLog`](#group__globalFunctions_1gacab2f81ca665988be5ca4ceb60503073)`(...)` 
 
@@ -1941,7 +1949,7 @@ Take the md5 hash of a file.
 * `file` Filename relative to script path.
 
 #### Returns
-The md5 hash of the file.
+The md5 hash of the file, or null when the file can't be read.
 
 #### `public String `[`sha1_file`](#group__globalFunctions_1ga2a0768372027c28a64fcb0780f7ff47b)`(String file)` 
 
@@ -1951,7 +1959,7 @@ Take the sha1 hash of a file.
 * `file` Filename relative to script path.
 
 #### Returns
-The sha1 hash of the file.
+The sha1 hash of the file, or null when the file can't be read.
 
 #### `public String `[`sha256_file`](#group__globalFunctions_1gacd44b56a400b27db81deb0edd542a81e)`(String file)` 
 
@@ -1961,7 +1969,7 @@ Take the sha256 hash of a file.
 * `file` Filename relative to script path.
 
 #### Returns
-The sha256 hash of the file.
+The sha256 hash of the file, or null when the file can't be read.
 
 #### `public String `[`sha384_file`](#group__globalFunctions_1gaec5638f75198f07622c214371a2bbef7)`(String file)` 
 
@@ -1971,7 +1979,7 @@ Take the sha384 hash of a file.
 * `file` Filename relative to script path.
 
 #### Returns
-The sha384 hash of the file.
+The sha384 hash of the file, or null when the file can't be read.
 
 #### `public String `[`sha512_file`](#group__globalFunctions_1gad562af84fe5dd55bf5d5172861b2a28f)`(String file)` 
 
@@ -1981,7 +1989,7 @@ Take the sha512 hash of a file.
 * `file` Filename relative to script path.
 
 #### Returns
-The sha512 hash of the file.
+The sha512 hash of the file, or null when the file can't be read.
 
 # namespace `ProfileType` 
 
@@ -2633,7 +2641,7 @@ This class handles the opening, reading and writing of files.
 `public `[`File`](#classFile)` `[`close`](#classFile_1ab8f676c747765ad97655928f1c2baf04)`()` | Close the current file and then return it.
 `public `[`File`](#classFile)` `[`reopen`](#classFile_1a6fe4ccb2fea82b46e091aa7c46df4dbe)`()` | Reopen the file, equivalent to calling open with the same parameters as were used the first time.
 `public String `[`read`](#classFile_1a2a09f2249cb161ee348e9198b054df0d)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` count)` | Read count chars from the file.
-`public byte[] `[`read`](#classFile_1a8b86be0df9dca624871c726b2eb96a44)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` count)` | Read count bytes from the file.
+`public int[] `[`read`](#classFile_1a8b86be0df9dca624871c726b2eb96a44)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` count)` | Read count 32-bit integers from the file.
 `public String `[`readLine`](#classFile_1a1f9845e5268c8d9ac944235f99538320)`()` | Read a line from the file and return it.
 `public String[] `[`readAllLines`](#classFile_1a2da4d7f22372013563a6d2301c3217bb)`()` | Read all the lines from the file into a String array.
 `public String `[`readAll`](#classFile_1a59de24f17a4fce1bdffb20d63ed63bc7)`()` | Read the entire file and return as a String.
@@ -2730,33 +2738,33 @@ Used when the file was not opened in binary mode.
 * `count` The number of characters to read.
 
 #### Returns
-The characters that were read.
+The characters that were read. Throws if the file is not open (it was closed).
 
-#### `public byte[] `[`read`](#classFile_1a8b86be0df9dca624871c726b2eb96a44)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` count)` 
+#### `public int[] `[`read`](#classFile_1a8b86be0df9dca624871c726b2eb96a44)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` count)` 
 
-Read count bytes from the file.
+Read count 32-bit integers from the file.
 
 Used when the file was opened in binary mode.
 
 #### Parameters
-* `count` The number of bytes to read.
+* `count` The number of 4-byte little-endian integers to read.
 
 #### Returns
-An array of the bytes read.
+One integer when count is 1 (0 at the end of the file), otherwise an array of the integers read, which is shorter than count at the end of the file. Binary write stores integers as 4 bytes but other numbers as 8-byte doubles and booleans as 1 byte, so only integers read back unchanged. Throws if the file is not open (it was closed).
 
 #### `public String `[`readLine`](#classFile_1a1f9845e5268c8d9ac944235f99538320)`()` 
 
 Read a line from the file and return it.
 
 #### Returns
-The line.
+The line. Throws if the file is not open (it was closed).
 
 #### `public String[] `[`readAllLines`](#classFile_1a2da4d7f22372013563a6d2301c3217bb)`()` 
 
 Read all the lines from the file into a String array.
 
 #### Returns
-An array of all the lines in the file.
+An array of all the lines in the file. Throws if the file is not open (it was closed).
 
 #### `public String `[`readAll`](#classFile_1a59de24f17a4fce1bdffb20d63ed63bc7)`()` 
 
@@ -2765,7 +2773,7 @@ Read the entire file and return as a String.
 Includes a seek to start from the beginning of the file, regardless of where the current position was.
 
 #### Returns
-The entire file in a String.
+The entire file in a String. Throws if the file is 256 MB or larger or is not open (it was closed).
 
 #### `public `[`File`](#classFile)` `[`write`](#classFile_1a90860f54a694ad17207855c4ff0c6053)`(...)` 
 
@@ -2829,6 +2837,10 @@ A collection of tools to do things like move files and determine whether files e
 --------------------------------|---------------------------------------------
 `public bool `[`writeText`](#classFileTools_1a6d7dea2b6426a01de14576827af4c606)`(String file,...)` | Write the string representation (for standard files) or the binary representation (for binary files) of each of the arguments to the file.
 `public bool `[`appendText`](#classFileTools_1a4f2c1b01653f22bb40d66d8cc7c16c6f)`(String file,...)` | Append the string representation (for standard files) or the binary representation (for binary files) of each of the arguments to the file.
+`public String readText(String file)` | Read the contents of a file into a String; throws if the file is 256 MB or larger.
+`public bool copy(String orig,String newName,bool overwrite)` | Copy a file byte for byte; an existing newName is replaced only when overwrite is true.
+`public bool remove(String file)` | Delete a file.
+`public bool rename(String orig,String newName)` | Rename a file; an existing newName is not replaced.
 
 ## Members
 
@@ -2852,6 +2864,42 @@ Append the string representation (for standard files) or the binary representati
 #### Returns
 Whether or not the operation was successful.
 
+#### `public String readText(String file)` 
+
+Read the contents of a file into a String.
+
+#### Parameters
+* `file` The filename of the file to read.
+
+#### Returns
+The contents of the file. Throws if the file is 256 MB or larger.
+
+#### `public bool copy(String orig,String newName,bool overwrite)` 
+
+Copy a file byte for byte.
+
+#### Parameters
+* `orig` The original filename.
+* `newName` The filename of the new file.
+* `overwrite` Replace newName if it already exists. Defaults to false.
+
+#### Returns
+true if the copy was made. false if it was not: the source is missing, newName exists and overwrite is not true, the two names are the same file, or reading or writing failed (no partial file is left). With overwrite true, a copy that fails while reading or writing also leaves no newName (the old file was already replaced). An invalid file name throws.
+
+#### `public bool remove(String file)` 
+
+Delete a file.
+
+#### Returns
+true if the file was deleted, false if it could not be (for example it does not exist). An invalid file name throws.
+
+#### `public bool rename(String orig,String newName)` 
+
+Rename a file.
+
+#### Returns
+true if the file was renamed. false if it was not, for example when orig is missing or newName already exists. An invalid file name throws.
+
 # class `Folder` 
 
 Represents a folder.
@@ -2863,8 +2911,8 @@ Represents a folder.
 `public String `[`name`](#classFolder_1a1b7bc0e644f873164b1d9c17085cf178) | The path name to the directory.
 `public `[`Folder`](#classFolder)` `[`create`](#classFolder_1a3a0bac848c1e110eb40dde3cd48393b8)`(String name)` | Create a new directory.
 `public bool `[`remove`](#classFolder_1aca893daac6c6747895d50987cf9cf34c)`()` | Remove the directory.
-`public String[] `[`getFiles`](#classFolder_1a811c76e8bd576486d01311bde02a79b3)`()` | Get the filename for each of the files in the directory.
-`public String[] `[`getFolders`](#classFolder_1ad738dfd1f4c322347a1caa549d4b3eec)`()` | Get the name for each of the sub-directories in the current directory.
+`public String[] `[`getFiles`](#classFolder_1a811c76e8bd576486d01311bde02a79b3)`(String search)` | Get the filename for each of the files in the directory.
+`public String[] `[`getFolders`](#classFolder_1ad738dfd1f4c322347a1caa549d4b3eec)`(String search)` | Get the name for each of the sub-directories in the current directory.
 
 ## Members
 
@@ -2891,16 +2939,22 @@ Must be empty to work properly.
 #### Returns
 true.
 
-#### `public String[] `[`getFiles`](#classFolder_1a811c76e8bd576486d01311bde02a79b3)`()` 
+#### `public String[] `[`getFiles`](#classFolder_1a811c76e8bd576486d01311bde02a79b3)`(String search)` 
 
 Get the filename for each of the files in the directory.
+
+#### Parameters
+* `search` Optional wildcard pattern for names in this folder (default `*.*`). It can't contain a backslash, a slash or a colon, or be only dots and spaces.
 
 #### Returns
 An array of all the filenames.
 
-#### `public String[] `[`getFolders`](#classFolder_1ad738dfd1f4c322347a1caa549d4b3eec)`()` 
+#### `public String[] `[`getFolders`](#classFolder_1ad738dfd1f4c322347a1caa549d4b3eec)`(String search)` 
 
 Get the name for each of the sub-directories in the current directory.
+
+#### Parameters
+* `search` Optional wildcard pattern for names in this folder (default `*.*`). It can't contain a backslash, a slash or a colon, or be only dots and spaces.
 
 #### Returns
 An array of all the folder names.
@@ -4792,6 +4846,22 @@ Whether or not the file has been included.
 Clear the scope of the [Sandbox](#classSandbox)'s global object.
 
 > Todo: Clarify what this means (i.e. post-conditions).
+
+# class `Socket` 
+
+A TCP connection opened with `Socket.open(host, port)`. The constructor itself throws; use `Socket.open`.
+
+## Hosts
+
+`Socket.open` connects only to a host listed in the `Hosts` key of the `[settings]` section of d2bs.ini. The host must equal one whole entry, compared case-insensitively; separate entries with commas, semicolons, spaces or tabs (for example `Hosts=127.0.0.1, api.example.com`). With no `Hosts` key, every host is refused.
+
+## Members
+
+* `static Socket open(String host, int port)` Connect to host:port. Returns false when called with fewer than two arguments or when networking cannot start. Throws `Invalid hostname specified` when host is not a string or not listed in Hosts, `Could not convert parameter 2`, `Failed to create the socket`, `Cannot find host`, `Failed to connect` or `Failed to define the socket object`.
+* `String read()` One receive of up to 10000 bytes, decoded as UTF-8; an empty string when the peer closed. Throws `Socket Error` on a network error and `Socket is closed` after close().
+* `void send(String data)` Send data as UTF-8. Throws `Socket Error` when it cannot be sent, `Socket is closed` after close(), and when data is missing or not a string.
+* `void close()` Close the connection; calling it again does nothing.
+* `readable`, `writeable` 1 when the socket can be read or written now, 0 when not, -1 after close() or on a network error.
 
 # class `SQLite` 
 

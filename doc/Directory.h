@@ -24,13 +24,17 @@ public:
 
 	/** Get the filename for each of the files in the directory.
 	 *
+	 * \param search Optional wildcard pattern for names in this folder (default `*.*`). It can't contain a backslash, a slash or a colon, or be only dots and spaces.
+	 *
 	 * \return An array of all the filenames.
 	 */
-	String[] getFiles();
+	String[] getFiles(String search);
 
 	/** Get the name for each of the sub-directories in the current directory.
 	 *
+	 * \param search Optional wildcard pattern for names in this folder (default `*.*`). It can't contain a backslash, a slash or a colon, or be only dots and spaces.
+	 *
 	 * \return An array of all the folder names.
 	 */
-	String[] getFolders();
+	String[] getFolders(String search);
 };

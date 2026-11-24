@@ -29,7 +29,7 @@ Entries for changes not released yet wait in `changelog.d/`, one file each, unti
 - **Unhurried `getRoom()` arguments.** `getRoom()` reads its area and coordinates before it takes the game lock, so a `valueOf()` that takes its time, for example one that calls `delay()`, holds up only its own script, and one that throws reaches the script whether or not the area is found.
 - **Areas across act changes.** The game keeps running when a script reads an `Area` it already holds while the player changes acts.
 
-## [1.8.0-rc.1] - 2026-11-20
+## [1.8.0] - 2026-11-24
 
 ### Added
 
@@ -93,6 +93,6 @@ Entries for changes not released yet wait in `changelog.d/`, one file each, unti
 - **Dependable file reads, seeks and closes.** `FileTools.readText()` throws when reading the file fails, a `File` whose `close()` throws is closed and can be reopened, `file.seek(n)` on a file opened with locking moves `n` bytes, and a binary `file.read(count)` returns 0 for each value past the end of the file and frees its memory when done.
 - **Steady memory for busy bots.** Every event a listener receives and every `getPath()` call frees the memory it used, so bots that trade many chat, `copydata` and script messages keep a steady footprint over long runs.
 
-[Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.8.0-rc.1...HEAD
-[1.8.0-rc.1]: https://github.com/blizzhackers/d2bs/compare/v1.7.0...v1.8.0-rc.1
+[Unreleased]: https://github.com/blizzhackers/d2bs/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/blizzhackers/d2bs/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/blizzhackers/d2bs/compare/v1.6.4...v1.7.0

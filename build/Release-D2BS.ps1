@@ -767,6 +767,17 @@ if ($bump) {
 }
 
 # === 6. Commit, tag, push ===========================================================================================
+# The tag's runs before this push: a release commit tagged again has the same tag and commit as its failed run. Listed
+# before anything is committed, so a slow GitHub API never holds up the steps between the commit and the push.
+$earlierRuns = @()
+$earlierKnown = $false
+if ($slug -and $hasGh -and -not $DryRun) {
+  $listed = & gh run list --repo $slug --workflow build.yml --limit 50 --json databaseId,headBranch 2>$null
+  if (-not $LASTEXITCODE) {
+    $earlierKnown = $true
+    if ($listed) { $earlierRuns = @($listed | ConvertFrom-Json | Where-Object { $_.headBranch -eq $tag } | ForEach-Object { $_.databaseId }) }
+  }
+}
 Say ''
 Say 'Committing, tagging, pushing'
 $tagTarget = @()
@@ -809,7 +820,7 @@ if ($promote) {
   if (-not $DryRun) {
     # The merge commit takes the whole index (git commit refuses paths in a merge): exactly the two files, as approved.
     $staged = ((Read-Git @('diff', '--cached', '--name-only')) -split "`n" | Where-Object { $_ } | Sort-Object) -join ','
-    if ($staged -cne 'CHANGELOG.md,VERSION') { Bad "master's commit would hold $(if ($staged) { $staged } else { 'no change' }), not just CHANGELOG.md and VERSION"; Say 'To undo:'; $undoMerge | ForEach-Object { Say "  $_" }; exit 1 }
+    if ($staged -cne 'CHANGELOG.md,VERSION') { Stop-Changed "master's commit would hold $(if ($staged) { $staged } else { 'no change' }), not just CHANGELOG.md and VERSION" $undoMerge }
     $moved = Get-Changed
     if ($moved) { Stop-Changed "$moved changed after the review's answer: run this again" $undoMerge }
   }
@@ -835,16 +846,6 @@ if ($promote) {
 # --keep (not --hard) drops the release commit but keeps any edits made to other files during the prompts.
 $undoCommit = @(if ($bump) { 'git reset --keep HEAD~1' })
 Invoke-GitStep (@('tag', '-a', $tag, '-m', "D2BS $tag") + $tagTarget) $undoCommit
-# The tag's runs before this push: a release commit tagged again has the same tag and commit as its failed run.
-$earlierRuns = @()
-$earlierKnown = $false
-if ($slug -and $hasGh -and -not $DryRun) {
-  $listed = & gh run list --repo $slug --workflow build.yml --limit 50 --json databaseId,headBranch 2>$null
-  if (-not $LASTEXITCODE) {
-    $earlierKnown = $true
-    if ($listed) { $earlierRuns = @($listed | ConvertFrom-Json | Where-Object { $_.headBranch -eq $tag } | ForEach-Object { $_.databaseId }) }
-  }
-}
 Say "  > git push --atomic origin master $tag"
 if (-not $DryRun) {
   # One atomic push: master and the tag both land or neither does.

@@ -246,15 +246,17 @@ function Get-ChangelogWrappedLines([AllowEmptyString()][string]$Section) {
 # "[Unreleased]: <repo>/compare/<base>...HEAD" link to <Tag>, adding "[<Version>]: <repo>/compare/<base>...<Tag>".
 # A final version (no -rc.N) also merges the release candidates' sections below Unreleased into its own (oldest
 # first, see Merge-ChangelogBodies) and drops them and their links; its link then starts where the oldest candidate's
-# did, and without that candidate's link it gets none. Writes CRLF throughout when the file has any, else LF. Throws
-# when there is no Unreleased heading or nothing to release, the version already has a section, or the Unreleased
-# link is not a compare link.
+# did, and without that candidate's link it gets none. -KeepUnreleased (a final made from the last candidate's code)
+# merges the candidates' sections alone and leaves Unreleased's entries where they are, for the next release. Writes
+# CRLF throughout when the file has any, else LF. Throws when there is no Unreleased heading or nothing to release, the
+# version already has a section, or the Unreleased link is not a compare link.
 function Update-ChangelogForRelease {
   param(
     [Parameter(Mandatory)][AllowEmptyString()][string]$Text,
     [Parameter(Mandatory)][string]$Version,
     [Parameter(Mandatory)][string]$Date,
-    [Parameter(Mandatory)][string]$Tag
+    [Parameter(Mandatory)][string]$Tag,
+    [switch]$KeepUnreleased
   )
   $newline = if ($Text.Contains("`r`n")) { "`r`n" } else { "`n" }
   $lines = [Collections.Generic.List[string]]::new([string[]](Split-ChangelogLines $Text))
@@ -263,6 +265,8 @@ function Update-ChangelogForRelease {
   if ((Find-ChangelogHeading $lines $Version) -ge 0) { throw "CHANGELOG.md already has a [$Version] section" }
   $candidates = @()
   if ($Version -notmatch "^$script:candidateLabel\z") { $candidates = Find-ChangelogCandidates $lines }
+  if ($KeepUnreleased -and -not $candidates.Count) { throw "CHANGELOG.md has no release candidate's section below [Unreleased] for [$Version] to take" }
+  $unreleasedBody = Join-ChangelogBody $lines ($unreleased + 1) (Find-ChangelogSectionEnd $lines $unreleased)
 
   $linkBase = $null
   if (-not $candidates.Count) {
@@ -274,13 +278,15 @@ function Update-ChangelogForRelease {
   } else {
     $bodies = [Collections.Generic.List[string]]::new()
     for ($i = $candidates.Count - 1; $i -ge 0; $i--) { $bodies.Add((Join-ChangelogBody $lines ($candidates[$i].Start + 1) $candidates[$i].End)) }
-    $bodies.Add((Join-ChangelogBody $lines ($unreleased + 1) (Find-ChangelogSectionEnd $lines $unreleased)))
+    if (-not $KeepUnreleased) { $bodies.Add($unreleasedBody) }
     if (-not @($bodies | Where-Object { Test-ChangelogEntries $_ }).Count) {
-      throw "CHANGELOG.md has no entries under [Unreleased] or its release candidates' sections: the release would have no notes"
+      $where = if ($KeepUnreleased) { "its release candidates' sections" } else { "[Unreleased] or its release candidates' sections" }
+      throw "CHANGELOG.md has no entries under ${where}: the release would have no notes"
     }
     $regionEnd = $candidates[$candidates.Count - 1].End
     $merged = [Collections.Generic.List[string]]::new()
     for ($i = 0; $i -le $unreleased; $i++) { $merged.Add($lines[$i]) }
+    if ($KeepUnreleased -and $unreleasedBody) { $merged.Add(''); $merged.AddRange([string[]](Split-ChangelogLines $unreleasedBody)) }
     $merged.AddRange([string[]]@('', "## [$Version] - $Date", ''))
     $merged.AddRange([string[]](Split-ChangelogLines (Merge-ChangelogBodies $bodies.ToArray())))
     if ($regionEnd -lt $lines.Count) {
@@ -312,6 +318,20 @@ function Update-ChangelogForRelease {
     if ($base) { $lines.Insert($link + 1, "[$Version]: $repoUrl/compare/$base...$Tag") }
   }
   $lines -join $newline
+}
+
+# The text with the Unreleased section's body taken out, its heading kept: the CHANGELOG.md a final made from the last
+# release candidate's code ships, whose Unreleased entries describe code it doesn't hold. Keeps the line endings.
+# Throws when there is no Unreleased heading.
+function Clear-ChangelogUnreleased([AllowEmptyString()][string]$Text) {
+  $newline = if ($Text.Contains("`r`n")) { "`r`n" } else { "`n" }
+  $lines = Split-ChangelogLines $Text
+  $unreleased = Find-ChangelogHeading $lines 'Unreleased'
+  if ($unreleased -lt 0) { throw 'CHANGELOG.md has no "## [Unreleased]" heading' }
+  $end = Find-ChangelogSectionEnd $lines $unreleased
+  $kept = @($lines[0..$unreleased]) + @('')
+  if ($end -lt $lines.Count) { $kept += @($lines[$end..($lines.Count - 1)]) }
+  $kept -join $newline
 }
 
 # A changelog.d file name read as <slug>.<section>.md: the slug in lowercase letters and digits, words joined by
@@ -428,5 +448,5 @@ function Add-ChangelogUnreleased {
 
 Export-ModuleMember -Function Get-ChangelogSection, Get-ChangelogEntryCounts, Test-ChangelogEntries, Get-ChangelogWrappedLines,
   Get-ChangelogCandidates, Get-ChangelogLink, Get-ChangelogCompareBase, Test-ChangelogTagName, Test-ChangelogUnclosed,
-  Test-ChangelogHeadingHidden, Update-ChangelogForRelease, Read-ChangelogFragmentName, Get-ChangelogFragmentLine,
+  Test-ChangelogHeadingHidden, Update-ChangelogForRelease, Clear-ChangelogUnreleased, Read-ChangelogFragmentName, Get-ChangelogFragmentLine,
   ConvertFrom-ChangelogFragmentBytes, Get-ChangelogFragmentProblem, Add-ChangelogUnreleased

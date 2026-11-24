@@ -109,7 +109,8 @@ release commit deletes the files. Anything else in `changelog.d` but its `README
 unknown section, a folder, a file of more than one line, of no entry, not in UTF-8 or holding a control character,
 a slug used twice, a file not yet committed, or a committed one changed since its commit or missing from the
 working tree, deleted or left out of a sparse checkout) stops a release that commits, which is any new version, at
-its plan until it is fixed. Releasing a version again after its tag was deleted commits nothing, so there these
+its plan until it is fixed. A final made from a release candidate's code (below) leaves `changelog.d` alone, so
+there these problems only warn. Releasing a version again after its tag was deleted commits nothing, so there these
 problems only warn. A `changelog.d` file already edited or deleted when the script starts stops it sooner, at its
 check for tracked changes; one edited or deleted after that check stops a new version at its plan. `-DryRun` shows
 `[Unreleased]` with the entries in it.
@@ -124,6 +125,13 @@ list just what changed since the one before. The final merges those sections and
 At its review, drop the entries for problems that only a release candidate had, which users of the last final
 release never met. A version can also skip release candidates and go straight to its final.
 
+When `master` has moved on since the last release candidate and that candidate is the one to ship, the script also
+offers its final made from the candidate's own code (`final of v1.7.0-rc.2's code`). The release commit goes on the
+candidate's commit, changing only `VERSION` and `CHANGELOG.md`, and takes the tag, so the DLL is the code its testers
+ran. `master` gets the same `VERSION` and `CHANGELOG.md` as a merge of that commit: the candidates' sections become
+`[1.7.0]` there too, while the entries under `[Unreleased]` and in `changelog.d`, which describe the code left out,
+stay for the next release. The release commit's own `CHANGELOG.md` has an empty `[Unreleased]`.
+
 ### The release script
 
 On an up-to-date `master` with no uncommitted changes, the script:
@@ -133,7 +141,8 @@ On an up-to-date `master` with no uncommitted changes, the script:
 2. Counts the entries under `[Unreleased]` (the `changelog.d` ones included) and each release candidate's section
    per group, and offers the next version: after a final release, the first release candidate of the next patch,
    minor or major version (e.g. `1.6.5-rc.1` after `1.6.4`), or that version's final; after a release candidate, the
-   next one (`1.6.5-rc.2`) or the final (`1.6.5`). The default is the same version again when that is offered;
+   next one (`1.6.5-rc.2`) or the final (`1.6.5`), and the final of its own code when `master` has commits past its
+   tag (above), which takes no other version. The default is the same version again when that is offered;
    otherwise the patch release candidate after a final, and the next release candidate after one, or the final when
    nothing new is under `[Unreleased]`. You can type another version; one that isn't newer than `VERSION` or the
    latest release tag (release candidates included) needs a confirmation (except when it offers the same version
@@ -152,8 +161,9 @@ On an up-to-date `master` with no uncommitted changes, the script:
    where). A file added to `changelog.d` during the review stays where it is, and a renamed one leaves both names:
    the old one put back, the new one as you left it.
 4. Commits `VERSION` and `CHANGELOG.md`, deleting those `changelog.d` files, as `chore(release): v1.6.5`, unless a
-   commit was made during the review, which stops it.
-5. Creates the annotated tag `v1.6.5`.
+   commit was made during the review, which stops it. A final of a candidate's code makes its two commits instead,
+   both `chore(release): v1.6.5`, and moves `master` once both exist; it leaves `changelog.d` alone.
+5. Creates the annotated tag `v1.6.5` (on the release commit off `master` for a final of a candidate's code).
 6. Pushes `master` and the tag in one atomic push.
 
 A release candidate's tag build publishes its pre-release, ready to hand to testers. A final's tag build creates a
@@ -170,10 +180,13 @@ one DLL):
    under `[Unreleased]` or in `changelog.d`.
 4. Run the script again. It offers the same version again, for the fixed `master`.
 
+A final made from a candidate's code is offered again on its own release commit, so steps 3 and 4 apply only to a
+failed download; a fault in its code is fixed on `master` and ships in the next version.
+
 Run `pwsh -File build\tests\Test-ReleaseScript.ps1` after changing `Release-D2BS.ps1`, `Changelog.psm1` or
 `Get-ReleaseNotes.ps1`. It releases into a throwaway sandbox (a bare clone of this repo without its tags as `origin`,
 with your working copies of the scripts and a `CHANGELOG.md` of its own) through every path above that needs no
-GitHub, including a rejected push, a re-release, a release candidate cycle up to its final and `changelog.d` entries
-from several commits and a merge, and nothing reaches this repo or GitHub. The check of `master`'s CI build and the
+GitHub, including a rejected push, a re-release, a release candidate cycle up to its final, a final of a candidate's
+code and `changelog.d` entries from several commits and a merge, and nothing reaches this repo or GitHub. The check of `master`'s CI build and the
 watch of the tag build need GitHub, so the test can't run them. Its exit code is the number of failed checks, or 1 if
 a git step in the sandbox itself fails.

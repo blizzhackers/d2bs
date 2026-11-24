@@ -10,6 +10,9 @@
   or create a final as a DRAFT release to publish after a test. Each carries D2BS.dll, D2BS.pdb and D2BS-<tag>.zip
   (the DLL, the PDB and CHANGELOG.md in a d2bs folder, to extract into a kolbot folder), and its notes open with the
   version's CHANGELOG.md section.
+  When master has moved on since the last release candidate, it also offers that candidate's final made from the
+  candidate's own code: the release commit goes on the candidate's commit and takes the tag, and master gets the same
+  VERSION and CHANGELOG.md as a merge of it, its [Unreleased] entries kept for the next release.
 
     pwsh -File build\Release-D2BS.ps1             interactive
     pwsh -File build\Release-D2BS.ps1 -DryRun     rehearse: prints every step that would change something, changes no
@@ -72,6 +75,35 @@ function Invoke-GitStep([string[]]$GitArgs, [string[]]$Undo = @()) {
     Bad "git $($GitArgs[0]) failed ($LASTEXITCODE)"
     if ($Undo) { Say 'To undo:'; $Undo | ForEach-Object { Say "  $_" } }
     exit 1
+  }
+}
+# A commit of $Base's tree with these files' contents in it, on these parents, made in a private index so the index,
+# the working tree and every ref stay as they are. Each file is hashed as git would check it in at its path (line
+# endings included). Returns its SHA; a failure prints how to undo and stops.
+function New-ReleaseCommit([string]$Base, [string[]]$Parents, [hashtable]$Files, [string]$Message, [string[]]$Undo) {
+  function Get-GitOutput([string[]]$GitArgs) {
+    $out = @(& git -C $repo @GitArgs 2>&1)
+    if ($LASTEXITCODE) {
+      Bad "git $($GitArgs[0]) failed ($LASTEXITCODE): $(@($out | ForEach-Object { "$_" }) -join ' ')"
+      if ($Undo) { Say 'To undo:'; $Undo | ForEach-Object { Say "  $_" } }
+      exit 1
+    }
+    (@($out | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n").Trim()
+  }
+  $savedIndex = $env:GIT_INDEX_FILE
+  $env:GIT_INDEX_FILE = Join-Path ([IO.Path]::GetTempPath()) "d2bs-release-index-$PID"
+  try {
+    Get-GitOutput @('read-tree', $Base) | Out-Null
+    foreach ($path in $Files.Keys) {
+      $mode = if ((Get-GitOutput @('ls-tree', $Base, '--', $path)) -match '^(\d+) ') { $Matches[1] } else { '100644' }
+      $blob = Get-GitOutput @('hash-object', '-w', "--path=$path", '--', $Files[$path])
+      Get-GitOutput @('update-index', '--add', '--cacheinfo', "$mode,$blob,$path") | Out-Null
+    }
+    $tree = Get-GitOutput @('write-tree')
+    Get-GitOutput (@('commit-tree', $tree, '-m', $Message) + @($Parents | ForEach-Object { '-p', $_ }))
+  } finally {
+    Remove-Item -LiteralPath $env:GIT_INDEX_FILE -ErrorAction SilentlyContinue
+    if ($null -eq $savedIndex) { Remove-Item Env:GIT_INDEX_FILE -ErrorAction SilentlyContinue } else { $env:GIT_INDEX_FILE = $savedIndex }
   }
 }
 
@@ -301,6 +333,19 @@ if ($latestTag) {
   if ($log.Count -gt 15) { Say "      ... and $($log.Count - 15) more" }
   if ($log.Count -eq 0) { Warn "nothing has changed since $latestTag" }
 } else { Say '  This is the first release tag.' }
+# Commits since the latest release tag that are not release commits: what a final would ship untested when that tag
+# is a release candidate's.
+$untested = @($log | Where-Object { $_ -notmatch '^\S+ chore\(release\): ' })
+# A final can also be made from the last release candidate's own commit, leaving out what master gained since: only
+# while VERSION is that candidate, its tag is the latest and on master's history, and master has moved on.
+$promoteFrom = $null
+if ((Test-Candidate $currentVersion) -and $latestTag -ceq "v$current" -and $untested.Count) {
+  $rcCommit = Read-Git @('rev-parse', '--verify', '--quiet', "$latestTag^{commit}")
+  if ($rcCommit -and $null -ne (Read-Git @('merge-base', '--is-ancestor', $rcCommit, 'HEAD')) -and
+      (Read-Git @('show', "${rcCommit}:VERSION")) -ceq $current) {
+    $promoteFrom = [pscustomobject]@{ Tag = $latestTag; Commit = $rcCommit; Short = (Read-Git @('rev-parse', '--short', $rcCommit)) }
+  }
+}
 # The entries per group, e.g. "Added 2, Fixed 5": Semantic Versioning makes an Added entry a minor version.
 function Format-EntryCounts($Counts) { ($Counts.Keys | ForEach-Object { "$_ $($Counts[$_])" }) -join ', ' }
 $groups = Get-ChangelogEntryCounts $unreleased
@@ -345,31 +390,44 @@ foreach ($name in $linkStarts.Keys) {
 Say ''
 Say 'Version'
 $options = @()
+$finalChoice = $null
 # The same version again only when its release commit exists but its tag is gone (deleted after a failed build).
 $currentTag = "v$current"
-$releaseCommit = Read-Git @('log', '-1', '--format=%h', '--extended-regexp', "--grep=^chore\(release\): v$($current -replace '\.', '\.')$")
+# On master's own line: a final made from a release candidate's code has a release commit there (the merge) and
+# another off it (the merge's second parent, which the tag names).
+$releaseCommit = Read-Git @('log', '-1', '--first-parent', '--format=%h', '--extended-regexp', "--grep=^chore\(release\): v$($current -replace '\.', '\.')$")
 $sameAgain = [bool]($releaseCommit -and -not (Test-LocalTag $currentTag) -and -not (Test-RemoteTag $currentTag))
+# What "again" tags: HEAD, or the release commit off master when the one on master is the merge of it.
+$againTarget = $null
 if ($sameAgain) {
-  $options += [pscustomobject]@{ Label = "$current again (release commit $releaseCommit, tag deleted)"; Version = $current }
+  $second = Read-Git @('rev-parse', '--verify', '--quiet', "$releaseCommit^2")
+  if ($second -and (Read-Git @('log', '-1', '--format=%s', $second)) -ceq "chore(release): v$current") {
+    $againTarget = [pscustomobject]@{ Commit = $second; Short = (Read-Git @('rev-parse', '--short', $second)) }
+  }
+  $options += [pscustomobject]@{ Label = "$current again (release commit $releaseCommit, tag deleted)"; Version = $current; Promote = $false }
 }
 if (Test-Candidate $currentVersion) {
   # Inside a release candidate cycle: the next candidate, or the final of the version they lead to.
   $final = '{0}.{1}.{2}' -f $currentVersion.Major, $currentVersion.Minor, $currentVersion.Patch
   $rc = [int]($currentVersion.PreReleaseLabel -replace '^rc\.', '')
-  $options += [pscustomobject]@{ Label = 'next release candidate'; Version = "$final-rc.$($rc + 1)" }
-  $options += [pscustomobject]@{ Label = 'final'; Version = $final }
+  $options += [pscustomobject]@{ Label = 'next release candidate'; Version = "$final-rc.$($rc + 1)"; Promote = $false }
+  $options += [pscustomobject]@{ Label = 'final'; Version = $final; Promote = $false }
+  $finalChoice = $options.Count
+  if ($promoteFrom) {
+    $options += [pscustomobject]@{ Label = "final of $($promoteFrom.Tag)'s code (leaves out the $($untested.Count) commit(s) since)"; Version = $final; Promote = $true }
+  }
 } else {
   $next = [ordered]@{
     patch = '{0}.{1}.{2}' -f $currentVersion.Major, $currentVersion.Minor, ($currentVersion.Patch + 1)
     minor = '{0}.{1}.0' -f $currentVersion.Major, ($currentVersion.Minor + 1)
     major = '{0}.0.0' -f ($currentVersion.Major + 1)
   }
-  foreach ($kind in $next.Keys) { $options += [pscustomobject]@{ Label = "$kind release candidate"; Version = "$($next[$kind])-rc.1" } }
-  foreach ($kind in $next.Keys) { $options += [pscustomobject]@{ Label = $kind; Version = $next[$kind] } }
+  foreach ($kind in $next.Keys) { $options += [pscustomobject]@{ Label = "$kind release candidate"; Version = "$($next[$kind])-rc.1"; Promote = $false } }
+  foreach ($kind in $next.Keys) { $options += [pscustomobject]@{ Label = $kind; Version = $next[$kind]; Promote = $false } }
 }
 for ($i = 0; $i -lt $options.Count; $i++) { Say ("  {0}) {1} -> v{2}" -f ($i + 1), $options[$i].Label, $options[$i].Version) }
 # Inside a cycle with no new entries, another release candidate would have no notes, so the final is the default.
-$default = if ((Test-Candidate $currentVersion) -and -not $groups.Count -and -not $sameAgain) { $options.Count } else { 1 }
+$default = if ((Test-Candidate $currentVersion) -and -not $groups.Count -and -not $sameAgain) { $finalChoice } else { 1 }
 $pick = $null
 while (-not $pick) {
   $answer = Ask "Choice [$default]: "
@@ -386,6 +444,7 @@ while (-not $chosen) {
   if (-not $candidateVersion) { Warn 'a version is major.minor.patch, or major.minor.patch-rc.N for a release candidate: e.g. 1.6.5 or 1.6.5-rc.1'; continue }
   # Tags and VERSION use the normalized form, so a leading-zero spelling can't duplicate an existing release.
   $candidate = $candidateVersion.ToString()
+  if ($pick.Promote -and $candidate -cne $pick.Version) { Warn "the final of $($promoteFrom.Tag)'s code is $($pick.Version)"; continue }
   if (Test-LocalTag "v$candidate") { Warn "tag v$candidate already exists here"; continue }
   $remote = Test-RemoteTag "v$candidate"
   if ($remote) { Warn "tag v$candidate already exists on origin"; continue }
@@ -400,6 +459,8 @@ while (-not $chosen) {
 $tag = "v$chosen"
 $bump = $chosen -ne $current
 $isCandidate = Test-Candidate (ConvertTo-Version $chosen)
+# A final made from the last release candidate's code: two commits (see the plan), and [Unreleased] stays on master.
+$promote = [bool]$pick.Promote
 # A final merges the release candidates' sections into its own; a release candidate dates [Unreleased] alone.
 $merging = @(if (-not $isCandidate) { $candidates })
 # The tag build posts the version's CHANGELOG.md section as the release notes and fails without one.
@@ -407,9 +468,18 @@ $date = Get-Date -Format 'yyyy-MM-dd'
 # A block left open inside the version's section takes the rest of the file into its notes.
 $unclosedNotes = "an HTML comment or a code fence in the [$chosen] notes never closes, so they would run to the end of CHANGELOG.md"
 $newChangelog = $null
-# A re-release commits nothing, so it leaves changelog.d alone.
-$folded = @(if ($bump) { $fragments.Entries })
-if ($bump) {
+# A promotion's release commit's CHANGELOG.md, as approved at the review.
+$releaseChangelog = $null
+# A re-release commits nothing, so it leaves changelog.d alone, and so does a promotion, whose entries describe code
+# the release leaves out.
+$folded = @(if ($bump -and -not $promote) { $fragments.Entries })
+if ($promote) {
+  try { $newChangelog = Update-ChangelogForRelease -Text $changelog -Version $chosen -Date $date -Tag $tag -KeepUnreleased }
+  catch { Fail $_.Exception.Message }
+  # The notes the tag build reads, from the CHANGELOG.md the release commit holds.
+  $notes = if ($newChangelog) { Get-ChangelogSection -Text (Clear-ChangelogUnreleased $newChangelog) -Name $chosen } else { $null }
+  if ($notes -and (Test-ChangelogUnclosed $notes)) { Fail $unclosedNotes }
+} elseif ($bump) {
   if ($fragments.Problems.Count) {
     Fail "changelog.d has $($fragments.Problems.Count) problem(s), listed above: fix them, or move those files out of changelog.d"
   }
@@ -418,23 +488,25 @@ if ($bump) {
   $notes = if ($newChangelog) { Get-ChangelogSection -Text $newChangelog -Name $chosen } else { $unreleased }
   if (Test-ChangelogUnclosed $notes) { Fail $unclosedNotes }
 } else {
-  $notes = Get-ChangelogSection -Text $changelog -Name $chosen
+  # The tag build reads the tagged commit's CHANGELOG.md, which for a release commit off master is that commit's own.
+  $taggedChangelog = if ($againTarget) { "$(Read-Git @('show', "$($againTarget.Commit):CHANGELOG.md"))" } else { $changelog }
+  $notes = Get-ChangelogSection -Text $taggedChangelog -Name $chosen
   if ($null -eq $notes) {
-    $cause = if (Test-ChangelogHeadingHidden $changelog $chosen) { ' (it is inside an HTML comment or a code fence)' } else { '' }
+    $cause = if (Test-ChangelogHeadingHidden $taggedChangelog $chosen) { ' (it is inside an HTML comment or a code fence)' } else { '' }
     Fail "CHANGELOG.md has no [$chosen] heading${cause}: the release would have no notes"
   } elseif (Test-ChangelogUnclosed $notes) { Fail $unclosedNotes }
   elseif (-not (Test-ChangelogEntries $notes)) { Fail "CHANGELOG.md has no entries under [$chosen]: the release would have no notes" }
-  # A fix made for a re-release belongs to the version it fixes, which is the section the release posts.
-  $waiting = @(if (Test-ChangelogEntries (Get-ChangelogSection -Text $changelog -Name 'Unreleased')) { '[Unreleased]' }) +
-    @(if ($fragments.Entries.Count) { 'changelog.d' })
+  # A fix made for a re-release belongs to the version it fixes, which is the section the release posts. Master's
+  # entries never reach a release commit off master, so they wait for the next release.
+  $waiting = @(if (-not $againTarget -and (Test-ChangelogEntries (Get-ChangelogSection -Text $changelog -Name 'Unreleased'))) { '[Unreleased]' }) +
+    @(if (-not $againTarget -and $fragments.Entries.Count) { 'changelog.d' })
   if ($waiting.Count) {
     Warn "$($waiting -join ' and ') $(if ($waiting.Count -gt 1) { 'have' } else { 'has' }) entries, and re-releasing $tag posts only [$chosen]: move a fix's entry there first"
   }
 }
 # A final is meant to be the code its last release candidate's testers ran; its own release commit (there when it is
-# released again) changes only VERSION and CHANGELOG.md.
-$untested = @($log | Where-Object { $_ -notmatch '^\S+ chore\(release\): ' })
-if (-not $isCandidate -and $latestTag -and (Test-Candidate (ConvertTo-Version $latestTag.Substring(1))) -and $untested.Count) {
+# released again) changes only VERSION and CHANGELOG.md. A promotion, or its tag again, is that code.
+if (-not $isCandidate -and -not $promote -and -not $againTarget -and $latestTag -and (Test-Candidate (ConvertTo-Version $latestTag.Substring(1))) -and $untested.Count) {
   Warn "$tag would ship $($untested.Count) commit(s) that no release candidate had (since $latestTag): cut another release candidate to have them tested"
 }
 
@@ -448,7 +520,14 @@ $mergedNames = "[$($merging -join '], [')]"
 $step = 0
 function Step([string]$s) { $script:step++; Say "    $script:step. $s" }
 $foldedFiles = "the $($folded.Count) changelog.d file$(if ($folded.Count -ne 1) { 's' })"
-if ($bump) {
+if ($promote) {
+  Step "write VERSION: $current -> $chosen"
+  $taken = if ($merging.Count -gt 1) { "merge CHANGELOG.md's $mergedNames sections into" } else { "rename CHANGELOG.md's $mergedNames section to" }
+  Step "$taken [$chosen] - $date, below [Unreleased], whose entries stay for the next release"
+  Step 'review the change; CHANGELOG.md can be edited there'
+  Step "commit VERSION and CHANGELOG.md (its [Unreleased] emptied) on $($promoteFrom.Tag)'s commit $($promoteFrom.Short) as `"chore(release): $tag`": the code its testers ran, without the $($untested.Count) commit(s) since"
+  Step "commit VERSION and CHANGELOG.md on master as `"chore(release): $tag`", a merge of that commit"
+} elseif ($bump) {
   Step "write VERSION: $current -> $chosen"
   if ($folded.Count) { Step "add the entries of $foldedFiles to CHANGELOG.md's [Unreleased] section" }
   if ($merging.Count) { Step "merge CHANGELOG.md's $mergedNames and [Unreleased] sections into [$chosen] - $date" }
@@ -456,15 +535,17 @@ if ($bump) {
   Step 'review the change; CHANGELOG.md can be edited there'
   if ($folded.Count) { Step "commit VERSION and CHANGELOG.md, deleting $foldedFiles, as `"chore(release): $tag`"" }
   else { Step "commit VERSION and CHANGELOG.md as `"chore(release): $tag`"" }
+} elseif ($againTarget) {
+  Step "VERSION already says ${chosen}: the tag goes on the release commit $($againTarget.Short), the one off master that its merge $releaseCommit brought in"
 } else {
   Step "VERSION already says ${chosen}: the tag goes on HEAD ($(Read-Git @('log', '-1', '--format=%h %s')))"
 }
-Step "annotated tag $tag"
+Step "annotated tag $tag$(if ($promote) { ' on the release commit made from the candidate''s code' })"
 $built = if ($isCandidate) { 'builds and publishes a pre-release' } else { 'builds a DRAFT release' }
 Step "push master and $tag in one atomic push; the tag $built"
 if ($notes) {
   $withFolded = if ($folded.Count) { " with $foldedFiles" } else { '' }
-  $source = if (-not $bump) { "[$chosen]" } elseif ($merging.Count) { "[Unreleased]$withFolded and $mergedNames, merged" } else { "[Unreleased]$withFolded" }
+  $source = if (-not $bump) { "[$chosen]" } elseif ($promote) { "$mergedNames$(if ($merging.Count -gt 1) { ', merged' })" } elseif ($merging.Count) { "[Unreleased]$withFolded and $mergedNames, merged" } else { "[Unreleased]$withFolded" }
   Say "  Release notes (CHANGELOG.md ${source}):"
   $notes -split "`n" | ForEach-Object { Say "    $_" }
   foreach ($line in Get-ChangelogWrappedLines $notes) { Warn "a wrapped line shows as its own line on GitHub; join it to its entry: $($line.Trim())" }
@@ -474,7 +555,7 @@ if (-not (Confirm-Step 'Proceed?' $true)) { Stop-Release }
 # The new CHANGELOG.md was made from the file as read at the start, and the plan named the commit to tag: an edit or
 # a commit made during the prompts would be lost or published unseen.
 if (-not $DryRun -and ((Read-Changelog) -cne $changelog -or (Read-Git @('status', '--porcelain', '--', 'VERSION', 'CHANGELOG.md')) -or
-    (Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart -or ($bump -and @(Get-FragmentChanges).Count))) {
+    (Read-Git @('rev-parse', 'HEAD')) -ne $headAtStart -or ($bump -and -not $promote -and @(Get-FragmentChanges).Count))) {
   Stop-Release 'VERSION, CHANGELOG.md, changelog.d or HEAD changed during the prompts: run this again'
 }
 
@@ -484,7 +565,8 @@ if ($bump) {
   Say 'Preparing'
   Say "  > write VERSION: $chosen"
   $intoUnreleased = if ($folded.Count) { "[Unreleased] with $foldedFiles" } else { '[Unreleased]' }
-  if ($merging.Count) { Say "  > write CHANGELOG.md: $mergedNames and $intoUnreleased -> [$chosen] - $date" }
+  if ($promote) { Say "  > write CHANGELOG.md: $mergedNames -> [$chosen] - $date, [Unreleased] kept" }
+  elseif ($merging.Count) { Say "  > write CHANGELOG.md: $mergedNames and $intoUnreleased -> [$chosen] - $date" }
   else { Say "  > write CHANGELOG.md: $intoUnreleased -> [$chosen] - $date" }
   Say ''
   Say 'Review'
@@ -505,6 +587,7 @@ if ($bump) {
       if ($merging.Count) {
         Say "  [$chosen] holds every release candidate's entries: drop the ones for problems that only a release candidate had."
       }
+      if ($promote) { Say "  Master's commit takes CHANGELOG.md as it is then; the release commit takes it with [Unreleased] emptied." }
       while ($true) {
         $answer = (Ask '(y) commit + tag + push  (d) show the diff  (n) abort: ').ToLower()
         if ($answer -in 'y', 'yes') {
@@ -514,6 +597,16 @@ if ($bump) {
           $versionNow = if (Test-Path -LiteralPath $versionFile) { (Read-TextFile $versionFile).Trim() } else { '' }
           if ($versionNow -cne $chosen) { Warn "VERSION no longer says ${chosen}: put it back, or answer n"; continue }
           $changelogNow = if (Test-Path -LiteralPath $changelogFile) { Read-Changelog } else { '' }
+          # A promotion's tag build reads the release commit's CHANGELOG.md, which is this one with [Unreleased] emptied.
+          if ($promote) {
+            # Master's copy keeps [Unreleased], and a block left open there would hide [$chosen] on master alone.
+            if ($null -eq (Get-ChangelogSection -Text $changelogNow -Name $chosen) -and (Test-ChangelogHeadingHidden $changelogNow $chosen)) {
+              Warn "CHANGELOG.md's [$chosen] heading is inside an HTML comment or a code fence now (on master's copy): close it, or answer n"; continue
+            }
+            try { $changelogNow = Clear-ChangelogUnreleased $changelogNow }
+            catch { Warn "CHANGELOG.md has no [Unreleased] heading now, whose entries the release commit leaves out: put it back, or answer n"; continue }
+            $releaseChangelog = $changelogNow
+          }
           $notesNow = Get-ChangelogSection -Text $changelogNow -Name $chosen
           if ($null -eq $notesNow) {
             $cause = if (Test-ChangelogHeadingHidden $changelogNow $chosen) { ' (it is inside an HTML comment or a code fence)' } else { '' }
@@ -521,6 +614,7 @@ if ($bump) {
           }
           if (Test-ChangelogUnclosed $notesNow) { Warn "$unclosedNotes (close it, or answer n)"; continue }
           if (-not (Test-ChangelogEntries $notesNow)) { Warn "CHANGELOG.md has no entries under [$chosen] now: the release would have no notes"; continue }
+          if ($promote) { $approved = $true; break }
           # The commit deletes the files it folded in, so an edit made to one now would go nowhere, and a file added
           # or renamed now would stay behind with its entry already in CHANGELOG.md.
           $changed = @(Get-FragmentChanges -AllowDeleted)
@@ -582,7 +676,31 @@ if ($bump) {
 # === 6. Commit, tag, push ===========================================================================================
 Say ''
 Say 'Committing, tagging, pushing'
-if ($bump) {
+$tagTarget = @()
+if ($promote) {
+  $undoFiles = @('git restore --staged --worktree -- VERSION CHANGELOG.md')
+  if (-not $DryRun) { Say "  Should these steps stop before master moves, this undoes them: $($undoFiles[0])" }
+  Say "  > commit VERSION and CHANGELOG.md on $($promoteFrom.Tag)'s commit $($promoteFrom.Short) as `"chore(release): $tag`""
+  Say "  > commit VERSION and CHANGELOG.md on master as `"chore(release): $tag`", a merge of it"
+  $tagTarget = @('<the release commit>')
+  if (-not $DryRun) {
+    # Both commits are built as objects first, and master moves once, after both exist, so a failure leaves only
+    # unreferenced objects behind. The working tree is never switched to the candidate's code.
+    $releaseFile = Join-Path ([IO.Path]::GetTempPath()) "d2bs-release-CHANGELOG-$PID.md"
+    try {
+      [IO.File]::WriteAllText($releaseFile, $releaseChangelog)
+      $promotedSha = New-ReleaseCommit $promoteFrom.Commit @($promoteFrom.Commit) @{ 'VERSION' = $versionFile; 'CHANGELOG.md' = $releaseFile } "chore(release): $tag" $undoFiles
+      $mergeSha = New-ReleaseCommit $headAtStart @($headAtStart, $promotedSha) @{ 'VERSION' = $versionFile; 'CHANGELOG.md' = $changelogFile } "chore(release): $tag" $undoFiles
+    } finally { Remove-Item -LiteralPath $releaseFile -ErrorAction SilentlyContinue }
+    # Moves master only if it is still the commit the release started from.
+    Invoke-GitStep @('update-ref', '-m', "chore(release): $tag", 'HEAD', $mergeSha, $headAtStart) $undoFiles
+    # The index still holds the files as the old master had them.
+    Invoke-GitStep @('reset', '--quiet', '--', 'VERSION', 'CHANGELOG.md') @('git reset --keep HEAD~1')
+    $tagTarget = @($promotedSha)
+  }
+} elseif ($againTarget) {
+  $tagTarget = @($againTarget.Commit)
+} elseif ($bump) {
   $releasePaths = @('VERSION', 'CHANGELOG.md') + @($folded | ForEach-Object { $_.Path })
   $undoFiles = @("git restore --staged --worktree -- $($releasePaths -join ' ')")
   # The steps below are separate git calls, and a Ctrl+C between them prints nothing, so the undo comes first.
@@ -594,7 +712,7 @@ if ($bump) {
 }
 # --keep (not --hard) drops the release commit but keeps any edits made to other files during the prompts.
 $undoCommit = @(if ($bump) { 'git reset --keep HEAD~1' })
-Invoke-GitStep @('tag', '-a', $tag, '-m', "D2BS $tag") $undoCommit
+Invoke-GitStep (@('tag', '-a', $tag, '-m', "D2BS $tag") + $tagTarget) $undoCommit
 Say "  > git push --atomic origin master $tag"
 if (-not $DryRun) {
   # One atomic push: master and the tag both land or neither does.
@@ -635,12 +753,17 @@ if ($isCandidate) {
   Say "  3. Try the DLL on a test install, e.g. with one D2Bot profile (D2BS-$tag.zip extracts into a kolbot folder)."
   Say '  4. Publish it and mark it Latest:'
   Say "     gh release edit $tag --repo $repoArg --draft=false --latest"
+  if ($promote) { Say "  master says VERSION $chosen now; its [Unreleased] entries and changelog.d files wait for the next release." }
   Say '  If the build fails on a download, re-run it from its Actions page. If the code or the DLL is at fault:'
   Say "     gh release delete $tag --repo $repoArg --yes   (if the draft exists)"
 }
 Say "     git push origin :refs/tags/$tag"
 Say "     git tag -d $tag"
-Say "  then fix master and run this script again: it offers $chosen again."
+# Again re-tags a promotion's release commit, whose code a fix on master can't reach.
+if ($promote -or $againTarget) {
+  Say "  then run this script again: it offers $chosen again, on the same release commit. A fault in the code itself"
+  Say '  is fixed on master and ships in the next version.'
+} else { Say "  then fix master and run this script again: it offers $chosen again." }
 # Testers report against the name, so a release candidate they have keeps its one DLL.
 if ($isCandidate) { Say '  Once testers have it, cut the next release candidate instead.' }
 if ($slug -and $hasGh -and -not $DryRun -and (Confirm-Step 'Watch the release build now?' $true -EofMeansNo)) {

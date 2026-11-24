@@ -302,7 +302,7 @@ Get skill ID by name.
 * `skillName` The skill name.
 
 #### Returns
-The skill ID.
+The skill ID (0 is Attack), or undefined when the name is not a known skill or the argument is not a string. The name is matched case-insensitively.
 
 #### `public String `[`getSkillById`](#group__globalFunctions_1ga14cda78dea3cf554c8ebeeb0834039c9)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` skillId)` 
 
@@ -859,6 +859,8 @@ Determine whether a file has been included yet or not.
 #### Parameters
 * `file` Filename of the file that might have been included.
 
+Throws if file is not a string.
+
 #### Returns
 Whether or not the file has been included.
 
@@ -868,6 +870,8 @@ Include file from the scriptDir\libs directory.
 
 #### Parameters
 * `file` Filename of the file to include.
+
+Throws if file is not a string.
 
 #### Returns
 Whether the inclusion was successful.
@@ -1054,6 +1058,8 @@ mode:
 #### Parameters
 * `eventHandler` A function with the signature listed above that handles the event.
 
+Throws "Invalid arguments" if fewer than two arguments are passed.
+
 #### `public void `[`removeEventListener`](#group__globalFunctions_1gaee02cb255ac39d16c7035fb1b58c70ed)`(String event,Function eventHandler)` 
 
 Removes a previously added event from the listener list.
@@ -1063,12 +1069,16 @@ Removes a previously added event from the listener list.
 
 * `eventHandler` The handler to remove.
 
+Throws "Invalid arguments" if fewer than two arguments are passed.
+
 #### `public void `[`clearEvent`](#group__globalFunctions_1ga185f0dafe7fd58fd565b8ce3b460541b)`(String event)` 
 
 Clear the event handler list for given event.
 
 #### Parameters
 * `event` The name of the event to clear the handler list for.
+
+Throws "Invalid arguments" if no event is passed.
 
 #### `public void `[`clearAllEvents`](#group__globalFunctions_1ga229f0f1b263c13dc1a2c5bdcb51a5320)`()` 
 
@@ -1376,6 +1386,8 @@ Load an mpq file.
 #### Parameters
 * `path` The mpq file to load
 
+Throws if path is not a string.
+
 #### `public bool `[`submitItem`](#group__globalFunctions_1gaaf6e11417ccd95f45faea57945684689)`()` 
 
 Submit the item on the cursor to the open screen (like the add sockets screen).
@@ -1634,14 +1646,14 @@ The euclidean distance from a to b.
 Get the euclidean distance from a to b.
 
 #### Parameters
-* `a` The first [Unit](#classUnit).
+* `a` The first [Unit](#classUnit), or any object with x and y.
 
 * `bx` The x coordinate of point b.
 
 * `by` The y coordinate of point b.
 
 #### Returns
-The euclidean distance from a to b.
+The euclidean distance from a to b, or undefined when a Unit argument has left the game.
 
 #### `public double `[`getDistance`](#group__globalFunctions_1ga099a9099c3a32df0346fa40c496964b9)`(int32_t ax,int32_t ay)` 
 
@@ -1664,10 +1676,10 @@ Get the euclidean distance from a to b.
 
 * `ay` The y coordinate of point a.
 
-* `b` The second [Unit](#classUnit).
+* `b` The second [Unit](#classUnit), or any object with x and y.
 
 #### Returns
-The euclidean distance from a to b.
+The euclidean distance from a to b, or undefined when a Unit argument has left the game.
 
 #### `public double `[`getDistance`](#group__globalFunctions_1ga5b44bdbe481beae0bd0a5fb322820864)`(int32_t ax,int32_t ay,int32_t bx,int32_t by)` 
 
@@ -1706,6 +1718,9 @@ Check if two units collide.
 * `b` [Unit](#classUnit) b.
 
 * `nBitMask` Bit mask to check collision of a and b with.
+
+#### Returns
+The collision result for nBitMask, or nBitMask itself (reads as blocked) when either unit has left the game; undefined for wrong arguments.
 
 #### `public bool `[`playSound`](#group__globalFunctions_1gaa759ea651473dc19c7af1bde87f126c9)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSoundId)` 
 
@@ -1819,7 +1834,7 @@ This is an exploit function.
 * `y` Y coord to move to.
 
 #### Returns
-true
+true once the move request is sent; false with a warning when EnableUnsupported is off or the game is not ready. Throws if fewer than three arguments are passed or npc is not a monster Unit. x and y are converted like any JS number.
 
 #### `public bool `[`getPacket`](#globalFuncs_8h_1ae457d3d8c69ab22efeefa2bc07e51d5e)`(...)` 
 
@@ -1855,7 +1870,7 @@ Convert a point from screen coordinates to automap coordinates.
 * `arg` An object with x and y parameters specifying the point.
 
 #### Returns
-An object with x and y, containing the automap coordinate.
+A new object with x and y, containing the automap coordinate. The argument is not changed.
 
 #### `public Object `[`screenToAutomap`](#group__globalFunctions_1gadb899fcbf6b0520f61c6ac2134b7bddd)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` ix,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` iy)` 
 
@@ -1877,7 +1892,7 @@ Convert a point from automap coordinates to screen coordinates.
 * `arg` An object with x and y parameters specifying the point.
 
 #### Returns
-An object with x and y, containing the screen coordinate.
+A new object with x and y, containing the screen coordinate. The argument is not changed.
 
 #### `public Object `[`automapToScreen`](#group__globalFunctions_1ga12b95062f34ffb0b121981df69f6de66)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` ix,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` iy)` 
 
@@ -2186,6 +2201,8 @@ Remove the [Box](#classBox) from the screen and destroy the corresponding object
 
 This class represents out of game (OOG) [Control](#classControl) s.
 
+A Control whose control is gone (the screen changed, or the game left the menu) reads every property as undefined and ignores writes; getNext() then returns false and click() and setText() do nothing.
+
 ## Summary
 
  Members                        | Descriptions                                
@@ -2198,7 +2215,7 @@ This class represents out of game (OOG) [Control](#classControl) s.
 `public double `[`state`](#classControl_1aeb22d5c21c492b4d08e64acc6181f4f7) | The state (?) of the [Control](#classControl).
 `public bool `[`password`](#classControl_1aebd2dddca40bfc123cb86b307368e134) | Return whether or not the [Control](#classControl) holds a password (starred out text).
 `public double `[`type`](#classControl_1acf59ef5830cbbf3da75babd82f47a93a) | The type of control.
-`public double `[`cursorPos`](#classControl_1a46fb8326d65d4a4aef170978e2ce1373) | Something...
+`public double `[`cursorpos`](#classControl_1a46fb8326d65d4a4aef170978e2ce1373) | The position of the text cursor in an edit box.
 `public double `[`selectstart`](#classControl_1acfa6b74b35e85f4b806bed082eade450) | Someting...
 `public double `[`selectend`](#classControl_1a435440d08525dcdf317a55d1b96b1086) | Something...
 `public double `[`disabled`](#classControl_1a8b89abb5d91642620cc5ffe5173a6619) | Whether the [Control](#classControl) is disabled or not.
@@ -2268,11 +2285,9 @@ The type of control.
 
 12 - AccountList
 
-#### `public double `[`cursorPos`](#classControl_1a46fb8326d65d4a4aef170978e2ce1373) 
+#### `public double `[`cursorpos`](#classControl_1a46fb8326d65d4a4aef170978e2ce1373) 
 
-Something...
-
-> Todo: Determine what this is.
+The position of the text cursor in an edit box. Reading it returns the current position, and setting it stores a new one. On any other control type it reads as undefined and ignores writes.
 
 #### `public double `[`selectstart`](#classControl_1acfa6b74b35e85f4b806bed082eade450) 
 
@@ -2317,6 +2332,8 @@ Set the [Control](#classControl)'s text.
 
 #### Parameters
 * `text` The text to set the [Control](#classControl)'s text field to.
+
+Throws "Invalid arguments" if no text is passed to a control that is still on screen.
 
 #### `public String[] `[`getText`](#classControl_1afab7c6e5349104c77cf2f6b91bf1461a)`()` 
 
@@ -2927,6 +2944,8 @@ Create a new directory.
 #### Parameters
 * `name` The name of the directory to create under the current directory.
 
+Throws "No path passed to dir.create()" if name is not a string, and "Invalid folder name" if it is invalid or too long.
+
 #### Returns
 The new [Folder](#classFolder) created.
 
@@ -3120,14 +3139,14 @@ The hover handler that gets called when the [Image](#classImage) gets hovered ov
 
 #### `public String `[`location`](#classImage_1af4f3e489b1fb5cfa4ffdbe52ea4aee51) 
 
-Location of the file to load for display.
+Location of the file to load for display, relative to the script folder. Setting a name that new Image() would refuse throws "Invalid image file path" and keeps the current file.
 
 #### `public  `[`Image`](#classImage_1ae6297ffbf18a41caa7971e58571250db)`(String szText,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` 
 
 Create an [Image](#classImage) hook with the given parameters.
 
 #### Parameters
-* `szText` The filename to load the image from.
+* `szText` The filename to load the image from, relative to the script folder. A name that leaves that folder (`..\` or `../`), contains any of `":?*<>|`, or makes a path longer than 515 characters when joined to the script folder's path throws "Invalid image file path".
 
 * `x` The x coordinate (left) of the [Image](#classImage).
 
@@ -3925,7 +3944,7 @@ The first item found that matches the description.
 Get all items from inventory.
 
 #### Returns
-An array of all the items from inventory.
+An array of all the items from inventory; empty when the unit has no items, has left the game, or the method is called on something that is not a unit.
 
 #### `public `[`Unit`](#classUnit)` `[`getMerc`](#classMe_1a12c1ae747f947cc96bcda92d517e4fd4)`()` 
 
@@ -4015,6 +4034,8 @@ The parent's name.
 #### `public void `[`overhead`](#classMe_1a6f5c4067c0304c88ab5105b93e787f7d)`(Object message)` 
 
 Puts the string equivalent of message over the unit.
+
+Throws "Invalid arguments" if no message is passed for a unit that is still in the game; a null or undefined message shows nothing.
 
 #### `public void `[`revive`](#classMe_1a7e53744fc9cd8233451fa8562e4ce7e9)`()` 
 
@@ -4113,6 +4134,8 @@ Return whether or not the unit has a given state.
 
 #### Parameters
 * `nState` The state id.
+
+Throws "Invalid arguments" if no state id is passed.
 
 #### Returns
 Whether or not the unit has the state.
@@ -4296,7 +4319,7 @@ Get the quest flag for a quest specified by act and quest number.
 * `nQuest` The quest number.
 
 #### Returns
-The quest flag for the specified quest.
+The quest flag for the specified quest, or undefined when act and quest are not both integers.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMinionCount`](#classMe_1accccb22ea6e3a2618fe740270374d6e6)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nType)` 
 
@@ -5063,6 +5086,8 @@ Remove the [Text](#classText) hook from the screen and destroy the corresponding
 
 This class represents a unit (monster, wp, npc, character, etc) in the game.
 
+When the unit or item has left the game, getFlag(), getEnchant() and getSkill() return false, getFlags(), getItemCost(), getMinionCount() and getMercHP() return undefined, and getItems() returns an empty array.
+
 ## Summary
 
  Members                        | Descriptions                                
@@ -5602,7 +5627,7 @@ The first item found that matches the description.
 Get all items from inventory.
 
 #### Returns
-An array of all the items from inventory.
+An array of all the items from inventory; empty when the unit has no items, has left the game, or the method is called on something that is not a unit.
 
 #### `public bool `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` 
 
@@ -5695,6 +5720,8 @@ The parent's name.
 #### `public void `[`overhead`](#classUnit_1a3b8b22982ac3eb1dcefb354102a19a30)`(Object message)` 
 
 Puts the string equivalent of message over the unit.
+
+Throws "Invalid arguments" if no message is passed for a unit that is still in the game; a null or undefined message shows nothing.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getFlags`](#classUnit_1a01704c64338a7818f03ea9fdb0205ee6)`()` 
 
@@ -5799,6 +5826,8 @@ Return whether or not the unit has a given state.
 
 #### Parameters
 * `nState` The state id.
+
+Throws "Invalid arguments" if no state id is passed.
 
 #### Returns
 Whether or not the unit has the state.
@@ -5938,7 +5967,7 @@ Get the quest flag for a quest specified by act and quest number.
 * `nQuest` The quest number.
 
 #### Returns
-The quest flag for the specified quest.
+The quest flag for the specified quest, or undefined when act and quest are not both integers.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMinionCount`](#classUnit_1a1cf6810c2589b47f74cfa125375d75ed)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nType)` 
 

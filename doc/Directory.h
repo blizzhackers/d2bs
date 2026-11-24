@@ -12,6 +12,9 @@ public:
 	 * \param name The name of the directory to create under the current
 	 * directory.
 	 *
+	 * Throws "No path passed to dir.create()" if name is not a string, and "Invalid folder name" if it is
+	 * invalid or too long.
+	 *
 	 * \return The new Folder created.
 	 */
 	Folder create(String name);

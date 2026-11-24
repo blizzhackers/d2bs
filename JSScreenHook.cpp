@@ -15,8 +15,24 @@ void hook_finalize(JSFreeOp* fop, JSObject* obj) {
     Genhook::LeaveGlobalSection();
 }
 
+namespace {
+// remove() is shared by the five hook classes; a private of any other class must never be deleted as a Genhook.
+bool IsHookObject(JSContext* cx, JSObject* obj) {
+    static JSClass* const hookClasses[] = {&frame_class, &box_class, &line_class, &text_class, &image_class};
+    if (!obj)
+        return false;
+    for (size_t i = 0; i < sizeof(hookClasses) / sizeof(hookClasses[0]); i++)
+        if (JS_InstanceOf(cx, obj, hookClasses[i], NULL))
+            return true;
+    return false;
+}
+} // namespace
+
 JSAPI_FUNC(hook_remove) {
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     JSObject* obj = JS_THIS_OBJECT(cx, vp);
+    if (!IsHookObject(cx, obj))
+        return JS_TRUE;
     Genhook::EnterGlobalSection();
     Genhook* hook = (Genhook*)JS_GetPrivate(cx, obj);
     if (hook) {
@@ -79,9 +95,12 @@ JSAPI_FUNC(frame_ctor) {
 }
 
 JSAPI_PROP(frame_getProperty) {
-    FrameHook* pFramehook = (FrameHook*)JS_GetPrivate(cx, obj);
-    if (!pFramehook)
+    FrameHook* pFramehook = (FrameHook*)JS_GetInstancePrivate(cx, obj, &frame_class, NULL);
+    if (!pFramehook) {
+        // Hook props are slotful: a getter that leaves vp unset hands back the holder's last stored value.
+        vp.setUndefined();
         return JS_TRUE;
+    }
 
     jsval ID;
     JS_IdToValue(cx, id, &ID);
@@ -118,7 +137,7 @@ JSAPI_PROP(frame_getProperty) {
 }
 
 JSAPI_STRICT_PROP(frame_setProperty) {
-    FrameHook* pFramehook = (FrameHook*)JS_GetPrivate(cx, obj);
+    FrameHook* pFramehook = (FrameHook*)JS_GetInstancePrivate(cx, obj, &frame_class, NULL);
     if (!pFramehook)
         return JS_TRUE;
 
@@ -215,9 +234,11 @@ JSAPI_FUNC(box_ctor) {
     return JS_TRUE;
 }
 JSAPI_PROP(box_getProperty) {
-    BoxHook* pBoxHook = (BoxHook*)JS_GetPrivate(cx, obj);
-    if (!pBoxHook)
+    BoxHook* pBoxHook = (BoxHook*)JS_GetInstancePrivate(cx, obj, &box_class, NULL);
+    if (!pBoxHook) {
+        vp.setUndefined();
         return JS_TRUE;
+    }
 
     jsval ID;
     JS_IdToValue(cx, id, &ID);
@@ -260,7 +281,7 @@ JSAPI_PROP(box_getProperty) {
 }
 
 JSAPI_STRICT_PROP(box_setProperty) {
-    BoxHook* pBoxHook = (BoxHook*)JS_GetPrivate(cx, obj);
+    BoxHook* pBoxHook = (BoxHook*)JS_GetInstancePrivate(cx, obj, &box_class, NULL);
     if (!pBoxHook)
         return JS_TRUE;
 
@@ -361,9 +382,11 @@ JSAPI_FUNC(line_ctor) {
 }
 
 JSAPI_PROP(line_getProperty) {
-    LineHook* pLineHook = (LineHook*)JS_GetPrivate(cx, obj);
-    if (!pLineHook)
+    LineHook* pLineHook = (LineHook*)JS_GetInstancePrivate(cx, obj, &line_class, NULL);
+    if (!pLineHook) {
+        vp.setUndefined();
         return JS_TRUE;
+    }
 
     jsval ID;
     JS_IdToValue(cx, id, &ID);
@@ -400,7 +423,7 @@ JSAPI_PROP(line_getProperty) {
 }
 
 JSAPI_STRICT_PROP(line_setProperty) {
-    LineHook* pLineHook = (LineHook*)JS_GetPrivate(cx, obj);
+    LineHook* pLineHook = (LineHook*)JS_GetInstancePrivate(cx, obj, &line_class, NULL);
     if (!pLineHook)
         return JS_TRUE;
 
@@ -462,7 +485,7 @@ JSAPI_FUNC(text_ctor) {
     if (argc > 0 && JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
         szText = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     if (!szText)
-        return JS_TRUE;
+        return JS_FALSE;
     if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
         x = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
     if (argc > 2 && JSVAL_IS_INT(JS_ARGV(cx, vp)[2]))
@@ -499,9 +522,11 @@ JSAPI_FUNC(text_ctor) {
 }
 
 JSAPI_PROP(text_getProperty) {
-    TextHook* pTextHook = (TextHook*)JS_GetPrivate(cx, obj);
-    if (!pTextHook)
+    TextHook* pTextHook = (TextHook*)JS_GetInstancePrivate(cx, obj, &text_class, NULL);
+    if (!pTextHook) {
+        vp.setUndefined();
         return JS_TRUE;
+    }
 
     jsval ID;
     JS_IdToValue(cx, id, &ID);
@@ -542,7 +567,7 @@ JSAPI_PROP(text_getProperty) {
 }
 
 JSAPI_STRICT_PROP(text_setProperty) {
-    TextHook* pTextHook = (TextHook*)JS_GetPrivate(cx, obj);
+    TextHook* pTextHook = (TextHook*)JS_GetInstancePrivate(cx, obj, &text_class, NULL);
     if (!pTextHook)
         return JS_TRUE;
 
@@ -569,7 +594,7 @@ JSAPI_STRICT_PROP(text_setProperty) {
         if (vp.isString()) {
             const wchar_t* pText = JS_GetStringCharsZ(cx, vp.toString());
             if (!pText)
-                return JS_TRUE;
+                return JS_FALSE;
             pTextHook->SetText(pText);
         }
         break;
@@ -595,6 +620,12 @@ JSAPI_STRICT_PROP(text_setProperty) {
     return JS_TRUE;
 }
 
+// LoadCellFile and getPathRelScript both build "<script path>\<name>" in
+// _MAX_FNAME + _MAX_PATH characters, so the joined name must fit before isValidPath's verdict can be trusted.
+static bool IsValidImageName(const wchar_t* name) {
+    return wcslen(Vars.szScriptPath) + 1 + wcslen(name) < _MAX_FNAME + _MAX_PATH && isValidPath(name);
+}
+
 // Function to create a image which gets called on a "new Image ()"
 
 // Parameters: image, x, y, color, align, automap, onHover, onimage
@@ -613,7 +644,7 @@ JSAPI_FUNC(image_ctor) {
     if (argc > 0 && JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
         szText = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     if (!szText)
-        return JS_TRUE;
+        return JS_FALSE;
     if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
         x = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
     if (argc > 2 && JSVAL_IS_INT(JS_ARGV(cx, vp)[2]))
@@ -629,10 +660,9 @@ JSAPI_FUNC(image_ctor) {
     if (argc > 7 && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[7]))
         hover = JS_ARGV(cx, vp)[7];
 
-    if (isValidPath(path))
-        swprintf_s(path, _countof(path), L"%s", szText);
-    else
+    if (!IsValidImageName(szText))
         THROW_ERROR(cx, "Invalid image file path");
+    swprintf_s(path, _countof(path), L"%s", szText);
 
     JSObject* hook = BuildObject(cx, &image_class, image_methods, image_props);
     if (!hook)
@@ -653,9 +683,11 @@ JSAPI_FUNC(image_ctor) {
 }
 
 JSAPI_PROP(image_getProperty) {
-    ImageHook* pImageHook = (ImageHook*)JS_GetPrivate(cx, obj);
-    if (!pImageHook)
+    ImageHook* pImageHook = (ImageHook*)JS_GetInstancePrivate(cx, obj, &image_class, NULL);
+    if (!pImageHook) {
+        vp.setUndefined();
         return JS_TRUE;
+    }
 
     jsval ID;
     JS_IdToValue(cx, id, &ID);
@@ -690,7 +722,7 @@ JSAPI_PROP(image_getProperty) {
 }
 
 JSAPI_STRICT_PROP(image_setProperty) {
-    ImageHook* pImageHook = (ImageHook*)JS_GetPrivate(cx, obj);
+    ImageHook* pImageHook = (ImageHook*)JS_GetInstancePrivate(cx, obj, &image_class, NULL);
     if (!pImageHook)
         return JS_TRUE;
 
@@ -709,7 +741,9 @@ JSAPI_STRICT_PROP(image_setProperty) {
         if (vp.isString()) {
             const wchar_t* pimage = JS_GetStringCharsZ(cx, vp.toString());
             if (!pimage)
-                return JS_TRUE;
+                return JS_FALSE;
+            if (!IsValidImageName(pimage))
+                THROW_ERROR(cx, "Invalid image file path");
             pImageHook->SetImage(pimage);
         }
         break;
@@ -742,23 +776,22 @@ JSAPI_FUNC(screenToAutomap) {
             // get the params
             JSObject* arg = JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[0]);
             jsval x, y;
+            // A failed read (a throwing getter) already has its exception pending; a THROW_ERROR would replace it.
             if (JS_GetProperty(cx, arg, "x", &x) == JS_FALSE || JS_GetProperty(cx, arg, "y", &y) == JS_FALSE)
-                THROW_ERROR(cx, "Failed to get x and/or y values");
+                return JS_FALSE;
             if (!JSVAL_IS_INT(x) || !JSVAL_IS_INT(y))
                 THROW_ERROR(cx, "Input has an x or y, but they aren't the correct type!");
             int32 ix, iy;
-            if (JS_ValueToInt32(cx, x, &ix) == JS_FALSE || JS_ValueToInt32(cx, y, &iy))
+            if (JS_ValueToInt32(cx, x, &ix) == JS_FALSE || JS_ValueToInt32(cx, y, &iy) == JS_FALSE)
                 THROW_ERROR(cx, "Failed to convert x and/or y values");
-            // convert the values
             POINT result = ScreenToAutomap(ix, iy);
             x = INT_TO_JSVAL(result.x);
             y = INT_TO_JSVAL(result.y);
             JSObject* res = JS_NewObject(cx, NULL, NULL, NULL);
             if (!res)
                 return JS_FALSE;
-            jsval* argv = JS_ARGV(cx, vp);
-            // A plain object's property write fails only out of memory, which the engine has already reported.
-            if (JS_SetProperty(cx, res, "x", &argv[0]) == JS_FALSE || JS_SetProperty(cx, res, "y", &argv[1]) == JS_FALSE)
+            // These writes fail only with an exception already pending (out of memory, or a script setter on Object.prototype).
+            if (JS_SetProperty(cx, res, "x", &x) == JS_FALSE || JS_SetProperty(cx, res, "y", &y) == JS_FALSE)
                 return JS_FALSE;
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(res));
         } else
@@ -795,29 +828,25 @@ JSAPI_FUNC(automapToScreen) {
             // get the params
             JSObject* arg = JSVAL_TO_OBJECT(argv[0]);
             jsval x, y;
+            // A failed read (a throwing getter) already has its exception pending; a THROW_ERROR would replace it.
             if (JS_GetProperty(cx, arg, "x", &x) == JS_FALSE || JS_GetProperty(cx, arg, "y", &y) == JS_FALSE)
-                THROW_ERROR(cx, "Failed to get x and/or y values");
+                return JS_FALSE;
             if (!JSVAL_IS_INT(x) || !JSVAL_IS_INT(y))
                 THROW_ERROR(cx, "Input has an x or y, but they aren't the correct type!");
             int32 ix, iy;
-            JS_BeginRequest(cx);
-            if (JS_ValueToInt32(cx, x, &ix) == JS_FALSE || JS_ValueToInt32(cx, y, &iy)) {
-                JS_EndRequest(cx);
+            if (JS_ValueToInt32(cx, x, &ix) == JS_FALSE || JS_ValueToInt32(cx, y, &iy) == JS_FALSE)
                 THROW_ERROR(cx, "Failed to convert x and/or y values");
-            }
-            JS_EndRequest(cx);
-            // convert the values
             POINT result = {ix, iy};
             AutomapToScreen(&result);
-            x = INT_TO_JSVAL(ix);
-            y = INT_TO_JSVAL(iy);
-            JS_BeginRequest(cx);
-            if (JS_SetProperty(cx, arg, "x", &x) == JS_FALSE || JS_SetProperty(cx, arg, "y", &y) == JS_FALSE) {
-                JS_EndRequest(cx);
-                THROW_ERROR(cx, "Failed to set x and/or y values");
-            }
-            JS_EndRequest(cx);
-            JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(arg));
+            x = INT_TO_JSVAL(result.x);
+            y = INT_TO_JSVAL(result.y);
+            JSObject* res = JS_NewObject(cx, NULL, NULL, NULL);
+            if (!res)
+                return JS_FALSE;
+            // These writes fail only with an exception already pending (out of memory, or a script setter on Object.prototype).
+            if (JS_SetProperty(cx, res, "x", &x) == JS_FALSE || JS_SetProperty(cx, res, "y", &y) == JS_FALSE)
+                return JS_FALSE;
+            JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(res));
         } else
             THROW_ERROR(cx, "Invalid object specified to automapToScreen");
     } else if (argc == 2) {

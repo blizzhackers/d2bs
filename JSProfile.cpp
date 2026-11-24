@@ -96,7 +96,10 @@ JSAPI_FUNC(profile_login) {
     char* error;
     Profile* prof;
 
-    prof = (Profile*)JS_GetPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    // A foreign or prototype this has no Profile; reading past a plain object's slots would be a garbage pointer.
+    prof = (Profile*)JS_GetInstancePrivate(cx, JS_THIS_OBJECT(cx, vp), &profile_class, NULL);
+    if (!prof)
+        return JS_TRUE;
 
     if (prof->login(&error) != 0)
         THROW_ERROR(cx, error);
@@ -118,7 +121,11 @@ void profile_finalize(JSFreeOp* fop, JSObject* obj) {
 JSAPI_PROP(profile_getProperty) {
     Profile* prof;
 
-    prof = (Profile*)JS_GetPrivate(cx, obj);
+    prof = (Profile*)JS_GetInstancePrivate(cx, obj, &profile_class, NULL);
+    if (!prof) {
+        vp.setUndefined();
+        return JS_TRUE;
+    }
     jsval ID;
     JS_IdToValue(cx, id, &ID);
     char* nStr;

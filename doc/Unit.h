@@ -1,5 +1,9 @@
 /** This class represents a unit (monster, wp, npc, character, etc) in the
  * game.
+ *
+ * When the unit or item has left the game, getFlag(), getEnchant() and
+ * getSkill() return false, getFlags(), getItemCost(), getMinionCount() and
+ * getMercHP() return undefined, and getItems() returns an empty array.
  */
 class Unit
 {
@@ -127,7 +131,7 @@ public:
 
 	/** Get all items from inventory.
 	 *
-	 * \return An array of all the items from inventory.
+	 * \return An array of all the items from inventory; empty when the unit has no items, has left the game, or the method is called on something that is not a unit.
 	 */
 	Unit[] getItems();
 
@@ -213,6 +217,9 @@ public:
 	String getParent();
 
 	/** Puts the string equivalent of message over the unit.
+	 *
+	 * Throws "Invalid arguments" if no message is passed for a unit that is still in the game; a null or
+	 * undefined message shows nothing.
 	 */
 	void overhead(Object message);
 
@@ -312,6 +319,8 @@ public:
 	/** Return whether or not the unit has a given state.
 	 *
 	 * \param nState The state id.
+	 *
+	 * Throws "Invalid arguments" if no state id is passed.
 	 *
 	 * \return Whether or not the unit has the state.
 	 */
@@ -437,7 +446,8 @@ public:
 	 *
 	 * \param nQuest The quest number.
 	 *
-	 * \return The quest flag for the specified quest.
+	 * \return The quest flag for the specified quest, or undefined when act and
+	 * quest are not both integers.
 	 */
 	int getQuest(int nAct, int nQuest);
 

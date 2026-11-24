@@ -6,6 +6,7 @@
 #include "D2BS.h"
 #include "D2Helpers.h"
 #include "JSParty.h"
+#include "JSUnit.h"
 
 EMPTY_CTOR(room)
 
@@ -525,7 +526,8 @@ JSAPI_FUNC(room_unitInRoom) {
     if (!pSnap || argc < 1 || !JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[0]))
         return JS_TRUE;
 
-    myUnit* pmyUnit = (myUnit*)JS_GetPrivate(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[0]));
+    // Class-checked: a non-Unit argument's private (a Room snapshot, a PresetUnit) is not a myUnit.
+    myUnit* pmyUnit = GetUnitPrivate(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[0]));
 
     if (!pmyUnit || (pmyUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
         return JS_TRUE;

@@ -10,7 +10,7 @@ class Image
 public:
 	/** Create an Image hook with the given parameters.
 	 *
-	 * \param szText The filename to load the image from.
+	 * \param szText The filename to load the image from, relative to the script folder. A name that leaves that folder (..\ or ../), contains any of ":?*<>|, or makes a path longer than 515 characters when joined to the script folder's path throws "Invalid image file path".
 	 *
 	 * \param x The x coordinate (left) of the Image.
 	 *
@@ -79,7 +79,7 @@ public:
 	 */
 	HoverHandler hover;
 
-	/** Location of the file to load for display.
+	/** Location of the file to load for display, relative to the script folder. Setting a name that new Image() would refuse throws "Invalid image file path" and keeps the current file.
 	 */
 	String location;
 };

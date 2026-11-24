@@ -121,7 +121,7 @@
 `public void `[`useSkillPoint`](#group__globalFunctions_1ga2316220fcf3f65233c46a23881f5702e)`(uint16_t skill,uint32_t count)`            | Use a skill point.
 `public void `[`takeScreenshot`](#group__globalFunctions_1gab872a4402833e45312ccdde4004b4f96)`()`            | Take a screenshot.
 `public bool `[`moveNPC`](#globalFuncs_8h_1a76152e5a307aa9fab69c1243453e51a7)`(`[`Unit`](#classUnit)` npc,uint32_t x,uint32_t y)`            | Move NPC to a new location.
-`public bool `[`getPacket`](#globalFuncs_8h_1ae457d3d8c69ab22efeefa2bc07e51d5e)`(...)`            | Send a packet to the client.
+`public bool `[`getPacket`](#globalFuncs_8h_1ae457d3d8c69ab22efeefa2bc07e51d5e)`(...)`            | Pass packets to the client as if the server had sent them.
 `public bool `[`sendPacket`](#globalFuncs_8h_1a4082e1ce7c6ac097efd964d6397d197d)`(...)`            | Send a packet to the server.
 `public String `[`getIP`](#globalFuncs_8h_1a7386e4db6f3be302ddd7a159d66774b1)`()`            | Get the external IP by going to "http://automation.whatismyip.com/n09230945.asp" and parsing the result.
 `public Object `[`screenToAutomap`](#group__globalFunctions_1ga252bace45245bc8c4794f27d31f8ca45)`(Object arg)`            | Convert a point from screen coordinates to automap coordinates.
@@ -1815,25 +1815,25 @@ true
 
 #### `public bool `[`getPacket`](#globalFuncs_8h_1ae457d3d8c69ab22efeefa2bc07e51d5e)`(...)` 
 
-Send a packet to the client.
+Pass packets to the client as if the server had sent them.
 
-Params are length, val, length, val, ... Length is the number of bytes in the following value. Value is an integer, put in the packet little endian. Maximum packet length is 20.
+Takes either one ArrayBuffer holding one or more whole packets, or pairs of arguments: size, value, size, value, ... where each size (1 to 4) is the number of bytes its value (an integer) adds to the packet, little endian. Every packet must be one the game can read, 1 to 516 bytes long and complete. An empty ArrayBuffer is refused. Pass a typed array's `.buffer`, not the typed array; the whole buffer is used, so for a typed array that covers only part of its buffer pass `view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)`. The packets are checked together: if one fails, none is passed on.
 
 This is an exploit function.
 
 #### Returns
-true when the packet was passed to the game's incoming packet queue, otherwise false (outside a game, for example)
+true when the packets were passed to the game's incoming packet queue; false outside a game, and false with a warning when the input is refused. A value that throws while it is converted stops the call with its error.
 
 #### `public bool `[`sendPacket`](#globalFuncs_8h_1a4082e1ce7c6ac097efd964d6397d197d)`(...)` 
 
 Send a packet to the server.
 
-Params are length, val, length, val, ... Length is the number of bytes in the following value. Value is an integer, put in the packet little endian. Maximum packet length is 20.
+Takes either one ArrayBuffer holding the packet, or pairs of arguments: size, value, size, value, ... where each size (1 to 4) is the number of bytes its value (an integer) adds to the packet, little endian. The packet must be 1 to 516 bytes long. Pass a typed array's `.buffer`, not the typed array; the whole buffer is used, so for a typed array that covers only part of its buffer pass `view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)`.
 
 This is an exploit function.
 
 #### Returns
-true
+true when the game took the packet; false when it did not (outside a game, for example), and false with a warning when the input is refused. A value that throws while it is converted stops the call with its error.
 
 #### `public String `[`getIP`](#globalFuncs_8h_1a7386e4db6f3be302ddd7a159d66774b1)`()` 
 

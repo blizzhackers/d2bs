@@ -1,0 +1,1 @@
+- **No DDE service.** D2BS no longer registers a `d2bs-<pid>` DDE service; profiles switch through the `-profile` launch argument and D2Bot's copydata messages, and `sendDDE` still reaches other DDE servers.

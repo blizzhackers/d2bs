@@ -4,7 +4,6 @@
 #include <io.h>
 #include <fcntl.h>
 
-#include "dde.h"
 #include "Offset.h"
 #include "ScriptEngine.h"
 #include "Helpers.h"
@@ -137,7 +136,6 @@ BOOL Startup(void) {
     InitializeRevisionTempPath();
     InstallPatches();
     InstallConditional();
-    CreateDdeServer();
 
     if ((hD2Thread = CreateThread(NULL, NULL, D2Thread, NULL, NULL, NULL)) == NULL)
         return FALSE;
@@ -163,7 +161,6 @@ void Shutdown(void) {
     RemovePatches();
     RemoveRevisionTempDirectory();
     Genhook::Destroy();
-    ShutdownDdeServer();
 
     KillTimer(D2GFX_GetHwnd(), Vars.uTimer);
 

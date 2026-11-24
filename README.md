@@ -76,7 +76,7 @@
 `public void `[`debugLog`](#group__globalFunctions_1gacab2f81ca665988be5ca4ceb60503073)`(...)`            | Log the String representation of the arguments.
 `public void `[`showConsole`](#group__globalFunctions_1ga084bae5a15c2ac3f27ea93f3a03ca0ce)`()`            | Show the console.
 `public void `[`hideConsole`](#group__globalFunctions_1gaaaafa71c8fdd6db81a134ae4aaa355db)`()`            | Hide the console.
-`public void `[`login`](#group__globalFunctions_1gaf76b7b46958dabf5e4ee9a492f0ec3fa)`()`            | Loads the default (either from config or copydata or DDE) profile from d2bs.ini and gets to the lobby (for battle.net chars) or into a game (for single player characters).
+`public void `[`login`](#group__globalFunctions_1gaf76b7b46958dabf5e4ee9a492f0ec3fa)`()`            | Loads the current profile (set by the -profile launch argument, a D2Bot copydata message, or an earlier login(profile)) from d2bs.ini and gets to the lobby (for battle.net chars) or into a game (for single player characters).
 `public void `[`login`](#group__globalFunctions_1gad9588235f179db8af822d1356337b021)`(String profile)`            | Loads the profile from d2bs.ini and gets to the lobby (for battle.net chars) or into a game (for single player characters).
 `public bool `[`selectCharacter`](#group__globalFunctions_1ga5bec5be39d3ffe649ab5a32fa328d680)`(String profile)`            | Select the character from the given profile.
 `public Object[] `[`getCharacterList`](#group__globalFunctions_getCharacterList)`()`            | Get every character on the character select screen in one call, in the order the screen lists them.
@@ -1199,7 +1199,7 @@ Hide the console.
 
 #### `public void `[`login`](#group__globalFunctions_1gaf76b7b46958dabf5e4ee9a492f0ec3fa)`()` 
 
-Loads the default (either from config or copydata or DDE) profile from d2bs.ini and gets to the lobby (for battle.net chars) or into a game (for single player characters).
+Loads the current profile (set by the -profile launch argument, a D2Bot copydata message, or an earlier login(profile)) from d2bs.ini and gets to the lobby (for battle.net chars) or into a game (for single player characters).
 
 #### Exceptions
 * `String` May throw one of the following:

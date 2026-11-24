@@ -1,67 +1,20 @@
-#include "ScriptEngine.h"
 #include "D2Helpers.h"
-#include "Helpers.h"
 #include "dde.h"
 
-DWORD DdeSrvInst = 0;
-HSZ hszD2BSns;
-
-HDDEDATA CALLBACK DdeCallback(UINT uType, UINT uFmt, HCONV hconv, HSZ hsz1, HSZ hsz2, HDDEDATA hdata, DWORD dwData1, DWORD dwData2) {
-    char pszItem[65535] = "";
-    wchar_t* pslzItem = AnsiToUnicode(pszItem);
-    switch (uType) {
-    case XTYP_CONNECT:
-        return (HDDEDATA)TRUE;
-    case XTYP_POKE:
-        DdeGetData(hdata, (LPBYTE)pszItem, 255, 0);
-        if (SwitchToProfile(pslzItem))
-            Log(L"Switched to profile %s", pslzItem);
-        else
-            Log(L"Profile %s not found", pslzItem);
-        break;
-    case XTYP_EXECUTE:
-        DdeGetData(hdata, (LPBYTE)pszItem, sizeof(pszItem), 0);
-        ScriptEngine::RunCommand(pslzItem);
-        break;
-    }
-    delete[] pslzItem;
-    return (HDDEDATA)0;
+// DDEML requires a callback even for a client-only instance. SendDDE makes only synchronous transactions and starts no
+// advise loop, so every callback it can get is a notification that needs no answer.
+static HDDEDATA CALLBACK DdeClientCallback(UINT, UINT, HCONV, HSZ, HSZ, HDDEDATA, ULONG_PTR, ULONG_PTR) {
+    return NULL;
 }
 
-DWORD CreateDdeServer() {
-    char buf[1000];
-
-    int ret = DdeInitialize(
-        &DdeSrvInst, DdeCallback,
-        APPCLASS_STANDARD | APPCMD_FILTERINITS | CBF_FAIL_ADVISES | CBF_FAIL_REQUESTS | CBF_SKIP_CONNECT_CONFIRMS | CBF_SKIP_REGISTRATIONS | CBF_SKIP_UNREGISTRATIONS, 0);
-    if (ret != DMLERR_NO_ERROR)
-        return 0;
-    char handle[25];
-    sprintf_s(handle, sizeof(handle), "d2bs-%d", GetProcessId(GetCurrentProcess()));
-    hszD2BSns = DdeCreateStringHandle(DdeSrvInst, handle, CP_WINANSI);
-    if (!hszD2BSns)
-        return 0;
-    if (!DdeNameService(DdeSrvInst, hszD2BSns, 0L, DNS_REGISTER | DNS_FILTERON)) {
-        sprintf_s(buf, sizeof(buf), "DdeServer DdeNameService Error: %X", DdeGetLastError(DdeSrvInst));
-        OutputDebugString(buf);
-        return 0;
-    }
-    return GetLastError();
-}
-
-BOOL ShutdownDdeServer() {
-    DdeFreeStringHandle(DdeSrvInst, hszD2BSns);
-    return DdeUninitialize(DdeSrvInst);
-}
-
-BOOL SendDDE(int mode, char* pszDDEServer, char* pszTopic, char* pszItem, char* pszData, char* result, uint size) {
+BOOL SendDDE(int mode, char* pszDDEServer, char* pszTopic, char* pszItem, char* pszData, char* result, unsigned int size) {
     DWORD pidInst = 0;
     HCONV hConv;
     DWORD dwTimeout = 5000;
 
     Log(L"SendDDE(%d, %hs, %hs, %hs, %hs, %u)", mode, pszDDEServer, pszTopic, pszItem, pszData, size);
 
-    int ret = DdeInitialize(&pidInst, (PFNCALLBACK)DdeCallback, APPCMD_CLIENTONLY, 0);
+    int ret = DdeInitialize(&pidInst, DdeClientCallback, APPCMD_CLIENTONLY, 0);
     if (ret != DMLERR_NO_ERROR) {
         Log(L"DdeInitialize Error: %X", ret);
         return FALSE;

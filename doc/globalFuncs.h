@@ -1393,9 +1393,9 @@ void showConsole();
  */
 void hideConsole();
 
-/** Loads the default (either from config or copydata or DDE) profile from
- * d2bs.ini and gets to the lobby (for battle.net chars) or into a game (for
- * single player characters).
+/** Loads the selected profile (set by the -profile launch argument or a D2Bot
+ * copydata message) from d2bs.ini and gets to the lobby (for battle.net chars)
+ * or into a game (for single player characters).
  *
  * \ingroup globalFunctions
  *

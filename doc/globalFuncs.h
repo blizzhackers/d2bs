@@ -2121,8 +2121,8 @@ bool getPacket(...);
  *
  * \warning This is an exploit function.
  *
- * \return true when the game took the packet; false when it did not (outside a game, for example), and false with
- * a warning when the input is refused. A value that throws while it is converted stops the call with its error.
+ * \return true when the game took the packet; false when it did not (outside a game, for example, or a
+ * `gamepacketsent` listener blocked it, with no warning), and false with a warning when the input is refused. A value that throws while it is converted stops the call with its error.
  */
 bool sendPacket(...);
 

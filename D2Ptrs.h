@@ -382,7 +382,8 @@ enum {
     // D2Net Functions
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Returns 0 when the game did not take the packet: no game session, refused by single player's server, or a failed send.
+    // Returns 0 when the game did not take the packet: no game session, refused by single player's server, a failed
+    // send, or a gamepacketsent listener blocked it (D2BS's hook at 0x12AE5A sits inside this function).
     FUNCPTR(D2NET, SendPacket, DWORD __stdcall, (size_t aLen, DWORD arg1, BYTE* aPacket), 0x12AE50)      // Updated 1.14d //0052AE50-BASE
     FUNCPTR(D2NET, ReceivePacket, void __fastcall, (BYTE * aPacket, DWORD aLen), 0x12AEB0)              // Updated 1.14d //0052AEB0-BASE
     FUNCPTR(D2NET, ReceivePacket_I, void __fastcall, (BYTE * aPacket, DWORD aLen, int* arg3), 0x12B920) // Updated 1.14d //0052B920-BASE

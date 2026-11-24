@@ -129,7 +129,7 @@ DWORD EventMessagesHandler(BYTE* pPacket, DWORD dwSize) {
     BYTE param2 = pPacket[7];
     char name1[16] = "", name2[28] = "";
     strncpy_s(name1, sizeof(name1), (char*)pPacket + 8, 15);
-    strncpy_s(name2, 16, (char*)pPacket + 24, 15);
+    strncpy_s(name2, sizeof(name2), (char*)pPacket + 24, 15);
     wchar_t* wname2 = NULL;
 
     char* tables[3] = {"", "monstats", "objects"};

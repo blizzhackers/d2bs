@@ -1833,7 +1833,7 @@ Takes either one ArrayBuffer holding the packet, or pairs of arguments: size, va
 This is an exploit function.
 
 #### Returns
-true when the game took the packet; false when it did not (outside a game, for example), and false with a warning when the input is refused. A value that throws while it is converted stops the call with its error.
+true when the game took the packet; false when it did not (outside a game, for example, or a `gamepacketsent` listener blocked it, with no warning), and false with a warning when the input is refused. A value that throws while it is converted stops the call with its error.
 
 #### `public String `[`getIP`](#globalFuncs_8h_1a7386e4db6f3be302ddd7a159d66774b1)`()` 
 

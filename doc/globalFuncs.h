@@ -1102,7 +1102,8 @@ int sendCopyData(HWND hWnd, String dummy, int32_t nModeId, String data);
  *
  * Arguments after the server are optional. mode must be an integer; sendDDE throws when mode or the server is missing.
  *
- * \return Result data (at most 255 bytes) if mode was 0, otherwise false. A server that is not running gives "" in mode 0. Throws only when DDE itself cannot start.
+ * \return Result data (at most 255 bytes) if mode was 0, otherwise false. A server that is not running gives ""
+ * in mode 0. Apart from the argument errors, it throws only when DDE itself cannot start.
  */
 String sendDDE(int32_t mode, String pszDDEServer, String pszTopic,
 	String pszItem, String pszData);

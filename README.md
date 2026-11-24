@@ -978,7 +978,7 @@ Send data to a DDE server by means of DdeClientTransaction.
 Arguments after the server are optional. mode must be an integer; sendDDE throws when mode or the server is missing.
 
 #### Returns
-Result data (at most 255 bytes) if mode was 0, otherwise false. A server that is not running gives "" in mode 0. Throws only when DDE itself cannot start.
+Result data (at most 255 bytes) if mode was 0, otherwise false. A server that is not running gives "" in mode 0. Apart from the argument errors, it throws only when DDE itself cannot start.
 
 #### `public bool `[`keystate`](#group__globalFunctions_1ga8758a45d0a7e6bb5c42258ea99e7da07)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` vKey)` 
 

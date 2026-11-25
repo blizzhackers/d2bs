@@ -2,7 +2,6 @@
 #include "JSFile.h"
 #include "JSSocket.h"
 #include "JSSQLite.h"
-#include "JSSandbox.h"
 #include "JSUnit.h"
 #include "JSScreenHook.h"
 #include "JSPresetUnit.h"
@@ -60,10 +59,6 @@ JSClass text_class = {
 JSClass image_class = {
     "Image", JSCLASS_HAS_PRIVATE,
     JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, hook_finalize, image_ctor)};
-
-JSClass sandbox_class = {"Sandbox", JSCLASS_HAS_PRIVATE,
-                         JSCLASS_SPEC(sandbox_addProperty, sandbox_delProperty, sandbox_getProperty, sandbox_setProperty, JS_EnumerateStub, JS_ResolveStub,
-                                      JS_ConvertStub, sandbox_finalize, sandbox_ctor)};
 
 JSClass room_class = {
     "Room", JSCLASS_HAS_PRIVATE,
@@ -156,7 +151,6 @@ JSClassSpec global_classes[] = {
     {&filetools_class, 0, filetools_ctor, 0, NULL, NULL, filetools_s_methods, NULL},
     {&sqlite_db, 0, sqlite_ctor, 0, sqlite_methods, sqlite_props, NULL, NULL},
     {&sqlite_stmt, 0, sqlite_stmt_ctor, 0, sqlite_stmt_methods, sqlite_stmt_props, NULL, NULL},
-    {&sandbox_class, 0, sandbox_ctor, 0, sandbox_methods, NULL, NULL, NULL},
     {&script_class, 0, script_ctor, 0, script_methods, script_props, NULL, NULL},
 
     {&frame_class, 0, frame_ctor, 0, frame_methods, frame_props, NULL, NULL},
@@ -189,7 +183,6 @@ JSClassSpec global_classes[] = {
 //{&sqlite_db,	sqlite_props,		sqlite_methods,			NULL,			NULL},
 //{&sqlite_stmt,			sqlite_stmt_props,	sqlite_stmt_methods,	NULL,			NULL},
 //{&filetools_class,		NULL,				NULL,					NULL,			filetools_s_methods},
-//{&sandbox_class,		NULL,				sandbox_methods,		NULL,			NULL},
 //{&script_class,			script_props,		script_methods,			NULL,			NULL},
 
 // screenhook objects

@@ -44,7 +44,7 @@
 `public `[`Unit`](#classUnit)` `[`getInteractedNPC`](#group__globalFunctions_1ga3338c7af7db3773f41edb61bf9c5873c)`()`            | Get the [Unit](#classUnit) that the controlled [Unit](#classUnit) is currently interacting with.
 `public void `[`print`](#group__globalFunctions_1ga428513e838de3670e09b242cde1f0f6b)`(...)`            | Print the String representation of the arguments to the console.
 `public void `[`delay`](#group__globalFunctions_1ga95cd2552eeef0300ab5bae0ee284f82d)`(uint32_t nDelay)`            | Delay for nDelay milliseconds.
-`public `[`D2BSScript`](#classD2BSScript)` `[`load`](#group__globalFunctions_1gabb55e1126cb1e7626356bd529f6bc965)`(String file,...)`            | Load file and create a thread with it's main function.
+`public bool `[`load`](#group__globalFunctions_1gabb55e1126cb1e7626356bd529f6bc965)`(String file,...)`            | Load file and start a new thread that runs its main function.
 `public bool `[`isIncluded`](#group__globalFunctions_1gae9d2eb16bc4dc333da24e3d968897f67)`(String file)`            | Determine whether a file has been included yet or not.
 `public bool `[`include`](#group__globalFunctions_1ga41df84bb09ce63ef47fd30ddf980294b)`(String file)`            | Include file from the scriptDir\libs directory.
 `public void `[`stop`](#group__globalFunctions_1ga8c8dfb6d9bcdee82b208da3033068b81)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` stop)`            | Conditionally stop current script.
@@ -157,7 +157,6 @@
 `class `[`PresetUnit`](#classPresetUnit) | Represents a [PresetUnit](#classPresetUnit) (a type of [Unit](#classUnit) that is available as soon as the [Area](#classArea) data is available).
 `class `[`Profile`](#classProfile) | This class represents the details needed to get a player to a game or lobby.
 `class `[`Room`](#classRoom) | Represents a "Room" in the game.
-`class `[`Sandbox`](#classSandbox) | A separate context to run scripts in.
 `class `[`Socket`](#classSocket) | A TCP connection to a host listed in d2bs.ini `Hosts`.
 `class `[`SQLite`](#classSQLite) | Class for dealing with an [SQLite](#classSQLite) database.
 `class `[`Text`](#classText) | A [Text](#classText) screen hook.
@@ -839,17 +838,17 @@ This is done by suspending the context, sleeping, then resuming the context for 
 #### Parameters
 * `nDelay` Milliseconds to sleep.
 
-#### `public `[`D2BSScript`](#classD2BSScript)` `[`load`](#group__globalFunctions_1gabb55e1126cb1e7626356bd529f6bc965)`(String file,...)` 
+#### `public bool `[`load`](#group__globalFunctions_1gabb55e1126cb1e7626356bd529f6bc965)`(String file,...)` 
 
-Load file and create a thread with it's main function.
+Load file and start a new thread that runs its main function.
 
-[File](#classFile) taken from scriptDir\file. All remaining parameters are passed to the script.
+[File](#classFile) taken from scriptDir\file. All remaining parameters are copied to the new script's main function; a value that can't be copied (a function, or a game object such as a Unit) throws an error and starts nothing. Loading a script that is already running ends the running copy; the new copy starts once that copy has ended, or after half a second (at once when a script loads its own file), and getScript() and getScripts() then list only the new copy.
 
 #### Parameters
 * `file` The filename of the script.
 
 #### Returns
-If successful returns the new script object representing the thread of the thread. Otherwise it returns null.
+true when the script's thread started, false when the file was not found or the thread could not start. A syntax error in the file still ends that script on its own thread after load() returned true; the calling script and the game keep running. A missing, empty, non-string or too-long file name throws an error.
 
 #### `public bool `[`isIncluded`](#group__globalFunctions_1gae9d2eb16bc4dc333da24e3d968897f67)`(String file)` 
 
@@ -1186,7 +1185,10 @@ The sqlite version string.
 
 #### `public double `[`sqlite_memusage`](#group__globalFunctions_1gae497b684eaeacd9196d73700e4d57d52)`()` 
 
-Return the sqlite memory usage.
+Return the number of bytes of memory SQLite currently holds.
+
+#### Returns
+The memory SQLite holds, in bytes (0 before SQLite is first used).
 
 #### `public `[`Folder`](#classFolder)` `[`dopen`](#group__globalFunctions_1ga9a23806a759b9bace15e57adbdb90f91)`(String name)` 
 
@@ -2372,7 +2374,7 @@ Represents a script (a thread), created by either loading a file, or typing some
 `public bool `[`getNext`](#classD2BSScript_1a9f47bf9a5ebd40e20561a133f9594b7b)`()` | Get the next script.
 `public void `[`pause`](#classD2BSScript_1af541fc2916b40774e2af4eaf947b0c85)`()` | Pause the script.
 `public void `[`resume`](#classD2BSScript_1ae16e135f6467d23dfb8a67582c817485)`()` | Resume the script.
-`public void `[`join`](#classD2BSScript_1a943c172af9bbbc4eedecb74653e1d146)`()` | Wait for other script to finish.
+`public void `[`join`](#classD2BSScript_1a943c172af9bbbc4eedecb74653e1d146)`()` | Wait for the script to finish.
 `public void `[`stop`](#classD2BSScript_1ab4933bbbe30752c142be6df995226967)`()` | Stop the script.
 `public void `[`send`](#classD2BSScript_1ab615c8319b0575b135a8f127a3cf61cf)`(...)` | Send some values to the script.
 
@@ -2396,6 +2398,8 @@ The type of script.
 
 Whether or not the script is running.
 
+False before the script has started (while it compiles and, after a reload, while it waits up to half a second for the old copy to end), while it is paused, after stop(), and after it has ended. A stopped or ended script stays listed until its thread ends (with DisableCache=false, until the cache is flushed or the file is loaded again). Once it is no longer listed, its name is an empty string, running stays false, its other members are undefined and its methods do nothing.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`threadid`](#classD2BSScript_1a85c1a8f5ec4bef0563d07209a1f1d2a1) 
 
 The thread id.
@@ -2417,7 +2421,9 @@ Resume the script.
 
 #### `public void `[`join`](#classD2BSScript_1a943c172af9bbbc4eedecb74653e1d146)`()` 
 
-Wait for other script to finish.
+Wait for the script to finish.
+
+Returns at once when it has already ended. Throws an error when called on the calling script itself.
 
 #### `public void `[`stop`](#classD2BSScript_1ab4933bbbe30752c142be6df995226967)`()` 
 
@@ -2427,7 +2433,7 @@ Stop the script.
 
 Send some values to the script.
 
-Has the effect of calling the any listeners to scriptmsg with the parameters provided.
+Has the effect of calling any listeners to scriptmsg with the parameters provided. A value that can't be copied (a function, or a game object such as a Unit) throws an error and nothing is sent.
 
 # class `DBStatement` 
 
@@ -2435,12 +2441,14 @@ A class describing ...
 
 > Todo: Get a better description (and understanding).
 
+The statement is closed after [close()](#classDBStatement_1a1d8293b4debace6e99c0dbede2677ee7), after a [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be) that returns, and after the database's close(): every method except close() throws "The statement is closed", `sql` reads undefined and `ready` reads false. When go()'s step reports an error, go() throws and the statement stays open, not ready.
+
 ## Summary
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
-`public String `[`sql`](#classDBStatement_1ac1de9e1a1ad1938c08682caac8984dad) | The statement string.
-`public bool `[`ready`](#classDBStatement_1a254934b06af2d3a12349add04f338c2e) | Whether or not there is more data to be gotten.
+`public String `[`sql`](#classDBStatement_1ac1de9e1a1ad1938c08682caac8984dad) | The statement string, or undefined once the statement is closed.
+`public bool `[`ready`](#classDBStatement_1a254934b06af2d3a12349add04f338c2e) | Whether a row can be read now; false once the statement is closed.
 `public Object `[`getObject`](#classDBStatement_1ad4f6860effd1caa57653e8c1fd3dd4c4)`()` | An object with property names from the column names and property values coming from the data.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getColumnCount`](#classDBStatement_1acd872f8af18dccfa9e6a65d0e7451d25)`()` | Get the column count.
 `public double `[`getColumnValue`](#classDBStatement_1a186d710e040e011b31ab49add001cdda)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colIndex)` | Get the value from the column specified by index.
@@ -2454,24 +2462,24 @@ A class describing ...
 `public bool `[`bind`](#classDBStatement_1aa7f4478203eaa27a68d33fa18a1ab9b4)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,double val)` | Bind the given data to the given column.
 `public bool `[`bind`](#classDBStatement_1a289bdcf455c3d15c1defc949fed8ff8b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` val)` | Bind the given data to the given column.
 `public bool `[`bind`](#classDBStatement_1ab817aa527c6c877e4bcc0410080b9b82)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,String val)` | Bind the given data to the given column.
-`public bool `[`bind`](#classDBStatement_1a42ddfab63e2f5438e6a971bf96e6cdab)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,bool val)` | Bind the given data to the given column.
+`public bool `[`bind`](#classDBStatement_1a42ddfab63e2f5438e6a971bf96e6cdab)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,bool val)` | Bind the given boolean to the given column as the integer 1 (true) or 0 (false).
 
 ## Members
 
 #### `public String `[`sql`](#classDBStatement_1ac1de9e1a1ad1938c08682caac8984dad) 
 
-The statement string.
+The statement string, or undefined once the statement is closed.
 
 #### `public bool `[`ready`](#classDBStatement_1a254934b06af2d3a12349add04f338c2e) 
 
-Whether or not there is more data to be gotten.
+Whether a row can be read now; false once the statement is closed.
 
 #### `public Object `[`getObject`](#classDBStatement_1ad4f6860effd1caa57653e8c1fd3dd4c4)`()` 
 
-An object with property names from the column names and property values coming from the data.
+An object with property names from the column names and property values coming from the data. The same object is returned until the statement moves to another row or closes.
 
 #### Returns
-The object with all the data.
+The row object, or null when the statement is not ready.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getColumnCount`](#classDBStatement_1acd872f8af18dccfa9e6a65d0e7451d25)`()` 
 
@@ -2487,6 +2495,8 @@ Get the value from the column specified by index.
 #### Parameters
 * `colIndex` The index of the column to get data from.
 
+Throws "Invalid column index" if colIndex is not a column of the statement.
+
 #### Returns
 The data.
 
@@ -2496,6 +2506,8 @@ Get the value from the column specified by index.
 
 #### Parameters
 * `colIndex` The index of the column to get data from.
+
+Throws "Invalid column index" if colIndex is not a column of the statement.
 
 #### Returns
 The data.
@@ -2507,6 +2519,8 @@ Get the name of the column at the given index.
 #### Parameters
 * `colIndex` The index of the column to get data from.
 
+Throws "Invalid column index" if colIndex is not a column of the statement.
+
 #### Returns
 The column name.
 
@@ -2514,7 +2528,7 @@ The column name.
 
 Call sqlite3_step and close_db_stmt on the statement.
 
-> Todo: Interpret what this means.
+Runs the statement once and closes it: ready is false afterwards and the statement can't be stepped again. When the step reports an error, go() throws and the statement stays open, not ready.
 
 #### Returns
 Whether the result is SQLITE_DONE.
@@ -2523,36 +2537,36 @@ Whether the result is SQLITE_DONE.
 
 Call sqlite3_step on the statement.
 
-> Todo: Interpret what this means and how's it's different from [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be).
+Moves to the next row of the results; ready tells whether there is one.
 
 #### Returns
 Whether the result is SQLITE_ROW.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`skip`](#classDBStatement_1a52b6771be336a56bbc8f02bcb99e55c7)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` rows)` 
 
-Skip a certain number of rows in the results.
+Skip a certain number of rows in the results. Stops at the end of the results; ready is true when it stopped on a row. A count of 0 or less skips nothing.
 
 #### Parameters
 * `rows` The number of rows to skip.
 
 #### Returns
-The number of rows actually skipped.
+The number of rows actually skipped, which is less than rows at the end of the results.
 
 #### `public bool `[`reset`](#classDBStatement_1a7c08cde3f29a7e5158e4ff290f9c6e25)`()` 
 
 Call sqlite3_reset.
 
-> Todo: Interpret what this does.
+Starts the results again from the first row; ready is false until next() or skip() lands on a row.
 
 #### Returns
-true.
+true. After a failed next(), skip() or go() it throws that step's error; the statement is still rewound and not ready.
 
 #### `public bool `[`close`](#classDBStatement_1a1d8293b4debace6e99c0dbede2677ee7)`()` 
 
 Close the statement.
 
 #### Returns
-true.
+true, also when the statement was already closed.
 
 #### `public bool `[`bind`](#classDBStatement_1aa7f4478203eaa27a68d33fa18a1ab9b4)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,double val)` 
 
@@ -2564,7 +2578,7 @@ Bind the given data to the given column.
 * `val` The data to bind.
 
 #### Returns
-true.
+true when the value was bound. Throws when colnum is out of range, when val is an object or a function, or when the statement has been stepped with next() or skip() since it was created or last reset().
 
 #### `public bool `[`bind`](#classDBStatement_1a289bdcf455c3d15c1defc949fed8ff8b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` val)` 
 
@@ -2576,7 +2590,7 @@ Bind the given data to the given column.
 * `val` The data to bind.
 
 #### Returns
-true.
+true when the value was bound. Throws when colnum is out of range, when val is an object or a function, or when the statement has been stepped with next() or skip() since it was created or last reset().
 
 #### `public bool `[`bind`](#classDBStatement_1ab817aa527c6c877e4bcc0410080b9b82)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,String val)` 
 
@@ -2588,11 +2602,11 @@ Bind the given data to the given column.
 * `val` The data to bind.
 
 #### Returns
-true.
+true when the value was bound. Throws when colnum is out of range, when val is an object or a function, or when the statement has been stepped with next() or skip() since it was created or last reset().
 
 #### `public bool `[`bind`](#classDBStatement_1a42ddfab63e2f5438e6a971bf96e6cdab)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,bool val)` 
 
-Bind the given data to the given column.
+Bind the given boolean to the given column as the integer 1 (true) or 0 (false). A bind() of null or undefined binds NULL.
 
 #### Parameters
 * `colnum` The column number to bind to.
@@ -2600,7 +2614,7 @@ Bind the given data to the given column.
 * `val` The data to bind.
 
 #### Returns
-true.
+true when the value was bound. Throws when colnum is out of range, when val is an object or a function, or when the statement has been stepped with next() or skip() since it was created or last reset().
 
 # class `Exit` 
 
@@ -4825,64 +4839,6 @@ Determine whether or not the [Unit](#classUnit) is in the [Room](#classRoom).
 #### Returns
 Whether or not the [Unit](#classUnit) is in the [Room](#classRoom).
 
-# class `Sandbox` 
-
-A separate context to run scripts in.
-
-## Summary
-
- Members                        | Descriptions                                
---------------------------------|---------------------------------------------
-`public  `[`Sandbox`](#classSandbox_1a414860b7f66f97746dfda9564bdbf2eb)`()` | Create a [Sandbox](#classSandbox).
-`public Object `[`evaluate`](#classSandbox_1ab2c4416ba21800e25b626beff623a5f5)`(String code)` | Evaluate the code passed in and return the result.
-`public Object `[`include`](#classSandbox_1a76b0fc82176f61c0ae48d21af80060a0)`(String file)` | Include a file from ScriptPath\libs\file.
-`public bool `[`isInclude`](#classSandbox_1ad924329aeb26651647f7423187541c53)`(String file)` | Determine whether a file has been included yet or not.
-`public void `[`clearScope`](#classSandbox_1a103663ab48c1deef0714995e58deab83)`()` | Clear the scope of the [Sandbox](#classSandbox)'s global object.
-
-## Members
-
-#### `public  `[`Sandbox`](#classSandbox_1a414860b7f66f97746dfda9564bdbf2eb)`()` 
-
-Create a [Sandbox](#classSandbox).
-
-This creates a separate context to run things in.
-
-#### `public Object `[`evaluate`](#classSandbox_1ab2c4416ba21800e25b626beff623a5f5)`(String code)` 
-
-Evaluate the code passed in and return the result.
-
-#### Parameters
-* `code` The code to run, literally JavaScript code to run.
-
-#### Returns
-The result of the last expression statement.
-
-#### `public Object `[`include`](#classSandbox_1a76b0fc82176f61c0ae48d21af80060a0)`(String file)` 
-
-Include a file from ScriptPath\libs\file.
-
-#### Parameters
-* `file` The filename relative to ScriptPath\libs to include.
-
-#### Returns
-The result of the last expression statement.
-
-#### `public bool `[`isInclude`](#classSandbox_1ad924329aeb26651647f7423187541c53)`(String file)` 
-
-Determine whether a file has been included yet or not.
-
-#### Parameters
-* `file` The filename relative to ScriptPath\libs to include.
-
-#### Returns
-Whether or not the file has been included.
-
-#### `public void `[`clearScope`](#classSandbox_1a103663ab48c1deef0714995e58deab83)`()` 
-
-Clear the scope of the [Sandbox](#classSandbox)'s global object.
-
-> Todo: Clarify what this means (i.e. post-conditions).
-
 # class `Socket` 
 
 A TCP connection opened with `Socket.open(host, port)`. The constructor itself throws; use `Socket.open`.
@@ -4908,15 +4864,15 @@ Class for dealing with an [SQLite](#classSQLite) database.
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
 `public String `[`path`](#classSQLite_1a5d99c8c883289592018dfd5ee94ea3ce) | Get the path used to open the database.
-`public `[`DBStatement`](#classDBStatement)` `[`statements`](#classSQLite_1a30a088d06c85fa846e13dd87b1ac7ad7) | Get the statements from query() that haven't been closed with close() or by closing the database.
+`public `[`DBStatement`](#classDBStatement)`[] `[`statements`](#classSQLite_1a30a088d06c85fa846e13dd87b1ac7ad7) | Get the statements from query() that are still open, from index 0.
 `public bool `[`isOpen`](#classSQLite_1a82dd45ef884604bf40f70a16c9f6fbc6) | Whether or not the database is open.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`lastRowId`](#classSQLite_1aff1af94823aa7b2de96f65993686feed) | Get the row id of the last inserted row.
-`public double `[`changes`](#classSQLite_1a8eaeea285b896935182fdd334b605c72) | Get the number of rows modified/inserted/deleted by the last statement.
+`public double `[`lastRowId`](#classSQLite_1aff1af94823aa7b2de96f65993686feed) | Get the row id of the last inserted row (exact up to 2^53), or 0 when the database is not open.
+`public double `[`changes`](#classSQLite_1a8eaeea285b896935182fdd334b605c72) | Get the number of rows modified/inserted/deleted by the last statement, or 0 when the database is not open.
 `public  `[`SQLite`](#classSQLite_1a9520cbf360895c30909dfdac712a9aef)`(String path,bool autoOpen)` | Create a database object which can be used to open [SQLite](#classSQLite) databases and execute queries.
 `public bool `[`execute`](#classSQLite_1a8d0c60072870fba816b974671996c2af)`(String queryString)` | Execute a query on the database.
-`public `[`DBStatement`](#classDBStatement)` `[`query`](#classSQLite_1a8ebb32f52a5426ae36a7977c540feb32)`(String sql,...)` | Do a sqlite3_prepare_v2 on the database with sql, then call the appropriate sqlite3_bind_ functions on the remaining parameters.
+`public `[`DBStatement`](#classDBStatement)` `[`query`](#classSQLite_1a8ebb32f52a5426ae36a7977c540feb32)`(String sql,...)` | Prepare sql on the database and bind the remaining arguments to its parameters in order: strings as text, numbers as integers or reals, true/false as 1/0, and null or undefined as NULL.
 `public bool `[`open`](#classSQLite_1af4ea33f6a23d60579ee6e36d0f0276fc)`()` | Open the database.
-`public bool `[`close`](#classSQLite_1ae4c723f03c88a9a11b6b7cdb7fba0e18)`()` | Close the database.
+`public bool `[`close`](#classSQLite_1ae4c723f03c88a9a11b6b7cdb7fba0e18)`()` | Close the database and every statement from query().
 
 ## Members
 
@@ -4924,21 +4880,21 @@ Class for dealing with an [SQLite](#classSQLite) database.
 
 Get the path used to open the database.
 
-#### `public `[`DBStatement`](#classDBStatement)` `[`statements`](#classSQLite_1a30a088d06c85fa846e13dd87b1ac7ad7) 
+#### `public `[`DBStatement`](#classDBStatement)`[] `[`statements`](#classSQLite_1a30a088d06c85fa846e13dd87b1ac7ad7) 
 
-Get the statements from query() that haven't been closed with close() or by closing the database.
+Get the statements from query() that are still open, from index 0. A statement finished by go(), closed with close() or closed by closing the database is left out.
 
 #### `public bool `[`isOpen`](#classSQLite_1a82dd45ef884604bf40f70a16c9f6fbc6) 
 
 Whether or not the database is open.
 
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`lastRowId`](#classSQLite_1aff1af94823aa7b2de96f65993686feed) 
+#### `public double `[`lastRowId`](#classSQLite_1aff1af94823aa7b2de96f65993686feed) 
 
-Get the row id of the last inserted row.
+Get the row id of the last inserted row (exact up to 2^53), or 0 when the database is not open.
 
 #### `public double `[`changes`](#classSQLite_1a8eaeea285b896935182fdd334b605c72) 
 
-Get the number of rows modified/inserted/deleted by the last statement.
+Get the number of rows modified/inserted/deleted by the last statement, or 0 when the database is not open.
 
 #### `public  `[`SQLite`](#classSQLite_1a9520cbf360895c30909dfdac712a9aef)`(String path,bool autoOpen)` 
 
@@ -4947,7 +4903,7 @@ Create a database object which can be used to open [SQLite](#classSQLite) databa
 #### Parameters
 * `path` The path to the database to open.
 
-* `autoOpen` Whether to open the database immediately or not.
+* `autoOpen` Whether to open the database immediately (default true; only a boolean is read). A failed open throws "Could not open database: " followed by SQLite's message.
 
 #### `public bool `[`execute`](#classSQLite_1a8d0c60072870fba816b974671996c2af)`(String queryString)` 
 
@@ -4961,29 +4917,27 @@ true
 
 #### `public `[`DBStatement`](#classDBStatement)` `[`query`](#classSQLite_1a8ebb32f52a5426ae36a7977c540feb32)`(String sql,...)` 
 
-Do a sqlite3_prepare_v2 on the database with sql, then call the appropriate sqlite3_bind_ functions on the remaining parameters.
+Prepare sql on the database and bind the remaining arguments to its parameters in order: strings as text, numbers as integers or reals, true/false as 1/0, and null or undefined as NULL.
 
 #### Parameters
-* `sql` The query to pass to sqlite3_prepare v2.
-
-> Todo: Determine what this function does (better documenation).
+* `sql` The SQL to prepare.
 
 #### Returns
-The resulting [DBStatement](#classDBStatement).
+The resulting [DBStatement](#classDBStatement). Throws when sql does not prepare or holds no statement, when an argument is an object or a function, or when there are more arguments than sql has parameters (an explicit undefined counts as an argument).
 
 #### `public bool `[`open`](#classSQLite_1af4ea33f6a23d60579ee6e36d0f0276fc)`()` 
 
-Open the database.
+Open the database. Opening an open database does nothing. After close(), it opens the same path again; statements from before the close stay closed, and a ":memory:" database starts empty.
 
 #### Returns
-true
+true. Throws "Could not open database: " followed by SQLite's message when SQLite cannot open the path.
 
 #### `public bool `[`close`](#classSQLite_1ae4c723f03c88a9a11b6b7cdb7fba0e18)`()` 
 
-Close the database.
+Close the database and every statement from query(). Closing a closed database does nothing.
 
 #### Returns
-true
+true. Throws "Could not close database: " followed by SQLite's message when SQLite cannot close it.
 
 # class `Text` 
 

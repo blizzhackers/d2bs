@@ -162,9 +162,6 @@
     <ClCompile Include="JSRoom.cpp">
       <Filter>Spidermonkey Engine\Core\JS</Filter>
     </ClCompile>
-    <ClCompile Include="JSSandbox.cpp">
-      <Filter>Spidermonkey Engine\Core\JS</Filter>
-    </ClCompile>
     <ClCompile Include="JSScreenHook.cpp">
       <Filter>Spidermonkey Engine\Core\JS</Filter>
     </ClCompile>
@@ -380,9 +377,6 @@
       <Filter>Spidermonkey Engine\Core\API</Filter>
     </ClInclude>
     <ClInclude Include="JSRoom.h">
-      <Filter>Spidermonkey Engine\Core\API</Filter>
-    </ClInclude>
-    <ClInclude Include="JSSandbox.h">
       <Filter>Spidermonkey Engine\Core\API</Filter>
     </ClInclude>
     <ClInclude Include="JSScreenHook.h">

@@ -988,17 +988,26 @@ void print(...);
  */
 void delay(uint32_t nDelay);
 
-/** Load file and create a thread with it's main function. File taken from
- * scriptDir\\file. All remaining parameters are passed to the script.
+/** Load file and start a new thread that runs its main function. File taken
+ * from scriptDir\\file. All remaining parameters are copied to the new
+ * script's main function; a value that can't be copied (a function, or a
+ * game object such as a Unit) throws an error and starts nothing. Loading a
+ * script that is already running ends the running copy; the new copy starts
+ * once that copy has ended, or after half a second (at once when a script
+ * loads its own file), and getScript() and getScripts() then list only the
+ * new copy.
  *
  * \ingroup globalFunctions
  *
  * \param file The filename of the script.
  *
- * \return If successful returns the new script object representing the thread
- * of the thread. Otherwise it returns null.
+ * \return true when the script's thread started, false when the file was not
+ * found or the thread could not start. A syntax error in the file still ends
+ * that script on its own thread after load() returned true; the calling script
+ * and the game keep running. A missing, empty, non-string or too-long file
+ * name throws an error.
  */
-D2BSScript load(String file, ...);
+bool load(String file, ...);
 
 /** Determine whether a file has been included yet or not. File taken from
  * scriptDir\\libs\\file
@@ -1403,9 +1412,11 @@ void scriptBroadcast(...);
  */
 String sqlite_version();
 
-/** Return the sqlite memory usage.
+/** Return the number of bytes of memory SQLite currently holds.
  *
  * \ingroup globalFunctions
+ *
+ * \return The memory SQLite holds, in bytes (0 before SQLite is first used).
  */
 double sqlite_memusage();
 

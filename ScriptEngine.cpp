@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <new>
 #include <vector>
 #include <assert.h>
+#include <io.h>
 
 #include "ScriptEngine.h"
 #include "Core.h"
@@ -16,12 +18,10 @@
 
 using namespace std;
 Script* ScriptEngine::console = NULL;
-JSRuntime* ScriptEngine::runtime = NULL;
 ScriptMap ScriptEngine::scripts = ScriptMap();
 EngineState ScriptEngine::state = Stopped;
-CRITICAL_SECTION ScriptEngine::lock = {0};
 CRITICAL_SECTION ScriptEngine::scriptListLock = {0};
-JSContext* ScriptEngine::context = NULL;
+static bool scriptListLockReady = false;
 
 namespace {
 struct DelayedTimer {
@@ -45,42 +45,68 @@ volatile LONG lastTimerId = 0;
 } // namespace
 // internal ForEachScript helpers
 bool __fastcall DisposeScript(Script* script, void*, uint);
+bool __fastcall DisposeCachedScript(Script* script, void*, uint);
 bool __fastcall StopScript(Script* script, void* argv, uint argc);
 
 Script* ScriptEngine::CompileFile(const wchar_t* file, ScriptState state, uint argc, JSAutoStructuredCloneBuffer** argv, bool recompile) {
     if (GetState() != Running)
         return NULL;
 
-    wchar_t* fileName = _wcsdup(file);
-    _wcslwr_s(fileName, wcslen(file) + 1);
-
-    try {
-        if (scripts.count(fileName))
-            scripts[fileName]->Stop();
-
-        Script* script = new Script(fileName, state, argc, argv);
-        scripts[fileName] = script;
-        free(fileName);
-        return script;
-    } catch (std::exception e) {
-        LeaveCriticalSection(&lock);
-        wchar_t* what = AnsiToUnicode(e.what());
-        Print(what);
-        delete[] what;
-        free(fileName);
+    // Checked before construction: without unwind semantics a throwing constructor leaks the Script itself.
+    if (_waccess(file, 0) != 0) {
+        DEBUG_LOG(file);
+        Print(L"File not found");
         return NULL;
     }
+
+    // Built before the list is touched, so a failure leaves a running instance alone; GetFilename() is the one map key
+    // (lower case, backslashes), the form DisposeScript and IsListed compare against.
+    Script* script = NULL;
+    try {
+        script = new Script(file, state, argc, argv);
+    } catch (std::exception& e) {
+        wchar_t* what = AnsiToUnicode(e.what());
+        if (what) {
+            Print(L"%s", what);
+            delete[] what;
+        }
+        return NULL;
+    }
+
+    // One instance per file, swapped in one locked step: the running one leaves the map, the new one takes its key,
+    // and the old one's own thread disposes it when it ends. The new copy's thread waits for that (Script::Run), so
+    // the caller never stalls here.
+    HANDLE oldThread = NULL;
+    LockScriptList("CompileFile");
+    if (ScriptEngine::GetState() != Running) {
+        UnLockScriptList("CompileFile");
+        // The caller still owns argv when this returns NULL.
+        script->argv = NULL;
+        script->argc = 0;
+        delete script;
+        return NULL;
+    }
+    ScriptMap::iterator it = scripts.find(script->GetFilename());
+    if (it != scripts.end()) {
+        Script* old = it->second;
+        scripts.erase(it);
+        // A self-load never waits (its predecessor is the loader); DuplicateThreadHandle leaves NULL for an unstarted copy.
+        if (old->threadId != GetCurrentThreadId() && !old->DuplicateThreadHandle(&oldThread))
+            oldThread = NULL;
+        old->SignalStop();
+    }
+    script->predecessor = oldThread;
+    scripts[script->GetFilename()] = script;
+    UnLockScriptList("CompileFile");
+    return script;
 }
 
 void ScriptEngine::RunCommand(const wchar_t* command) {
     if (GetState() != Running)
         return;
     try {
-        // EnterCriticalSection(&lock);
         console->RunCommand(command);
-        // LeaveCriticalSection(&lock);
     } catch (std::exception e) {
-        // LeaveCriticalSection(&lock);
         wchar_t* what = AnsiToUnicode(e.what());
         Print(what);
         delete[] what;
@@ -89,23 +115,49 @@ void ScriptEngine::RunCommand(const wchar_t* command) {
 
 void ScriptEngine::DisposeScript(Script* script) {
     LockScriptList("DisposeScript");
+    // Only this Script's own entry: a replacement of the same file may already hold the name.
+    for (ScriptMap::iterator it = scripts.begin(); it != scripts.end(); it++) {
+        if (it->second == script) {
+            scripts.erase(it);
+            break;
+        }
+    }
 
-    const wchar_t* nFilename = script->GetFilename();
-
-    if (scripts.count(nFilename))
-        scripts.erase(nFilename);
-
-    UnLockScriptList("DisposeScript");
-
-    if (GetCurrentThreadId() == script->threadId)
+    // A script whose thread never started holds no engine state, so any thread may delete it.
+    if (GetCurrentThreadId() == script->threadId || script->startFailed) {
+        UnLockScriptList("DisposeScript");
         delete script;
-    else {
-        // bad things happen if we delete from another thread
+    } else {
+        // Queued before the list lock is free: once unlisted, the script's own thread deletes it as soon as it can
+        // take the lock, and only its own thread may destroy its runtime.
         Event* evt = new Event;
         evt->owner = script;
         evt->name = _strdup("DisposeMe");
         script->FireEvent(evt);
+        UnLockScriptList("DisposeScript");
     }
+}
+
+bool ScriptEngine::IsListed(Script* script) {
+    bool listed = false;
+    LockScriptList("IsListed");
+    for (ScriptMap::iterator it = scripts.begin(); it != scripts.end(); it++) {
+        if (it->second == script) {
+            listed = true;
+            break;
+        }
+    }
+    UnLockScriptList("IsListed");
+    return listed;
+}
+
+Script* ScriptEngine::FindScriptById(DWORD id) {
+    if (id == 0)
+        return NULL;
+    for (ScriptMap::iterator it = scripts.begin(); it != scripts.end(); it++)
+        if (it->second->GetId() == id)
+            return it->second;
+    return NULL;
 }
 void ScriptEngine::LockScriptList(char* loc) {
     EnterCriticalSection(&scriptListLock);
@@ -119,7 +171,6 @@ unsigned int ScriptEngine::GetCount(bool active, bool unexecuted) {
     if (GetState() != Running)
         return 0;
     LockScriptList("getCount");
-    // EnterCriticalSection(&lock);
     int count = scripts.size();
     for (ScriptMap::iterator it = scripts.begin(); it != scripts.end(); it++) {
         if (!active && it->second->IsRunning() && !it->second->IsAborted())
@@ -129,21 +180,23 @@ unsigned int ScriptEngine::GetCount(bool active, bool unexecuted) {
     }
     assert(count >= 0);
     UnLockScriptList("getCount");
-    // LeaveCriticalSection(&lock);
     return count;
 }
 
 BOOL ScriptEngine::Startup(void) {
     if (GetState() == Stopped) {
+        // Initialized once, before the state leaves Stopped: hooks installed at DLL load enumerate scripts as soon as
+        // it does, and a later Startup must not re-initialize a lock a tearing-down script may still hold.
+        if (!scriptListLockReady) {
+            InitializeCriticalSection(&scriptListLock);
+            scriptListLockReady = true;
+        }
         state = Starting;
-        InitializeCriticalSection(&scriptListLock);
         // Kept across a Shutdown: scripts still tearing down on their own threads may take it.
         if (!timerLockReady) {
             InitializeCriticalSection(&timerLock);
             timerLockReady = true;
         }
-        // InitializeCriticalSection(&lock);
-        // EnterCriticalSection(&lock);
         LockScriptList("startup - enter");
         if (wcslen(Vars.szConsole) > 0) {
             wchar_t file[_MAX_FNAME + _MAX_PATH];
@@ -155,7 +208,6 @@ BOOL ScriptEngine::Startup(void) {
         scripts[L"console"] = console;
         console->BeginThread(ScriptThread);
         state = Running;
-        // LeaveCriticalSection(&lock);
         UnLockScriptList("startup - leave");
     }
     return TRUE;
@@ -164,7 +216,6 @@ BOOL ScriptEngine::Startup(void) {
 void ScriptEngine::Shutdown(void) {
     if (GetState() == Running) {
         // bring the engine down properly
-        // EnterCriticalSection(&lock);
         LockScriptList("Shutdown");
         state = Stopping;
         StopAll(true);
@@ -176,15 +227,7 @@ void ScriptEngine::Shutdown(void) {
         if (!scripts.empty())
             scripts.clear();
 
-        if (runtime) {
-            JS_DestroyContext(context);
-            JS_DestroyRuntime(runtime);
-            JS_ShutDown();
-            runtime = NULL;
-        }
         UnLockScriptList("shutdown");
-        // LeaveCriticalSection(&lock);
-        DeleteCriticalSection(&lock);
         state = Stopped;
     }
 }
@@ -193,10 +236,7 @@ void ScriptEngine::StopAll(bool forceStop) {
     if (GetState() != Running)
         return;
 
-    // EnterCriticalSection(&lock);
     ForEachScript(StopScript, &forceStop, 1);
-
-    // LeaveCriticalSection(&lock);
 }
 
 void ScriptEngine::UpdateConsole() {
@@ -211,25 +251,22 @@ void ScriptEngine::FlushCache(void) {
     if (isFlushing || Vars.bDisableCache)
         return;
 
-    // EnterCriticalSection(&lock);
-    // TODO: examine if this lock is necessary any more
     EnterCriticalSection(&Vars.cFlushCacheSection);
 
     isFlushing = true;
 
-    ForEachScript(::DisposeScript, NULL, 0);
+    ForEachScript(DisposeCachedScript, NULL, 0);
 
     isFlushing = false;
 
     LeaveCriticalSection(&Vars.cFlushCacheSection);
-    // LeaveCriticalSection(&lock);
 }
 
 bool ScriptEngine::ForEachScript(ScriptCallback callback, void* argv, uint argc) {
-    if (callback == NULL || scripts.size() < 1)
+    // Before the first Startup the list lock does not exist yet, and the packet, copydata and input hooks are live.
+    if (callback == NULL || GetState() == Stopped)
         return false;
     bool block = false;
-    // EnterCriticalSection(&lock);
 
     LockScriptList("forEachScript");
 
@@ -246,25 +283,29 @@ bool ScriptEngine::ForEachScript(ScriptCallback callback, void* argv, uint argc)
         if (callback(list[i], argv, argc))
             block = true;
     }
-    // LeaveCriticalSection(&lock);  // was previously locked after callback calls.
 
     return block;
 }
 
-void ScriptEngine::InitClass(JSContext* context, JSObject* globalObject, JSClass* classp, JSFunctionSpec* methods, JSPropertySpec* props, JSFunctionSpec* s_methods,
+bool ScriptEngine::InitClass(JSContext* context, JSObject* globalObject, JSClass* classp, JSFunctionSpec* methods, JSPropertySpec* props, JSFunctionSpec* s_methods,
                              JSPropertySpec* s_props) {
-    if (!JS_InitClass(context, globalObject, NULL, classp, classp->construct, 0, props, methods, s_props, s_methods))
-        throw std::exception("Couldn't initialize the class");
+    return JS_InitClass(context, globalObject, NULL, classp, classp->construct, 0, props, methods, s_props, s_methods) != NULL;
 }
 
-void ScriptEngine::DefineConstant(JSContext* context, JSObject* globalObject, const char* name, int value) {
-    if (!JS_DefineProperty(context, globalObject, name, INT_TO_JSVAL(value), NULL, NULL, JSPROP_PERMANENT_VAR))
-        throw std::exception("Couldn't initialize the constant");
+bool ScriptEngine::DefineConstant(JSContext* context, JSObject* globalObject, const char* name, int value) {
+    return JS_DefineProperty(context, globalObject, name, INT_TO_JSVAL(value), NULL, NULL, JSPROP_PERMANENT_VAR) != JS_FALSE;
 }
 
 // internal ForEachScript helper functions
 bool __fastcall DisposeScript(Script* script, void*, uint) {
     ScriptEngine::DisposeScript(script);
+    return true;
+}
+
+// The console is not a cached script: ScriptEngine::console and its map key keep pointing at it after a flush.
+bool __fastcall DisposeCachedScript(Script* script, void*, uint) {
+    if (script->GetState() != Command)
+        ScriptEngine::DisposeScript(script);
     return true;
 }
 
@@ -366,6 +407,10 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
 
         // JS_SetGCZeal(cx, 2, 1);
         JSObject* globalObject = JS_NewGlobalObject(cx, &global_obj, NULL);
+        if (!globalObject) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         JS_SetGCParameter(JS_GetRuntime(cx), JSGC_MODE, 2);
 
         // Every JS_FALSE return ends the request first: the engine then destroys cx without calling back for JSCONTEXT_DESTROY.
@@ -374,7 +419,20 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
             return JS_FALSE;
         }
 
-        myUnit* lpUnit = new myUnit;
+        // Classes come before the `me` private exists, so a failure here has nothing to free.
+        for (JSClassSpec* entry = global_classes; entry->classp != NULL; entry++) {
+            if (!ScriptEngine::InitClass(cx, globalObject, entry->classp, entry->methods, entry->properties, entry->static_methods,
+                                         entry->static_properties)) {
+                JS_EndRequest(cx);
+                return JS_FALSE;
+            }
+        }
+
+        myUnit* lpUnit = new (std::nothrow) myUnit;
+        if (!lpUnit) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
         memset(lpUnit, NULL, sizeof(myUnit));
 
         UnitAny* player = D2CLIENT_GetPlayerUnit();
@@ -383,9 +441,6 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
         lpUnit->dwType = UNIT_PLAYER;
         lpUnit->dwUnitId = player ? player->dwUnitId : NULL;
         lpUnit->_dwPrivateType = PRIVATE_UNIT;
-
-        for (JSClassSpec* entry = global_classes; entry->classp != NULL; entry++)
-            ScriptEngine::InitClass(cx, globalObject, entry->classp, entry->methods, entry->properties, entry->static_methods, entry->static_properties);
 
         JSObject* meObject = BuildObject(cx, &unit_class, unit_methods, me_props, lpUnit);
         // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
@@ -401,15 +456,19 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
         }
 
 #define DEFCONST(vp) ScriptEngine::DefineConstant(cx, globalObject, #vp, vp)
-        DEFCONST(FILE_READ);
-        DEFCONST(FILE_WRITE);
-        DEFCONST(FILE_APPEND);
+        if (!DEFCONST(FILE_READ) || !DEFCONST(FILE_WRITE) || !DEFCONST(FILE_APPEND)) {
+            JS_EndRequest(cx);
+            return JS_FALSE;
+        }
 #undef DEFCONST
 
         JS_EndRequest(cx);
     }
     if (contextOp == JSCONTEXT_DESTROY) {
         Script* script = (Script*)JS_GetContextPrivate(cx);
+        // A context made for no Script has no private and nothing to clean up.
+        if (!script)
+            return JS_TRUE;
         script->hasActiveCX = false;
         // First, so no other thread can queue a timer event behind the drain below.
         ScriptEngine::DestroyTimers(script);

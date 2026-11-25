@@ -52,6 +52,8 @@ bool WaitForBlocker(Event* evt, DWORD timeoutMs);
 // The owning script's side, for a blocker event it ran or dropped: records the verdict and ends the wait.
 void CompleteBlocker(Event* evt, bool block);
 void ReleaseBlocker(Event* evt);
+// Deletes each of the first count buffers and then the array, which must come from new[]; NULL buffers does nothing.
+void FreeCloneBuffers(JSAutoStructuredCloneBuffer** buffers, uint count);
 
 class Script {
   private:
@@ -71,6 +73,10 @@ class Script {
     IncludeList includes, inProgress;
 
     HANDLE threadHandle;
+    DWORD id;
+    bool startFailed; // BeginThread could not create the thread
+    // The replaced copy's thread, waited for at the top of Run so the loader never stalls; NULL when none.
+    HANDLE predecessor;
 
     CRITICAL_SECTION lock;
 
@@ -79,13 +85,21 @@ class Script {
     Script(const Script&);
     Script& operator=(const Script&);
     ~Script(void);
+    void FreeArgs(void);
 
   public:
     DWORD threadId;
     friend class ScriptEngine;
     FunctionMap functions;
-    void Run(void);
-    void Join(void);
+    bool Run(void);
+    // Starts at 1, one per Script; 0 means no script. It would repeat only after 2^32 scripts in one process, so a Script
+    // object names one script for good in practice.
+    inline DWORD GetId(void) {
+        return id;
+    }
+    // A handle to wait on the script's thread; *out is NULL when no thread was started. False only when the handle
+    // could not be copied. Takes no lock: the caller holds the list lock, which keeps the Script and its handle alive.
+    bool DuplicateThreadHandle(HANDLE* out);
     void Pause(void);
     void Resume(void);
     bool IsPaused(void);
@@ -97,6 +111,8 @@ class Script {
     inline bool IsReallyPaused(void) {
         return isReallyPaused;
     }
+    // Sets the stop flags and wakes the script without taking its lock or waiting; false when already stopped.
+    bool SignalStop(void);
     void Stop(bool force = false, bool reallyForce = false);
 
     inline const wchar_t* GetFilename(void) {

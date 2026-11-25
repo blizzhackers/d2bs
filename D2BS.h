@@ -115,7 +115,8 @@ struct Variables {
     DWORD dwMenuSession;
 
     std::queue<std::wstring> qPrintBuffer;
-    std::map<unsigned __int32, CellFile*> mCachedCellFiles;
+    // Keyed by the exact path LoadCellFile loaded; guarded by cCellFileSection. Cells live until the process ends.
+    std::map<std::wstring, CellFile*> mCachedCellFiles;
     std::vector<std::pair<DWORD, DWORD>> vUnitList;
     // std::list<Event*> EventList;
     CRITICAL_SECTION cEventSection;
@@ -125,6 +126,7 @@ struct Variables {
     CRITICAL_SECTION cPrintSection;
     CRITICAL_SECTION cTextHookSection;
     CRITICAL_SECTION cImageHookSection;
+    CRITICAL_SECTION cCellFileSection;
     CRITICAL_SECTION cBoxHookSection;
     CRITICAL_SECTION cFrameHookSection;
     CRITICAL_SECTION cLineHookSection;

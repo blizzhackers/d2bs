@@ -37,30 +37,29 @@ class Genhook {
     Script* owner;
     ScreenhookState gameState;
     Align alignment;
-    jsval clicked, hovered;
+    // Game-thread copy of HOOK_SLOT_CLICK for ClickEvent; the slot, not this copy, keeps the function alive.
+    jsval clicked;
     JSObject* self;
     bool isAutomap, isVisible;
     ushort opacity, zorder;
     POINT location;
-    // CRITICAL_SECTION hookSection;
 
     Genhook(const Genhook&);
     Genhook& operator=(const Genhook&);
 
   public:
     Genhook::Genhook(Script* nowner, JSObject* nself, uint x, uint y, ushort nopacity, bool nisAutomap = false, Align nalign = Left, ScreenhookState ngameState = Perm);
-    ~Genhook(void);
+    // Hooks are deleted through Genhook* (hook_finalize, hook_remove), so the derived destructors must run.
+    virtual ~Genhook(void);
 
     friend bool __fastcall DrawHook(Genhook* hook, void* argv, uint argc);
     friend bool __fastcall CleanHook(Genhook* hook, void* argv, uint argc);
-    friend bool __fastcall HoverHook(Genhook* hook, void* argv, uint argc);
 
     static void DrawAll(ScreenhookState type);
 
     static bool ForEachHook(HookCallback proc, void* argv, uint argc);
     static bool ForEachVisibleHook(HookCallback proc, void* argv, uint argc);
     static bool ForEachInvisibleHook(HookCallback proc, void* argv, uint argc);
-    static bool ForEachVisibleHookUnLocked(HookCallback proc, void* argv, uint argc);
     // Runs the click handlers of the visible hooks under loc; true when one of them blocks the click.
     static bool ClickVisibleHooks(int button, POINT* loc);
     static void Clean(Script* owner);
@@ -82,7 +81,6 @@ class Genhook {
 
   public:
     Event* ClickEvent(int button, POINT* loc);
-    void Hover(POINT* loc);
 
     bool IsInRange(POINT* pt) {
         return IsInRange(pt->x, pt->y);
@@ -135,13 +133,19 @@ class Genhook {
         Unlock();
         LeaveCriticalSection(&globalSection);
     }
+    // Publishes the hook to the draw and click lists; each hook constructor native calls it last, once the derived
+    // object is complete, because the game thread calls the hook's virtual Draw and IsInRange from the lists.
+    void Register(void);
+    // The game thread sorts the lists by zorder under globalSection, and its sort needs the order stable while it runs.
     void SetZOrder(ushort norder) {
-        Lock();
+        EnterCriticalSection(&globalSection);
         zorder = norder;
-        Unlock();
+        LeaveCriticalSection(&globalSection);
     }
-    void SetClickHandler(jsval handler);
-    void SetHoverHandler(jsval handler);
+    // Owner script thread only (ctors and setters): stores into the hook object's reserved slot; SetClickHandler also
+    // refreshes ClickEvent's copy under globalSection.
+    void SetClickHandler(JSContext* cx, jsval handler);
+    void SetHoverHandler(JSContext* cx, jsval handler);
 
     POINT GetLocation(void) const {
         return location;
@@ -170,13 +174,6 @@ class Genhook {
     ushort GetZOrder(void) const {
         return zorder;
     }
-    jsval GetClickHandler(void) {
-        return clicked;
-    }
-    jsval GetHoverHandler(void) {
-        return hovered;
-    }
-
     static void EnterGlobalSection() {
         EnterCriticalSection(&globalSection);
     }
@@ -202,6 +199,7 @@ class TextHook : public Genhook {
     TextHook(Script* owner, JSObject* nself, const wchar_t* text, uint x, uint y, ushort nfont, ushort ncolor, bool automap = false, Align align = Left,
              ScreenhookState state = Perm)
         : Genhook(owner, nself, x, y, 0, automap, align, state), text(NULL), font(nfont), color(ncolor) {
+        // A failed copy leaves the string NULL; the constructor native checks it and deletes the hook.
         this->text = _wcsdup(text);
     }
     ~TextHook(void) {
@@ -224,7 +222,7 @@ class TextHook : public Genhook {
         color = ncolor;
         Unlock();
     }
-    void SetText(const wchar_t* ntext);
+    bool SetText(const wchar_t* ntext);
 
     ushort GetFont(void) const {
         return font;
@@ -250,12 +248,14 @@ class ImageHook : public Genhook {
     ImageHook(Script* owner, JSObject* nself, const wchar_t* nloc, uint x, uint y, ushort ncolor, bool automap = false, Align align = Left, ScreenhookState state = Perm,
               bool fromFile = true)
         : Genhook(owner, nself, x, y, 0, automap, align, state), color(ncolor), image(NULL), location(NULL) {
+        // A failed copy leaves the string NULL; the constructor native checks it and deletes the hook.
         location = _wcsdup(nloc);
-        image = LoadCellFile(location, 3);
+        if (location)
+            image = LoadCellFile(location, 3);
     }
+    // The cell belongs to LoadCellFile's cache for the process lifetime; only the path copy is this hook's.
     ~ImageHook(void) {
         free(location);
-        delete[] image;
     }
 
   protected:
@@ -264,7 +264,7 @@ class ImageHook : public Genhook {
   public:
     bool IsInRange(int dx, int dy);
 
-    void SetImage(const wchar_t* nimage);
+    bool SetImage(const wchar_t* nimage);
     void SetColor(ushort ncolor) {
         Lock();
         color = ncolor;

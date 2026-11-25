@@ -3,6 +3,10 @@
 
 #include "js32.h"
 
+// The hook object owns its click and hover handlers: the GC keeps them alive exactly as long as the hook object,
+// with no C++ root to leak or to outlive the hook.
+enum HookSlot { HOOK_SLOT_CLICK = 0, HOOK_SLOT_HOVER = 1, HOOK_SLOT_COUNT = 2 };
+
 JSAPI_FUNC(hook_remove);
 void hook_finalize(JSFreeOp* fop, JSObject* obj);
 

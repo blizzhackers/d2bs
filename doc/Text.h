@@ -2,6 +2,8 @@
 
 /** A Text screen hook
  *
+ * Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color`, `font` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
+ *
  * \todo Verify all the documentation in this class.
  */
 class Text
@@ -32,11 +34,11 @@ public:
 	 * \param automap Whether the Text is in automap coordinate space (true) or
 	 * screen coordinate space (false).
 	 *
-	 * \param click The click handler that gets called when the Text is
-	 * clicked.
+	 * \param click A function to call when the Text is clicked; any other
+	 * value sets no handler.
 	 *
-	 * \param hover The hover handler that gets called when the Text gets
-	 * hovered over.
+	 * \param hover A hover function for the Text, kept but never called; any
+	 * other value sets no handler.
 	 */
 	Text(String szText = "", int x = 0, int y = 0, int color = 0, int font = 0,
 		int align = 0, bool automap = false, ClickHandler click = null,
@@ -73,11 +75,14 @@ public:
 	 */
 	int zorder;
 
-	/** The click handler that gets called when the Text is clicked.
+	/** The click handler that gets called when the Text is clicked. Assign null
+	 * or undefined to remove it; a value that is not a function is ignored.
 	 */
 	ClickHandler click;
 
-	/** The hover handler that gets called when the Text gets hovered over.
+	/** A hover handler for the Text. D2BS keeps it and returns it from `hover`,
+	 * but never calls it. Assign null or undefined to remove it; a value that
+	 * is not a function is ignored.
 	 */
 	HoverHandler hover;
 

@@ -2097,6 +2097,8 @@ See [Unit::area](#classUnit_1af5f2e11d4f116084ffd807b578078d7d).
 
 A [Box](#classBox) screen hook.
 
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color`, `opacity` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
+
 > Todo: Explain (and understand) this better. 
 
 Verify all the documentation in this class.
@@ -2112,8 +2114,8 @@ Verify all the documentation in this class.
 `public bool `[`visible`](#classBox_1ae2d7733c544cc0ededa905045062a37d) | Whether or not the [Box](#classBox) is visible.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classBox_1a1703dbd7e3fdce5b0fd8f9250cc99ade) | The horizontal alignment.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classBox_1a3f51df7eadec72ac84ca1bede15ea008) | The z-order of the [Box](#classBox) (what it covers up and is covered by).
-`public ClickHandler `[`click`](#classBox_1a660b86951ae4edaa3b4f4e93dc682b62) | The click handler that gets called when the [Box](#classBox) is clicked.
-`public HoverHandler `[`hover`](#classBox_1aa6504cde7640e62a2a4853677bfe0d5e) | The hover handler that gets called when the [Box](#classBox) gets hovered over.
+`public ClickHandler `[`click`](#classBox_1a660b86951ae4edaa3b4f4e93dc682b62) | The click handler that gets called when the [Box](#classBox) is clicked; null or undefined removes it.
+`public HoverHandler `[`hover`](#classBox_1aa6504cde7640e62a2a4853677bfe0d5e) | A hover handler for the [Box](#classBox); kept but never called.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`color`](#classBox_1aa9c08a5f737f77a0d4a6d61192dadeb6) | The color of the [Box](#classBox).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`opacity`](#classBox_1af39fa1fbcc7398a6334531934f85a878) | How much of the controls underneath the [Box](#classBox) should show through.
 `public  `[`Box`](#classBox_1af8e43dea86c924a91316bd0f61099cc3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` opacity,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` | Create a [Box](#classBox) hook with the given parameters.
@@ -2157,11 +2159,11 @@ The z-order of the [Box](#classBox) (what it covers up and is covered by).
 
 #### `public ClickHandler `[`click`](#classBox_1a660b86951ae4edaa3b4f4e93dc682b62) 
 
-The click handler that gets called when the [Box](#classBox) is clicked.
+The click handler that gets called when the [Box](#classBox) is clicked. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public HoverHandler `[`hover`](#classBox_1aa6504cde7640e62a2a4853677bfe0d5e) 
 
-The hover handler that gets called when the [Box](#classBox) gets hovered over.
+A hover handler for the [Box](#classBox). D2BS keeps it and returns it from `hover`, but never calls it. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`color`](#classBox_1aa9c08a5f737f77a0d4a6d61192dadeb6) 
 
@@ -2204,9 +2206,9 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 #### Parameters
 * `automap` Whether the [Box](#classBox) is in automap coordinate space (true) or screen coordinate space (false).
 
-* `click` The click handler that gets called when the [Box](#classBox) is clicked.
+* `click` A function to call when the [Box](#classBox) is clicked; any other value sets no handler.
 
-* `hover` The hover handler that gets called when the [Box](#classBox) gets hovered over.
+* `hover` A hover function for the [Box](#classBox), kept but never called; any other value sets no handler.
 
 #### `public void `[`remove`](#classBox_1a6257b65ed22242f4660d3fa357a5ec5b)`()` 
 
@@ -3009,6 +3011,8 @@ An array of all the folder names.
 
 This class represents a screen hook for a [Frame](#classFrame).
 
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `zorder` keeps only the low 16 bits, so -1 reads back 65535.
+
 > Todo: Explain (and understand) this better. 
 
 Verify all the documentation in this class.
@@ -3024,8 +3028,8 @@ Verify all the documentation in this class.
 `public bool `[`visible`](#classFrame_1a863ec6abf9fd37fa6a33e63d1d58718f) | Whether or not the [Frame](#classFrame) is visible.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classFrame_1a7344aa54a7eeaa68fdf7fa42b0fa0a29) | The horizontal alignment.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classFrame_1a7b6c33df644c92758f289fd76e905b89) | The z-order of the [Frame](#classFrame) (what it covers up and is covered by).
-`public ClickHandler `[`click`](#classFrame_1a2e9a32aed91d5f9c7ffb77d93f39a047) | The click handler that gets called when the [Frame](#classFrame) is clicked.
-`public HoverHandler `[`hover`](#classFrame_1a62ee67d27035fd2178031b0eee2116f4) | The hover handler that gets called when the [Frame](#classFrame) gets hovered over.
+`public ClickHandler `[`click`](#classFrame_1a2e9a32aed91d5f9c7ffb77d93f39a047) | The click handler that gets called when the [Frame](#classFrame) is clicked; null or undefined removes it.
+`public HoverHandler `[`hover`](#classFrame_1a62ee67d27035fd2178031b0eee2116f4) | A hover handler for the [Frame](#classFrame); kept but never called.
 `public  `[`Frame`](#classFrame_1a659ccea661a5f12de6baefb5bfa9b732)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` | Create a [Frame](#classFrame) hook with the given parameters.
 `public void `[`remove`](#classFrame_1ab6188f670788ea98d8a9d3fd65211d8f)`()` | Remove the [Frame](#classFrame) from the screen and destroy the corresponding object.
 
@@ -3067,11 +3071,11 @@ The z-order of the [Frame](#classFrame) (what it covers up and is covered by).
 
 #### `public ClickHandler `[`click`](#classFrame_1a2e9a32aed91d5f9c7ffb77d93f39a047) 
 
-The click handler that gets called when the [Frame](#classFrame) is clicked.
+The click handler that gets called when the [Frame](#classFrame) is clicked. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public HoverHandler `[`hover`](#classFrame_1a62ee67d27035fd2178031b0eee2116f4) 
 
-The hover handler that gets called when the [Frame](#classFrame) gets hovered over.
+A hover handler for the [Frame](#classFrame). D2BS keeps it and returns it from `hover`, but never calls it. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public  `[`Frame`](#classFrame_1a659ccea661a5f12de6baefb5bfa9b732)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` 
 
@@ -3097,9 +3101,9 @@ Create a [Frame](#classFrame) hook with the given parameters.
 #### Parameters
 * `automap` Whether the [Frame](#classFrame) is in automap coordinate space (true) or screen coordinate space (false).
 
-* `click` The click handler that gets called when the [Frame](#classFrame) is clicked.
+* `click` A function to call when the [Frame](#classFrame) is clicked; any other value sets no handler.
 
-* `hover` The hover handler that gets called when the [Frame](#classFrame) gets hovered over.
+* `hover` A hover function for the [Frame](#classFrame), kept but never called; any other value sets no handler.
 
 #### `public void `[`remove`](#classFrame_1ab6188f670788ea98d8a9d3fd65211d8f)`()` 
 
@@ -3108,6 +3112,8 @@ Remove the [Frame](#classFrame) from the screen and destroy the corresponding ob
 # class `Image` 
 
 This class represents a screen hook for a [Image](#classImage).
+
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. The `zorder` property and the `color` argument keep only the low 16 bits, so a `zorder` of -1 reads back 65535.
 
 > Todo: Explain (and understand) this better. 
 
@@ -3122,8 +3128,8 @@ Verify all the documentation in this class.
 `public bool `[`visible`](#classImage_1addd9aead76cc50bf9891d4096195c18d) | Whether or not the [Image](#classImage) is visible.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classImage_1a943ad156731bd86b94d77e4f617e0fe8) | The horizontal alignment.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classImage_1a8f7cef488ff6a72dde9dea8a5c14e39b) | The z-order of the [Image](#classImage) (what it covers up and is covered by).
-`public ClickHandler `[`click`](#classImage_1a69ec2e746b9688ac033064f69a132a35) | The click handler that gets called when the [Image](#classImage) is clicked.
-`public HoverHandler `[`hover`](#classImage_1ad60232f651bec42eab0f73f2344e4bf0) | The hover handler that gets called when the [Image](#classImage) gets hovered over.
+`public ClickHandler `[`click`](#classImage_1a69ec2e746b9688ac033064f69a132a35) | The click handler that gets called when the [Image](#classImage) is clicked; null or undefined removes it.
+`public HoverHandler `[`hover`](#classImage_1ad60232f651bec42eab0f73f2344e4bf0) | A hover handler for the [Image](#classImage); kept but never called.
 `public String `[`location`](#classImage_1af4f3e489b1fb5cfa4ffdbe52ea4aee51) | Location of the file to load for display.
 `public  `[`Image`](#classImage_1ae6297ffbf18a41caa7971e58571250db)`(String szText,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` | Create an [Image](#classImage) hook with the given parameters.
 `public void `[`remove`](#classImage_1a777c1f1bf88cf556aa256c6559bd3401)`()` | Remove the [Image](#classImage) from the screen and destroy the corresponding object.
@@ -3158,22 +3164,22 @@ The z-order of the [Image](#classImage) (what it covers up and is covered by).
 
 #### `public ClickHandler `[`click`](#classImage_1a69ec2e746b9688ac033064f69a132a35) 
 
-The click handler that gets called when the [Image](#classImage) is clicked.
+The click handler that gets called when the [Image](#classImage) is clicked. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public HoverHandler `[`hover`](#classImage_1ad60232f651bec42eab0f73f2344e4bf0) 
 
-The hover handler that gets called when the [Image](#classImage) gets hovered over.
+A hover handler for the [Image](#classImage). D2BS keeps it and returns it from `hover`, but never calls it. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public String `[`location`](#classImage_1af4f3e489b1fb5cfa4ffdbe52ea4aee51) 
 
-Location of the file to load for display, relative to the script folder. Setting a name that new Image() would refuse throws "Invalid image file path" and keeps the current file.
+Location of the file to load for display, relative to the script folder (an uncompressed 8-bit bottom-up BMP, as for new Image()). Setting a name that new Image() would refuse throws "Invalid image file path" and keeps the current file; a name that does not load leaves the Image blank.
 
 #### `public  `[`Image`](#classImage_1ae6297ffbf18a41caa7971e58571250db)`(String szText,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` 
 
 Create an [Image](#classImage) hook with the given parameters.
 
 #### Parameters
-* `szText` The filename to load the image from, relative to the script folder. A name that leaves that folder (`..\` or `../`), contains any of `":?*<>|`, or makes a path longer than 515 characters when joined to the script folder's path throws "Invalid image file path".
+* `szText` The filename to load the image from, relative to the script folder. Only uncompressed 8-bit (256-color) bottom-up BMP files in the script folder load; a missing file or any other format leaves the Image blank, and a file fixed on disk loads the next time an Image or location names it. A name that has loaded once keeps that picture until Diablo II (Game.exe) exits, even if the file is rewritten on disk, and the same file under another spelling (letter case, `.\`, `/` instead of `\`) loads again as its own picture; a file that is deleted or cannot be opened (for example while another program holds it locked) leaves the Image blank and writes a line to the log. A name that leaves that folder (`..\` or `../`), contains any of `":?*<>|`, or makes a path longer than 515 characters when joined to the script folder's path throws "Invalid image file path".
 
 * `x` The x coordinate (left) of the [Image](#classImage).
 
@@ -3195,9 +3201,9 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 #### Parameters
 * `automap` Whether the [Image](#classImage) is in automap coordinate space (true) or screen coordinate space (false).
 
-* `click` The click handler that gets called when the [Image](#classImage) is clicked.
+* `click` A function to call when the [Image](#classImage) is clicked; any other value sets no handler.
 
-* `hover` The hover handler that gets called when the [Image](#classImage) gets hovered over.
+* `hover` A hover function for the [Image](#classImage), kept but never called; any other value sets no handler.
 
 #### `public void `[`remove`](#classImage_1a777c1f1bf88cf556aa256c6559bd3401)`()` 
 
@@ -3206,6 +3212,8 @@ Remove the [Image](#classImage) from the screen and destroy the corresponding ob
 # class `Line` 
 
 A 2d line.
+
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
 
 > Todo: Verify all the documentation in this class.
 
@@ -3220,8 +3228,8 @@ A 2d line.
 `public bool `[`visible`](#classLine_1ad03610daf3369fe0beaaa0b63bb00826) | Whether or not the [Line](#classLine) is visible.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`color`](#classLine_1a9efd376d9b6ac16dd115bd7bfbf9c923) | The color of the [Line](#classLine).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classLine_1ab5abf5a8115842ca5e99a827966a332b) | The z-order of the [Line](#classLine) (what it covers up and is covered by).
-`public ClickHandler `[`click`](#classLine_1a4d07ee7727434b01299b0d41389a1e01) | The click handler that gets called when the [Line](#classLine) is clicked.
-`public HoverHandler `[`hover`](#classLine_1a290a03210ee18d9644db5679e931f7a3) | The hover handler that gets called when the [Line](#classLine) gets hovered over.
+`public ClickHandler `[`click`](#classLine_1a4d07ee7727434b01299b0d41389a1e01) | The click handler for the [Line](#classLine); kept but never called, since a click never hits a [Line](#classLine). Null or undefined removes it.
+`public HoverHandler `[`hover`](#classLine_1a290a03210ee18d9644db5679e931f7a3) | A hover handler for the [Line](#classLine); kept but never called.
 `public  `[`Line`](#classLine_1afcf6affa1a4e375b37e61669b1103f12)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,bool automap,ClickHandler click,HoverHandler hover)` | Create a [Line](#classLine) hook with the given parameters.
 `public void `[`remove`](#classLine_1a33c4869ac6002c11dcace8c4e5d47c60)`()` | Remove the [Line](#classLine) from the screen and destroy the corresponding object.
 
@@ -3259,11 +3267,11 @@ The z-order of the [Line](#classLine) (what it covers up and is covered by).
 
 #### `public ClickHandler `[`click`](#classLine_1a4d07ee7727434b01299b0d41389a1e01) 
 
-The click handler that gets called when the [Line](#classLine) is clicked.
+The click handler for the [Line](#classLine). D2BS keeps it and returns it from `click`, but never calls it: a click never hits a [Line](#classLine). Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public HoverHandler `[`hover`](#classLine_1a290a03210ee18d9644db5679e931f7a3) 
 
-The hover handler that gets called when the [Line](#classLine) gets hovered over.
+A hover handler for the [Line](#classLine). D2BS keeps it and returns it from `hover`, but never calls it. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public  `[`Line`](#classLine_1afcf6affa1a4e375b37e61669b1103f12)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,bool automap,ClickHandler click,HoverHandler hover)` 
 
@@ -3285,9 +3293,9 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 #### Parameters
 * `automap` Whether the [Line](#classLine) is in automap coordinate space (true) or screen coordinate space (false).
 
-* `click` The click handler that gets called when the [Line](#classLine) is clicked.
+* `click` A click function for the [Line](#classLine), kept but never called (a click never hits a [Line](#classLine)); any other value sets no handler.
 
-* `hover` The hover handler that gets called when the [Line](#classLine) gets hovered over.
+* `hover` A hover function for the [Line](#classLine), kept but never called; any other value sets no handler.
 
 #### `public void `[`remove`](#classLine_1a33c4869ac6002c11dcace8c4e5d47c60)`()` 
 
@@ -4943,6 +4951,8 @@ true. Throws "Could not close database: " followed by SQLite's message when SQLi
 
 A [Text](#classText) screen hook.
 
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color`, `font` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
+
 > Todo: Verify all the documentation in this class.
 
 ## Summary
@@ -4954,8 +4964,8 @@ A [Text](#classText) screen hook.
 `public bool `[`visible`](#classText_1a9d8567b4c506868eeabe14720a627096) | Whether or not the [Text](#classText) is visible.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classText_1a4c8c8cccbf4fe4c50f9e56ff3f5e5c96) | The horizontal alignment.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classText_1ab953550b21d489b9c3a686e8119f19fe) | The z-order of the [Text](#classText) (what it covers up and is covered by).
-`public ClickHandler `[`click`](#classText_1a6d8b641a52b4e8dcd78b3477fe0456c4) | The click handler that gets called when the [Text](#classText) is clicked.
-`public HoverHandler `[`hover`](#classText_1ac180c2f5c657fb60f5ec3b81bd1b8cd3) | The hover handler that gets called when the [Text](#classText) gets hovered over.
+`public ClickHandler `[`click`](#classText_1a6d8b641a52b4e8dcd78b3477fe0456c4) | The click handler that gets called when the [Text](#classText) is clicked; null or undefined removes it.
+`public HoverHandler `[`hover`](#classText_1ac180c2f5c657fb60f5ec3b81bd1b8cd3) | A hover handler for the [Text](#classText); kept but never called.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`color`](#classText_1a6f4e60b7e0ccd69f154dad14a48be330) | The color of the [Text](#classText).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`font`](#classText_1a4113e8ec35bb03fa7529d357c5f389b1) | Something that determines the font.
 `public String `[`text`](#classText_1a562d404f9579c7f6e04ada90126d4125) | The string that the [Text](#classText) hook displays.
@@ -4992,11 +5002,11 @@ The z-order of the [Text](#classText) (what it covers up and is covered by).
 
 #### `public ClickHandler `[`click`](#classText_1a6d8b641a52b4e8dcd78b3477fe0456c4) 
 
-The click handler that gets called when the [Text](#classText) is clicked.
+The click handler that gets called when the [Text](#classText) is clicked. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public HoverHandler `[`hover`](#classText_1ac180c2f5c657fb60f5ec3b81bd1b8cd3) 
 
-The hover handler that gets called when the [Text](#classText) gets hovered over.
+A hover handler for the [Text](#classText). D2BS keeps it and returns it from `hover`, but never calls it. Assign null or undefined to remove it; a value that is not a function is ignored.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`color`](#classText_1a6f4e60b7e0ccd69f154dad14a48be330) 
 
@@ -5041,9 +5051,9 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 #### Parameters
 * `automap` Whether the [Text](#classText) is in automap coordinate space (true) or screen coordinate space (false).
 
-* `click` The click handler that gets called when the [Text](#classText) is clicked.
+* `click` A function to call when the [Text](#classText) is clicked; any other value sets no handler.
 
-* `hover` The hover handler that gets called when the [Text](#classText) gets hovered over.
+* `hover` A hover function for the [Text](#classText), kept but never called; any other value sets no handler.
 
 #### `public void `[`remove`](#classText_1a6d32e163a5fb4eb1a2b90e85baf83600)`()` 
 

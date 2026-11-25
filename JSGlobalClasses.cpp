@@ -41,23 +41,23 @@ JSClass script_class = {
     JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL, script_ctor)};
 
 JSClass frame_class = {
-    "Frame", JSCLASS_HAS_PRIVATE,
+    "Frame", JSCLASS_HAS_PRIVATE | JSCLASS_HAS_RESERVED_SLOTS(HOOK_SLOT_COUNT),
     JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, hook_finalize, frame_ctor)};
 
 JSClass box_class = {
-    "Box", JSCLASS_HAS_PRIVATE,
+    "Box", JSCLASS_HAS_PRIVATE | JSCLASS_HAS_RESERVED_SLOTS(HOOK_SLOT_COUNT),
     JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, hook_finalize, box_ctor)};
 
 JSClass line_class = {
-    "Line", JSCLASS_HAS_PRIVATE,
+    "Line", JSCLASS_HAS_PRIVATE | JSCLASS_HAS_RESERVED_SLOTS(HOOK_SLOT_COUNT),
     JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, hook_finalize, line_ctor)};
 
 JSClass text_class = {
-    "Text", JSCLASS_HAS_PRIVATE,
+    "Text", JSCLASS_HAS_PRIVATE | JSCLASS_HAS_RESERVED_SLOTS(HOOK_SLOT_COUNT),
     JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, hook_finalize, text_ctor)};
 
 JSClass image_class = {
-    "Image", JSCLASS_HAS_PRIVATE,
+    "Image", JSCLASS_HAS_PRIVATE | JSCLASS_HAS_RESERVED_SLOTS(HOOK_SLOT_COUNT),
     JSCLASS_SPEC(JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub, JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, hook_finalize, image_ctor)};
 
 JSClass room_class = {

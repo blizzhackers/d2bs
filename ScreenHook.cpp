@@ -25,12 +25,6 @@ bool zOrderSort(Genhook* first, Genhook* second) {
     return first->GetZOrder() < second->GetZOrder();
 }
 
-bool __fastcall HoverHook(Genhook* hook, void* argv, uint argc) {
-    HookClickHelper* helper = (HookClickHelper*)argv;
-    hook->Hover(&helper->point);
-    return true;
-}
-
 bool __fastcall DrawHook(Genhook* hook, void* argv, uint argc) {
     if ((hook->GetGameState() == (ScreenhookState)(int)argv || hook->GetGameState() == Perm) &&
         (!hook->GetIsAutomap() || (hook->GetIsAutomap() && *p_D2CLIENT_AutomapOn)))
@@ -99,25 +93,6 @@ bool Genhook::ForEachVisibleHook(HookCallback proc, void* argv, uint argc) {
     LeaveCriticalSection(&globalSection);
     return result;
 }
-bool Genhook::ForEachVisibleHookUnLocked(HookCallback proc, void* argv, uint argc) {
-    // iterate the visible hooks  //unlocked to call funcs, locked to draw
-    EnterCriticalSection(&globalSection);
-
-    bool result = false;
-    std::vector<Genhook*> list;
-    for (HookIterator it = visible.begin(); it != visible.end(); it++)
-        list.push_back(*it);
-
-    LeaveCriticalSection(&globalSection);
-
-    std::sort(list.begin(), list.end(), zOrderSort);
-    int count = list.size();
-    for (int i = 0; i < count; i++)
-        if (proc(list[i], argv, argc))
-            result = true;
-
-    return result;
-}
 bool Genhook::ForEachInvisibleHook(HookCallback proc, void* argv, uint argc) {
     // iterate the invisible hooks
     EnterCriticalSection(&globalSection);
@@ -136,31 +111,27 @@ bool Genhook::ForEachInvisibleHook(HookCallback proc, void* argv, uint argc) {
     return result;
 }
 
+// Unlists the hooks of the ending script and of every aborted script, in both lists alike, so the draw and click paths
+// stop reaching them (a normally ended cached script keeps its hooks drawn); their finalizers delete them. A listed
+// hook's owner is always live: the runtime's finalizers delete its hooks before ~Script frees the Script.
 void Genhook::Clean(Script* owner) {
     if (!init)
         return;
 
-    // ForEachHook(CleanHook, owner, 1);
     EnterCriticalSection(&globalSection);
-
     HookIterator it = visible.begin();
     while (it != visible.end()) {
-        if ((*it)->owner->IsAborted()) {
-            Genhook* i = *it;
+        if ((*it)->owner == owner || (*it)->owner->IsAborted())
             it = visible.erase(it);
-            //	delete(i);
-        } else
+        else
             it++;
     }
 
     it = invisible.begin();
     while (it != invisible.end()) {
-        if ((*it)->owner == owner) {
-            Genhook* i = *it;
+        if ((*it)->owner == owner || (*it)->owner->IsAborted())
             it = invisible.erase(it);
-            // delete(i);
-
-        } else
+        else
             it++;
     }
     LeaveCriticalSection(&globalSection);
@@ -168,28 +139,23 @@ void Genhook::Clean(Script* owner) {
 
 Genhook::Genhook(Script* nowner, JSObject* nself, uint x, uint y, ushort nopacity, bool nisAutomap, Align nalign, ScreenhookState ngameState)
     : owner(nowner), isAutomap(nisAutomap), isVisible(true), alignment(nalign), opacity(nopacity), gameState(ngameState), zorder(1) {
-    // InitializeCriticalSection(&hookSection);
     clicked = JSVAL_VOID;
-    hovered = JSVAL_VOID;
     self = nself;
-    // JS_AddObjectRoot(owner->GetContext(),&self);
-    // JS_AddRoot(&self);
     SetX(x);
     SetY(y);
+}
+
+void Genhook::Register(void) {
     EnterCriticalSection(&globalSection);
-    visible.push_back(this);
+    if (isVisible)
+        visible.push_back(this);
+    else
+        invisible.push_back(this);
     LeaveCriticalSection(&globalSection);
 }
 
 Genhook::~Genhook(void) {
     Lock();
-    // if(owner && !JSVAL_IS_FUNCTION(owner->GetContext(), clicked))
-    //	JS_RemoveRoot(owner->GetContext(), &clicked);
-    // if(owner && !JSVAL_IS_FUNCTION(owner->GetContext(), hovered))
-    //	JS_RemoveRoot(owner->GetContext(), &hovered);
-    // JS_RemoveObjectRoot(owner->GetContext(), &self);
-    // JS_RemoveRoot(&self);
-
     EnterCriticalSection(&globalSection);
 
     owner = NULL;
@@ -203,7 +169,6 @@ Genhook::~Genhook(void) {
     LeaveCriticalSection(&globalSection);
 
     Unlock();
-    // DeleteCriticalSection(&hookSection);
 }
 
 static void FreeClickArgs(Event* evt) {
@@ -255,70 +220,28 @@ bool Genhook::ClickVisibleHooks(int button, POINT* loc) {
     return block;
 }
 
-void Genhook::Hover(POINT* loc) {
-    if (!IsInRange(loc))
-        return;
-
-    if (owner && JSVAL_IS_FUNCTION(owner->GetContext(), hovered)) {
-        Event* evt = new Event;
-        evt->owner = owner;
-        evt->argc = 2;
-        evt->functions.push_back(new AutoRoot(owner->GetContext(), hovered));
-        evt->name = _strdup("ScreenHookHover");
-        evt->arg1 = new DWORD((DWORD)loc->x);
-        evt->arg2 = new DWORD((DWORD)loc->y);
-
-        owner->FireEvent(evt);
-    }
+namespace {
+// A function sets a handler and null or undefined clears it; any other value is ignored without a throw.
+bool IsHandlerValue(JSContext* cx, jsval v) {
+    return JSVAL_IS_NULL(v) || JSVAL_IS_VOID(v) || JSVAL_IS_FUNCTION(cx, v);
 }
-void Genhook::SetClickHandler(jsval handler) {
+} // namespace
 
-    if (!owner)
+void Genhook::SetClickHandler(JSContext* cx, jsval handler) {
+    if (!IsHandlerValue(cx, handler))
         return;
-    if (JSVAL_IS_VOID(handler))
-        return;
-    Lock();
-
-    JSContext* cx = owner->GetContext();
-    // if(JSVAL_IS_FUNCTION(cx, handler))
-    //	JS_RemoveRoot(owner->GetContext(), &clicked);
-    // JS_SetContextThread(cx);
-    // JS_BeginRequest(cx);
-
+    // Slot first, so the function is reachable before the game thread can see it in the copy.
+    JS_SetReservedSlot(self, HOOK_SLOT_CLICK, handler);
+    // ClickEvent reads the 64-bit copy under globalSection on the game input thread; an unlocked store can tear.
+    EnterGlobalSection();
     clicked = handler;
-    //	if(!JSVAL_IS_VOID(clicked))
-    //	{
-    //		if(JS_AddRoot(owner->GetContext(),&clicked) == JS_FALSE)
-    //		{
-    //			Unlock();
-    //			JS_EndRequest(cx);
-    ////bob1.8.8			JS_ClearContextThread(cx);
-    //			return;
-    //		}
-    //	}
-    //	JS_EndRequest(cx);
-    // JS_ClearContextThread(cx);
-    Unlock();
+    LeaveGlobalSection();
 }
 
-void Genhook::SetHoverHandler(jsval handler) {
-
-    if (!owner)
+void Genhook::SetHoverHandler(JSContext* cx, jsval handler) {
+    if (!IsHandlerValue(cx, handler))
         return;
-    if (JSVAL_IS_VOID(handler))
-        return;
-    Lock();
-    if (!JSVAL_IS_VOID(hovered))
-        JS_RemoveRoot(owner->GetContext(), &hovered);
-    if (JSVAL_IS_FUNCTION(owner->GetContext(), handler))
-        hovered = handler;
-    if (!JSVAL_IS_VOID(hovered)) {
-        if (JS_AddRoot(owner->GetContext(), &hovered) == JS_FALSE) {
-            Unlock();
-            return;
-        }
-    }
-    Unlock();
+    JS_SetReservedSlot(self, HOOK_SLOT_HOVER, handler);
 }
 
 void TextHook::Draw(void) {
@@ -345,13 +268,17 @@ bool TextHook::IsInRange(int dx, int dy) {
     return (xp < dx && y > dy && (xp + w) > dx && (y - h) < dy);
 }
 
-void TextHook::SetText(const wchar_t* ntext) {
+// Copies before the swap so a failed copy keeps the current text; Draw reads the pointer under globalSection.
+bool TextHook::SetText(const wchar_t* ntext) {
+    wchar_t* copy = _wcsdup(ntext ? ntext : L"");
+    if (!copy)
+        return false;
     EnterGlobalSection();
-    free(text);
-    text = NULL;
-    if (ntext)
-        text = _wcsdup(ntext);
+    wchar_t* old = text;
+    text = copy;
     LeaveGlobalSection();
+    free(old);
+    return true;
 }
 
 void ImageHook::Draw(void) {
@@ -386,14 +313,20 @@ bool ImageHook::IsInRange(int dx, int dy) {
     return false;
 }
 
-void ImageHook::SetImage(const wchar_t* nimage) {
-    Lock();
-    free(location);
-    delete[] image;
-
-    location = _wcsdup(nimage);
-    image = LoadCellFile(location);
-    Unlock();
+// The new name and cell are made before taking globalSection, and both pointers swap under it: Draw and IsInRange
+// read them there on the game thread. The cache owns every cell, so only the old name is freed.
+bool ImageHook::SetImage(const wchar_t* nimage) {
+    wchar_t* newLocation = _wcsdup(nimage);
+    if (!newLocation)
+        return false;
+    CellFile* newImage = LoadCellFile(newLocation, 3);
+    EnterGlobalSection();
+    wchar_t* oldLocation = location;
+    location = newLocation;
+    image = newImage;
+    LeaveGlobalSection();
+    free(oldLocation);
+    return true;
 }
 
 void LineHook::Draw(void) {

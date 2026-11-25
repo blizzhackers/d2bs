@@ -18,6 +18,25 @@ ClientGameState ClientState(void);
 bool GameReady(void);
 bool WaitForGameReady(void);
 DWORD GetPlayerArea(void);
+bool PlayerActLoaded(void);
+
+// DllMain allocates the per-thread blocking-listener slot before any thread starts and releases it at detach.
+bool AllocBlockingListenerSlot(void);
+void FreeBlockingListenerSlot(void);
+
+// Marks the current thread, for its lifetime, as running listeners whose verdict another thread waits for (a blocker
+// event); WaitForGameReady then fails at once instead of waiting for a state only that waiting thread can change.
+class BlockingListenerScope {
+  public:
+    explicit BlockingListenerScope(bool active);
+    ~BlockingListenerScope();
+
+  private:
+    bool previous;
+    BlockingListenerScope(const BlockingListenerScope&);
+    BlockingListenerScope& operator=(const BlockingListenerScope&);
+};
+
 void SendMouseClick(int x, int y, int clicktype);
 void SendKeyPress(uint type, uint key, uint ext);
 POINT CalculateTextLen(const char* szwText, int Font);
@@ -26,6 +45,9 @@ void WorldToScreen(POINT* pPos);
 void ScreenToWorld(POINT* ptPos);
 POINT ScreenToAutomap(int x, int y);
 void AutomapToScreen(POINT* pPos);
+// The level of the loaded act with that number, its rooms built; NULL when it is not in that act, the game is not
+// ready, or its rooms could not be built. The pointer is live only while the caller holds the game lock from before
+// the call until its last use, since the game thread frees an act's levels under that lock.
 Level* GetLevel(DWORD dwLevelNo);
 void D2CLIENT_Interact(UnitAny* pUnit, DWORD dwMoveType);
 void myDrawText(const wchar_t* szwText, int x, int y, int color, int font);
@@ -33,6 +55,7 @@ void myDrawCenterText(const wchar_t* szwText, int x, int y, int color, int font,
 // UnitAny* FindItemByPosition(DWORD x, DWORD y, DWORD Location);
 BYTE CalcPercent(DWORD dwVal, DWORD dwMaxVal, BYTE iMin = NULL);
 DWORD GetTileLevelNo(Room2* lpRoom2, DWORD dwTileNo);
+// The caller holds the game lock.
 UnitAny* GetMercUnit(UnitAny* pUnit);
 
 BOOL ClickNPCMenu(DWORD NPCClassId, DWORD MenuId);

@@ -1,0 +1,1 @@
+- **Area errors and rooms the game cannot load.** An `Area`'s properties wait while an area loads, and `getPath()` and an `Area`'s properties report an area outside the player's act as an error a script can catch, as `getCollision()` does; `getCollision()`, `getPath()` and `area.exits` treat a room the game cannot load as blocked.

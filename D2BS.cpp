@@ -25,6 +25,7 @@ BOOL WINAPI DllMain(HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
     case DLL_PROCESS_ATTACH: {
         DisableThreadLibraryCalls(hDll);
+        AllocBlockingListenerSlot(); // before Startup() starts any thread; on failure listeners just wait
         if (lpReserved != NULL) {
             Vars.pModule = (Module*)lpReserved;
 
@@ -102,6 +103,7 @@ BOOL WINAPI DllMain(HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved) {
             Vars.bShutdownFromDllMain = TRUE;
             Shutdown();
         }
+        FreeBlockingListenerSlot(); // after Shutdown() has stopped the script threads
         break;
     }
 

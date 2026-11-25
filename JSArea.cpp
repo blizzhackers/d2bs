@@ -18,14 +18,33 @@ void area_finalize(JSFreeOp* fop, JSObject* obj) {
 
 JSAPI_PROP(area_getProperty) {
     // Class-checked: a getter reached through an object that inherits from an area gets that object as obj, which
-    // has no area private to read and no exits slot to cache in.
+    // has no area private to read and no exits slot to cache in. It throws like a level that is not loaded.
     myArea* pArea = (myArea*)JS_GetInstancePrivate(cx, obj, &area_class, NULL);
     if (!pArea)
-        return JS_FALSE;
+        THROW_ERROR(cx, "Area not loaded");
 
-    Level* pLevel = GetLevel(pArea->AreaId);
-    if (!pLevel)
-        return JS_FALSE;
+    // Waits out a load like getPath, so a read mid-walk does not throw; a blocking listener fails fast instead.
+    if (!WaitForGameReady())
+        THROW_ERROR(cx, "Area not loaded");
+
+    // The level is looked up and read under one hold of the game lock, which the game thread needs to free an act's
+    // levels; the hold ends before any value is built, since building one can run the GC.
+    bool bLoaded = false;
+    DWORD dwPosX = 0, dwPosY = 0, dwSizeX = 0, dwSizeY = 0, dwLevelNo = 0;
+    {
+        AutoCriticalRoom cRoom;
+        Level* pLevel = GetLevel(pArea->AreaId);
+        if (pLevel) {
+            bLoaded = true;
+            dwPosX = pLevel->dwPosX;
+            dwPosY = pLevel->dwPosY;
+            dwSizeX = pLevel->dwSizeX;
+            dwSizeY = pLevel->dwSizeY;
+            dwLevelNo = pLevel->dwLevelNo;
+        }
+    }
+    if (!bLoaded)
+        THROW_ERROR(cx, "Area not loaded");
 
     jsval ID;
     JS_IdToValue(cx, id, &ID);
@@ -42,9 +61,17 @@ JSAPI_PROP(area_getProperty) {
             }
 
             ExitArray exits;
+            bool bMapped = false;
             {
-                ScopedActMap map(pLevel);
-                map->GetExits(exits);
+                ScopedActMap map(pArea->AreaId);
+                bMapped = map.ok();
+                if (bMapped)
+                    map->GetExits(exits);
+            }
+            // The act can change between the read above and this map; that is the same not-loaded case.
+            if (!bMapped) {
+                JS_EndRequest(cx);
+                THROW_ERROR(cx, "Area not loaded");
             }
             int count = exits.size();
             for (int i = 0; i < count; i++) {
@@ -87,19 +114,19 @@ JSAPI_PROP(area_getProperty) {
         }
     } break;
     case AUNIT_X:
-        vp.setInt32(pLevel->dwPosX);
+        vp.setInt32(dwPosX);
         break;
     case AUNIT_Y:
-        vp.setInt32(pLevel->dwPosY);
+        vp.setInt32(dwPosY);
         break;
     case AUNIT_XSIZE:
-        vp.setInt32(pLevel->dwSizeX);
+        vp.setInt32(dwSizeX);
         break;
     case AUNIT_YSIZE:
-        vp.setInt32(pLevel->dwSizeY);
+        vp.setInt32(dwSizeY);
         break;
     case AUNIT_ID:
-        vp.setInt32(pLevel->dwLevelNo);
+        vp.setInt32(dwLevelNo);
         break;
     }
 

@@ -594,6 +594,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 if (str2) {
                     argv[1] = STRING_TO_JSVAL(str2);
                     jsval rval;
+                    BlockingListenerScope blocking(evt->done != NULL);
                     for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
                         JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv.begin(), &rval);
                         block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
@@ -674,6 +675,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             if (argv.resize(1)) {
                 argv[0] = JS_NumberValue(*(DWORD*)evt->arg1);
                 jsval rval;
+                BlockingListenerScope blocking(evt->done != NULL);
                 for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
                     JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 1, argv.begin(), &rval);
                     block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
@@ -701,6 +703,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 argv[2] = JS_NumberValue(*(DWORD*)evt->arg3);
 
                 jsval rval;
+                BlockingListenerScope blocking(evt->done != NULL);
                 // diffrent function source for hooks
                 for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++) {
                     JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 3, argv.begin(), &rval);
@@ -797,6 +800,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                     // JS_AddValueRoot(cx, &argv[0]);
 
                     jsval rval;
+                    BlockingListenerScope blocking(evt->done != NULL);
                     for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
                         JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 1, &argv, &rval);
                         block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));

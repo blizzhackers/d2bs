@@ -144,7 +144,7 @@ public:
 	 *
 	 * The reported HP is a percentage.
 	 *
-	 * \return The merc's HP percentage.
+	 * \return The merc's HP percentage, 0 while the merc is dead, undefined when there is no merc, or false when the game is not ready.
 	 */
 	int getMercHP();
 
@@ -901,11 +901,11 @@ public:
 	 */
 	int runwalk;
 
-	/** The health at which to chicken if the character drops below.
+	/** The health at which to chicken if the character drops below, outside town.
 	 */
 	int chickenhp;
 
-	/** The mana at which to chicken if the character drops below.
+	/** The mana at which to chicken if the character drops below, outside town.
 	 */
 	int chickenmp;
 

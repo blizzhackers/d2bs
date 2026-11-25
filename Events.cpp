@@ -1,5 +1,6 @@
 #include "ScriptEngine.h"
 #include "D2BS.h"
+#include "CriticalSections.h"
 
 bool __fastcall LifeEventCallback(Script* script, void* argv, uint argc) {
     SingleArgHelper* helper = (SingleArgHelper*)argv;
@@ -350,11 +351,6 @@ void FireBlocker(Event* evt) {
     evt->done = CreateEvent(NULL, TRUE, FALSE, NULL);
     evt->refs = 2;
     evt->owner->FireEvent(evt);
-}
-
-// The critical section records its owner's thread id, which only the owning thread can find there.
-static bool HoldsGameLock(void) {
-    return (DWORD)(DWORD_PTR)Vars.cGameLoopSection.OwningThread == GetCurrentThreadId();
 }
 
 bool WaitForBlocker(Event* evt, DWORD timeoutMs) {

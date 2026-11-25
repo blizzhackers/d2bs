@@ -62,6 +62,7 @@ Unit getUnit(int type = -1, uint32_t classId = (uint32_t)-1,
  * \param Radius The distance between each point.
  *
  * \return The path as an array of objects with x and y properties.
+ * Throws an error when the area is not in the act the player is in.
  */
 object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
 	int dstY, uint32_t reductionType = 0, uint32_t Radius = 20);
@@ -90,10 +91,10 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  * 	use it, but it must be passed so the functions are the 8th to 10th
  * 	arguments.
  *
- * \param reject Called with (x, y) for the start and the end before the
- * 	search, then for each neighbouring point the search considers (some more
- * 	than once), never for the end. A truthy return blocks the point. A point
- * 	outside the current act's levels is blocked without a call.
+ * \param reject Called at most once for each point, with (x, y): for the
+ * 	start and the end before the search, then for each neighbouring point the
+ * 	search considers, except the end. A truthy return blocks the point. A
+ * 	point outside the current act's levels is blocked without a call.
  *
  * \param reduce Called once for each point of the path found, in order, with
  * 	the point ({x, y}), its index and the array of all the points. A truthy
@@ -101,22 +102,30 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  *
  * \param mutate Called with (x, y) for the start or the end when it is
  * 	blocked, before the search. Return [x, y] to move that point (fractions
- * 	are truncated); a return that isn't an object keeps it. An object whose
- * 	elements 0 and 1 don't convert to numbers in the 32-bit integer range
- * 	makes getPath throw a TypeError.
+ * 	are truncated); a return that isn't an object keeps it. A start or end
+ * 	that is outside the current act's levels once mutate returns, moved
+ * 	there or kept, has no path, so getPath returns an empty path without
+ * 	calling reject or mutate again. An object whose elements 0 and 1 don't
+ * 	convert to numbers in the 32-bit integer range makes getPath throw a
+ * 	TypeError.
  *
  * Reduction type 3 needs all three functions, or getPath throws. They are
  * called with getPath's this (the global object for a plain call). An error
  * one of them throws, or the script being stopped while one runs, ends the
- * getPath call with it. They run without the game lock, so the game keeps
- * running while one waits, for example in delay(), and they may call
- * getCollision() and getPath(). The exception is a getPath inside a listener
- * the game is already waiting on: the game then stays paused until it returns.
- * If the player changes area, act or game while reject or mutate runs, getPath
- * returns an empty path; reduce runs after the search, so the path it reduces
- * is still returned.
+ * getPath call with it. When the script already holds the game lock as getPath
+ * starts, for example in a gamepacketsent listener that runs inside clickMap(),
+ * they run with the game paused and the D2BS log notes it once for that call;
+ * otherwise they run without the game lock, so the game keeps running while one
+ * waits, for example in delay(). They may call getCollision() and getPath().
+ * Inside a listener the game is already waiting on, the game also stays paused
+ * until getPath returns. After each reject or mutate call, getPath checks that
+ * the player is still in the same game, act and area; if not, it calls none of
+ * the three again and returns an empty path. A trip away and back to the same
+ * area within one call may not be noticed. reduce runs after the search, so
+ * the path it reduces is still returned.
  *
  * \return The path as an array of objects with x and y properties.
+ * Throws an error when the area is not in the act the player is in.
  */
 object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
 	int dstY, uint32_t reductionType, uint32_t Radius,
@@ -136,14 +145,16 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  *
  * \return The collision flags. For details see:
  * http://forums.d2botnet.org/viewtopic.php?f=18&t=1212 .
+ * Throws an error when the area is not in the act the player is in.
  */
 unsigned short getCollision(uint32_t nLevelId, int32_t nX, int32_t nY);
 
-/** Get the health points of the controlled unit's merc.
+/** Get the health of the controlled unit's merc, as a percentage.
  *
  * \ingroup globalFunctions
  *
- * \return The health points.
+ * \return The merc's HP percentage, 0 while the merc is dead, undefined when
+ * there is no merc, or false when the game is not ready.
  */
 int getMercHP();
 
@@ -327,9 +338,15 @@ D2BSScript getScript();
  * \ingroup globalFunctions
  *
  * \param levelId The id of the area to get the room from, or 0 to get the room
- * the controlled unit is in.
+ * the controlled unit is in. Any number or numeric string is read as an area id;
+ * undefined, null and values that convert to NaN read as 0.
  *
- * \return The first room in the area.
+ * \return The first room in the area, or the controlled unit's room for 0.
+ * Waits while an area or act loads; undefined when the area is not in the
+ * player's act, or when an act change, a move between rooms or the end of the
+ * game begins as the call runs. Throws "Get Room Game not ready" out of game,
+ * when that wait times out, or at once while the game is busy in a blocking
+ * listener or while your script holds the game lock.
  */
 Room getRoom(uint32_t levelId);
 
@@ -343,7 +360,9 @@ Room getRoom(uint32_t levelId);
  *
  * \param y The y coordinate to find a room for.
  *
- * \return The room at the given point.
+ * \return The room at the given point. Throws "Get Room Game not ready" out of
+ * game, when the wait for an area or act load times out, or at once while the
+ * game is busy in a blocking listener or while your script holds the game lock.
  */
 Room getRoom(uint32_t levelId, int x, int y);
 
@@ -355,7 +374,9 @@ Room getRoom(uint32_t levelId, int x, int y);
  *
  * \param y The y coordinate to find a room for.
  *
- * \return The room at the given point.
+ * \return The room at the given point. Throws "Get Room Game not ready" out of
+ * game, when the wait for an area or act load times out, or at once while the
+ * game is busy in a blocking listener or while your script holds the game lock.
  */
 Room getRoom(int x, int y);
 
@@ -363,7 +384,10 @@ Room getRoom(int x, int y);
  *
  * \ingroup globalFunctions
  *
- * \return The first room in the current area.
+ * \return The first room in the current area; undefined when an act change
+ * begins as the call runs. Throws "Get Room Game not ready" out of game, when
+ * the wait for an area or act load times out, or at once while the game is busy
+ * in a blocking listener or while your script holds the game lock.
  */
 Room getRoom();
 
@@ -1017,8 +1041,9 @@ void stop(int stop = 0);
  */
 void stop(bool stop);
 
-/** Return a random number between low and high. Uses C rand() when out of game,
- * and D2GAME_D2Rand with the game seed while in game.
+/** Return a random number between low and high. Draws from the operating system's
+ * random generator (the C runtime's rand_s), in and out of game; it never touches
+ * the game's own random seed and never waits for the game.
  *
  * \ingroup globalFunctions
  *
@@ -1029,6 +1054,18 @@ void stop(bool stop);
  * \return A random integer in the range [low,high].
  */
 int rand(int32_t low, int32_t high);
+
+/** Reveal the player's current level on the automap.
+ *
+ * \ingroup globalFunctions
+ *
+ * \param drawPresets True to also draw preset icons (shrines, special NPCs, level names). Optional; read only
+ * when it is the only argument, and false when omitted or not a boolean.
+ *
+ * \return True once the player's level was walked and revealed (a room the game
+ * cannot load stays hidden), false when the game is not ready.
+ */
+bool revealLevel(bool drawPresets = false);
 
 /** Copy txt to the clipboard as Unicode text.
  *
@@ -1216,6 +1253,16 @@ bool keystate(int vKey);
  * 0x10 - "You must wait a short time to declare hostility with that player."
  * 0x11 - "%Param1 Stones of Jordan Sold to Merchants"
  * 0x12 - "Diablo Walks the Earth"
+ *
+ * A listener whose result can block its event (keydownblocker, chatmsgblocker,
+ * chatinputblocker, whispermsgblocker, gamepacket, gamepacketsent, realmpacket,
+ * and a hook's click handler) runs while the game, or the script that sent the
+ * packet, waits for its answer. A call in it that needs a ready game returns
+ * its "Game not ready" result at once while the game is busy (an area or act
+ * loading, or the moment the player moves between rooms), rather than waiting.
+ * A gamepacketsent listener for a packet its own script sent runs inside that
+ * send instead; its calls wait as usual unless the send was made while the
+ * script holds the game lock, when they get "Game not ready" at once.
  *
  * \param eventHandler A function with the signature listed above that handles
  * the event.

@@ -1,0 +1,1 @@
+- **Mercenary health.** `getMercHP()` reports the mercenary's health while an assassin kicks, reads 0 once the mercenary has died, and `unit.getMercHP()` returns `undefined` on a unit that is not a player.

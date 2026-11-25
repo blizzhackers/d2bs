@@ -57,3 +57,9 @@ class AutoCriticalRoom {
         LeaveSection();
     }
 };
+
+// True on the thread that holds the game lock: the critical section records its owner's thread id, which only the
+// owning thread can find there.
+inline bool HoldsGameLock(void) {
+    return (DWORD)(DWORD_PTR)Vars.cGameLoopSection.OwningThread == GetCurrentThreadId();
+}

@@ -1,4 +1,7 @@
-/** Represent an Area of the map.
+/** Represent an Area of the map. Reading a property throws an error while the
+ * area is not in the act the player is in, for example after a waypoint to
+ * another act, or when the game isn't ready (out of game, or in a blocking
+ * listener while an area loads).
  */
 class Area
 {

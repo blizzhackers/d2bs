@@ -3,7 +3,9 @@
 #include "PathReducer.h"
 #include "../Path.h"
 #include "../../Diablo_II/ActMap.h"
+#include "../AStarPath.h"
 #include "../../../js32.h"
+#include <map>
 
 namespace Mapping {
 namespace Pathing {
@@ -24,6 +26,14 @@ class JSPathReducer : public PathReducer {
     // The current act's levels, copied under the game lock: the search never leaves them, as types 0 and 1 can't.
     std::vector<LevelRect> levels;
     bool failed_;
+    // Where the search started, captured under the game lock before any callback.
+    SearchOrigin origin_;
+    // Set when the player left the search's origin during a callback, or the start or end lies outside the act's levels
+    // after mutate: no further script call is made and getPath returns an empty path. Unlike failed_, nothing is pending.
+    bool stopped_;
+    // reject's answer for each point it was asked about: it is asked at most once per point, which the docs promise.
+    std::map<Point, bool> verdicts_;
+    bool pausedLogged_;
 
     // DWORD compare, as ActMap::isPointInLevel.
     bool InLevels(Point const& pt) const {
@@ -33,13 +43,21 @@ class JSPathReducer : public PathReducer {
                 return true;
         return false;
     }
-    // The game lock is given up only through CleanUp, which first empties the room lists every map shares, so a
-    // callback's own getPath or another script's search never meets this search's rooms.
+    // The game lock is given up only through CleanUp, which first unloads the rooms this map loaded and empties its
+    // caches, so the game never runs with them loaded and a callback's own getPath starts from the game's state. A thread
+    // that held the lock before getPath still holds it here: the game stays paused through the callbacks, and is logged once.
     void ReleaseGame() {
         map->CleanUp();
+        if (!pausedLogged_ && HoldsGameLock()) {
+            pausedLogged_ = true;
+            Log(L"getPath: reject, mutate and reduce run with the game paused (this thread already held the game lock)");
+        }
     }
+    // The game ran during the callback: a player who left the search's origin makes the rest of the search moot.
     void RetakeGame() {
         map->actCrit->EnterSection();
+        if (!stopped_ && !SearchOriginHolds(origin_))
+            stopped_ = true;
     }
     // A native passed as a callback can report an error and still return success, so an exception that appears
     // during a call fails it too; one already pending came from an earlier statement and is left to it.
@@ -81,7 +99,10 @@ class JSPathReducer : public PathReducer {
     JSPathReducer(const JSPathReducer&);
     JSPathReducer& operator=(const JSPathReducer&);
     JSPathReducer(ActMap* m, JSContext* _cx, JSObject* _obj, jsval _reject, jsval _reduce, jsval _mutate)
-        : map(m), cx(_cx), obj(_obj), reject(_reject), reduce(_reduce), mutate(_mutate), failed_(false) {
+        : map(m), cx(_cx), obj(_obj), reject(_reject), reduce(_reduce), mutate(_mutate), failed_(false), stopped_(false), pausedLogged_(false) {
+        // No origin means GetPath returns before any callback too; stopping here keeps the two in step.
+        if (!CaptureSearchOrigin(origin_))
+            stopped_ = true;
         const Level* level = m->GetLevel();
         if (!level || !level->pMisc)
             return;
@@ -104,7 +125,7 @@ class JSPathReducer : public PathReducer {
     void Reduce(PointList const& in, PointList& out, bool abs) {
         // The last game-lock use of the search: the points are built and the callbacks run without it.
         ReleaseGame();
-        if (failed_)
+        if (failed_ || stopped_)
             return;
 
         // create the initial array to pass to the js function
@@ -152,9 +173,12 @@ class JSPathReducer : public PathReducer {
         }
     }
     bool Reject(Point const& pt, bool abs) {
-        // After a failure every point is blocked, so the search drains without calling script again.
-        if (failed_ || !InLevels(pt))
+        // After a failure or a stop every point is blocked, so the search drains without calling script again.
+        if (failed_ || stopped_ || !InLevels(pt))
             return true;
+        std::map<Point, bool>::const_iterator known = verdicts_.find(pt);
+        if (known != verdicts_.end())
+            return known->second;
         jsval rval = JSVAL_FALSE;
         jsval argv[] = {INT_TO_JSVAL(pt.first), INT_TO_JSVAL(pt.second)};
         ReleaseGame();
@@ -165,7 +189,11 @@ class JSPathReducer : public PathReducer {
             failed_ = true;
             return true;
         }
-        return JS::ToBoolean(rval);
+        if (stopped_)
+            return true;
+        const bool blocked = !!JS::ToBoolean(rval);
+        verdicts_[pt] = blocked;
+        return blocked;
     }
     void GetOpenNodes(Point const& center, PointList& out, Point const& endpoint) {
         for (int i = 1; i >= -1; i--) {
@@ -180,7 +208,7 @@ class JSPathReducer : public PathReducer {
         return 0;
     }
     void MutatePoint(Point& pt, bool abs) {
-        if (failed_)
+        if (failed_ || stopped_)
             return;
         int x = pt.first, y = pt.second;
         ReleaseGame();
@@ -188,6 +216,13 @@ class JSPathReducer : public PathReducer {
         RetakeGame();
         if (!ok) {
             failed_ = true;
+            return;
+        }
+        if (stopped_)
+            return;
+        // A start or end outside the current act's levels, moved there or kept, has no path to or from it.
+        if (!InLevels(Point(x, y))) {
+            stopped_ = true;
             return;
         }
         pt.first = x;

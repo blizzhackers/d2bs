@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <new>
 
 #include "D2Helpers.h"
 #include "Constants.h"
@@ -656,23 +657,6 @@ UnitAny* FindMissileOwner(UnitAny* pMissile) {
     return FindUnitInTables(pTables, pMissile->dwOwnerId, pMissile->dwOwnerType);
 }
 
-// TODO: Rewrite this and split it into two functions
-CellFile* LoadCellFile(const char* lpszPath, DWORD bMPQ) {
-    if (bMPQ == TRUE) {
-        unsigned __int32 hash = sfh((char*)lpszPath, (int)strlen((char*)lpszPath));
-        if (Vars.mCachedCellFiles.count(hash) > 0)
-            return Vars.mCachedCellFiles[hash];
-        CellFile* result = (CellFile*)D2WIN_LoadCellFile((char*)lpszPath, 0);
-        Vars.mCachedCellFiles[hash] = result;
-        return result;
-    } else {
-        wchar_t* path = AnsiToUnicode(lpszPath);
-        CellFile* ret = LoadCellFile(path, bMPQ);
-        delete[] path;
-        return ret;
-    }
-}
-
 CellFile* LoadCellFile(const wchar_t* lpszPath, DWORD bMPQ) {
     if (bMPQ == true) {
         Log(L"Cannot specify wide character path for MPQ: %s", lpszPath);
@@ -695,18 +679,20 @@ CellFile* LoadCellFile(const wchar_t* lpszPath, DWORD bMPQ) {
         }
     }
 
-    unsigned __int32 hash = sfh((char*)lpszPath, (int)strlen((char*)lpszPath));
-    if (Vars.mCachedCellFiles.count(hash) > 0)
-        return Vars.mCachedCellFiles[hash];
-
-    // see if the file exists first
-    if (!(_waccess(lpszPath, 0) != 0 && errno == ENOENT)) {
-        CellFile* result = myInitCellFile((CellFile*)LoadBmpCellFile(lpszPath));
-        Vars.mCachedCellFiles[hash] = result;
-        return result;
+    // The cache owns every cell for the process lifetime (hooks never free one) and keeps successful loads only, so a
+    // file fixed on disk loads on the next Image or location set. Leaf lock: no D2BS lock is taken while it is held.
+    EnterCriticalSection(&Vars.cCellFileSection);
+    CellFile* result = NULL;
+    std::map<std::wstring, CellFile*>::const_iterator it = Vars.mCachedCellFiles.find(lpszPath);
+    if (it != Vars.mCachedCellFiles.end()) {
+        result = it->second;
+    } else if (!(_waccess(lpszPath, 0) != 0 && errno == ENOENT)) {
+        result = myInitCellFile(LoadBmpCellFile(lpszPath));
+        if (result)
+            Vars.mCachedCellFiles[lpszPath] = result;
     }
-
-    return NULL;
+    LeaveCriticalSection(&Vars.cCellFileSection);
+    return result;
 }
 
 POINT GetScreenSize() {
@@ -770,38 +756,43 @@ HANDLE OpenFileRead(const wchar_t* filename) {
     return CreateFileW(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 }
 
-BYTE* AllocReadFile(const char* filename) {
+// A whole file of 1 byte to 2 GB - 1 in a new[] buffer; NULL and *pSize 0 when it cannot be opened, is empty or
+// larger, or reads short.
+BYTE* AllocReadFile(const wchar_t* filename, DWORD* pSize) {
+    *pSize = 0;
     HANDLE hFile = OpenFileRead(filename);
-    int filesize = GetFileSize(hFile, 0);
-    if (filesize <= 0)
-        return 0;
-    BYTE* buf = new BYTE[filesize];
-    ReadFile(hFile, buf, filesize);
+    if (hFile == INVALID_HANDLE_VALUE)
+        return NULL;
+    BYTE* buf = NULL;
+    DWORD high = 0;
+    DWORD size = GetFileSize(hFile, &high);
+    if (high == 0 && size > 0 && size <= 0x7FFFFFFF) {
+        buf = new (std::nothrow) BYTE[size];
+        if (buf && ReadFile(hFile, buf, size) != size) {
+            delete[] buf;
+            buf = NULL;
+        }
+    }
     CloseHandle(hFile);
+    if (buf)
+        *pSize = size;
     return buf;
 }
 
-BYTE* AllocReadFile(const wchar_t* filename) {
-    HANDLE hFile = OpenFileRead(filename);
-    int filesize = GetFileSize(hFile, 0);
-    if (filesize <= 0)
-        return 0;
-    BYTE* buf = new BYTE[filesize];
-    ReadFile(hFile, buf, filesize);
-    CloseHandle(hFile);
-    return buf;
-}
-
+// Callers pass width and height > 0, ((width + 3) & ~3) * height readable bytes at buf1, and width * height * 2 +
+// height within 0x7FFFFFFF (LoadBmpCellFile(const wchar_t*) checks all three).
 CellFile* LoadBmpCellFile(BYTE* buf1, int width, int height) {
-    BYTE *buf2 = new BYTE[(width * height * 2) + height], *dest = buf2;
+    BYTE *buf2 = new (std::nothrow) BYTE[(width * height * 2) + height], *dest = buf2;
+    if (!buf2)
+        return NULL;
 
     for (int i = 0; i < height; i++) {
         BYTE *src = buf1 + (i * ((width + 3) & -4)), *limit = src + width;
         while (src < limit) {
-            BYTE *start = src, *limit2 = min(limit, src + 0x7f), trans = !*src;
+            BYTE *start = src, *limit2 = src + min(limit - src, 0x7f), trans = !*src;
             do
                 src++;
-            while ((trans == (BYTE) !*src) && (src < limit2));
+            while ((src < limit2) && (trans == (BYTE) !*src));
             if (!trans || (src < limit))
                 *dest++ = (BYTE)((trans ? 0x80 : 0) + (src - start));
             if (!trans)
@@ -811,44 +802,45 @@ CellFile* LoadBmpCellFile(BYTE* buf1, int width, int height) {
         *dest++ = 0x80;
     }
 
-    static DWORD dc6head[] = {6, 1, 0, 0xeeeeeeee, 1, 1, 0x1c, 0, (DWORD)-1, (DWORD)-1, 0, 0, 0, (DWORD)-1, (DWORD)-1};
+    // A local: callers run on any script thread, and InitCellFile relocates only the returned copy.
+    DWORD dc6head[] = {6, 1, 0, 0xeeeeeeee, 1, 1, 0x1c, 0, (DWORD)-1, (DWORD)-1, 0, 0, 0, (DWORD)-1, (DWORD)-1};
     dc6head[8] = width;
     dc6head[9] = height;
     dc6head[14] = dest - buf2;
     dc6head[13] = sizeof(dc6head) + (dc6head[14]) + 3;
-    BYTE* ret = new BYTE[dc6head[13]];
-    memset(memcpy2(memcpy2(ret, dc6head, sizeof(dc6head)), buf2, dc6head[14]), 0xee, 3);
+    BYTE* ret = new (std::nothrow) BYTE[dc6head[13]];
+    if (ret)
+        memset(memcpy2(memcpy2(ret, dc6head, sizeof(dc6head)), buf2, dc6head[14]), 0xee, 3);
     delete[] buf2;
 
     return (CellFile*)ret;
 }
 
-CellFile* LoadBmpCellFile(const char* filename) {
-    BYTE* ret = 0;
-
-    BYTE* buf1 = AllocReadFile(filename);
-    BITMAPFILEHEADER* bmphead1 = (BITMAPFILEHEADER*)buf1;
-    BITMAPINFOHEADER* bmphead2 = (BITMAPINFOHEADER*)(buf1 + sizeof(BITMAPFILEHEADER));
-    if (buf1 && (bmphead1->bfType == 'MB') && (bmphead2->biBitCount == 8) && (bmphead2->biCompression == BI_RGB)) {
-        ret = (BYTE*)LoadBmpCellFile(buf1 + bmphead1->bfOffBits, bmphead2->biWidth, bmphead2->biHeight);
-    }
-    delete[] buf1;
-
-    return (CellFile*)ret;
-}
-
+// Loads an uncompressed 8-bit bottom-up BMP; any other format, a header shorter than BITMAPINFOHEADER, or pixel data
+// that starts inside the headers or ends outside the file gives NULL.
 CellFile* LoadBmpCellFile(const wchar_t* filename) {
-    BYTE* ret = 0;
+    DWORD size = 0;
+    BYTE* buf1 = AllocReadFile(filename, &size);
+    if (!buf1)
+        return NULL;
 
-    BYTE* buf1 = AllocReadFile(filename);
-    BITMAPFILEHEADER* bmphead1 = (BITMAPFILEHEADER*)buf1;
-    BITMAPINFOHEADER* bmphead2 = (BITMAPINFOHEADER*)(buf1 + sizeof(BITMAPFILEHEADER));
-    if (buf1 && (bmphead1->bfType == 'MB') && (bmphead2->biBitCount == 8) && (bmphead2->biCompression == BI_RGB)) {
-        ret = (BYTE*)LoadBmpCellFile(buf1 + bmphead1->bfOffBits, bmphead2->biWidth, bmphead2->biHeight);
+    CellFile* ret = NULL;
+    if (size >= sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER)) {
+        BITMAPFILEHEADER* bmphead1 = (BITMAPFILEHEADER*)buf1;
+        BITMAPINFOHEADER* bmphead2 = (BITMAPINFOHEADER*)(buf1 + sizeof(BITMAPFILEHEADER));
+        LONG width = bmphead2->biWidth, height = bmphead2->biHeight;
+        if (bmphead1->bfType == 'MB' && bmphead2->biBitCount == 8 && bmphead2->biCompression == BI_RGB && width > 0 &&
+            height > 0 && bmphead2->biSize >= sizeof(BITMAPINFOHEADER) && bmphead1->bfOffBits >= sizeof(BITMAPFILEHEADER) &&
+            bmphead1->bfOffBits - sizeof(BITMAPFILEHEADER) >= bmphead2->biSize && bmphead1->bfOffBits <= size) {
+            unsigned __int64 stride = ((unsigned __int64)width + 3) & ~(unsigned __int64)3;
+            unsigned __int64 encoded = (unsigned __int64)width * height * 2 + height;
+            if (stride * height <= size - bmphead1->bfOffBits && encoded <= 0x7FFFFFFF)
+                ret = LoadBmpCellFile(buf1 + bmphead1->bfOffBits, (int)width, (int)height);
+        }
     }
     delete[] buf1;
 
-    return (CellFile*)ret;
+    return ret;
 }
 
 CellFile* myInitCellFile(CellFile* cf) {

@@ -122,6 +122,7 @@ BOOL Startup(void) {
     InitializeCriticalSection(&Vars.cFrameHookSection);
     InitializeCriticalSection(&Vars.cLineHookSection);
     InitializeCriticalSection(&Vars.cImageHookSection);
+    InitializeCriticalSection(&Vars.cCellFileSection);
     InitializeCriticalSection(&Vars.cTextHookSection);
     InitializeCriticalSection(&Vars.cFlushCacheSection);
     InitializeCriticalSection(&Vars.cConsoleSection);
@@ -179,6 +180,7 @@ void Shutdown(void) {
     DeleteCriticalSection(&Vars.cFrameHookSection);
     DeleteCriticalSection(&Vars.cLineHookSection);
     DeleteCriticalSection(&Vars.cImageHookSection);
+    DeleteCriticalSection(&Vars.cCellFileSection);
     DeleteCriticalSection(&Vars.cTextHookSection);
     DeleteCriticalSection(&Vars.cFlushCacheSection);
     DeleteCriticalSection(&Vars.cConsoleSection);

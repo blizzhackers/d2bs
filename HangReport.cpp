@@ -1342,6 +1342,7 @@ void ResolveAtStart(void) {
     AddLock("box hook", &Vars.cBoxHookSection);
     AddLock("frame hook", &Vars.cFrameHookSection);
     AddLock("line hook", &Vars.cLineHookSection);
+    AddLock("image file", &Vars.cCellFileSection);
     AddLock("D2Net packet", p_D2NET_CriticalPacketSection);
     AddLock("Storm read", p_STORM_ReadLock);
     // PEB.LoaderLock (x86 offset 0xA0) is undocumented, so it is used only when it points into ntdll.

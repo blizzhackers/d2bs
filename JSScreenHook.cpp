@@ -5,6 +5,7 @@
 #include "File.h"
 using namespace std;
 
+// Every delete of a published hook holds globalSection: the derived destructor runs before ~Genhook unlinks the hook.
 void hook_finalize(JSFreeOp* fop, JSObject* obj) {
     Genhook* hook = (Genhook*)JS_GetPrivate(obj);
     Genhook::EnterGlobalSection();
@@ -26,24 +27,43 @@ bool IsHookObject(JSContext* cx, JSObject* obj) {
             return true;
     return false;
 }
+
+// Hook number arguments take any finite number, truncated as ECMA ToInt32 does; a non-number or a NaN/Infinity is
+// ignored, so the default or current value stays (no valueOf/toString call can run script inside a setter).
+bool HookNumberArg(const JS::Value& v, int32_t* out) {
+    if (v.isInt32()) {
+        *out = v.toInt32();
+        return true;
+    }
+    if (v.isDouble() && MOZ_DOUBLE_IS_FINITE(v.toDouble())) {
+        *out = JS_DoubleToInt32(v.toDouble());
+        return true;
+    }
+    return false;
+}
 } // namespace
 
 JSAPI_FUNC(hook_remove) {
-    JS_SET_RVAL(cx, vp, JSVAL_VOID);
+    // JS_THIS_OBJECT may read the callee from the rval slot to box a primitive this, so it runs before the rval is
+    // set; a null result means an error is pending.
     JSObject* obj = JS_THIS_OBJECT(cx, vp);
+    if (!obj)
+        return JS_FALSE;
+    JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!IsHookObject(cx, obj))
         return JS_TRUE;
     Genhook::EnterGlobalSection();
     Genhook* hook = (Genhook*)JS_GetPrivate(cx, obj);
     if (hook) {
-        // hook->SetIsVisible(false);
         delete hook;
     }
 
     JS_SetPrivate(cx, obj, NULL);
-    // JS_ClearScope(cx, obj);
-    JS_ValueToObject(cx, JSVAL_VOID, &obj);
     Genhook::LeaveGlobalSection();
+
+    // The handler slots belong to this (the owner) thread; clearing them lets a removed hook's functions be collected.
+    JS_SetReservedSlot(obj, HOOK_SLOT_CLICK, JSVAL_VOID);
+    JS_SetReservedSlot(obj, HOOK_SLOT_HOVER, JSVAL_VOID);
 
     return JS_TRUE;
 }
@@ -57,17 +77,18 @@ JSAPI_FUNC(frame_ctor) {
     Align align = Left;
     bool automap = false;
     jsval click = JSVAL_VOID, hover = JSVAL_VOID;
+    int32_t n;
 
-    if (argc > 0 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
-        x = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
-    if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
-        y = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc > 2 && JSVAL_IS_INT(JS_ARGV(cx, vp)[2]))
-        x2 = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-    if (argc > 3 && JSVAL_IS_INT(JS_ARGV(cx, vp)[3]))
-        y2 = JSVAL_TO_INT(JS_ARGV(cx, vp)[3]);
-    if (argc > 4 && JSVAL_IS_INT(JS_ARGV(cx, vp)[4]))
-        align = (Align)JSVAL_TO_INT(JS_ARGV(cx, vp)[4]);
+    if (argc > 0 && HookNumberArg(JS_ARGV(cx, vp)[0], &n))
+        x = n;
+    if (argc > 1 && HookNumberArg(JS_ARGV(cx, vp)[1], &n))
+        y = n;
+    if (argc > 2 && HookNumberArg(JS_ARGV(cx, vp)[2], &n))
+        x2 = n;
+    if (argc > 3 && HookNumberArg(JS_ARGV(cx, vp)[3], &n))
+        y2 = n;
+    if (argc > 4 && HookNumberArg(JS_ARGV(cx, vp)[4], &n))
+        align = (Align)n;
     if (argc > 5 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[5]))
         automap = !!JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[5]);
     if (argc > 6 && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[6]))
@@ -82,12 +103,10 @@ JSAPI_FUNC(frame_ctor) {
     // framehooks don't work out of game -- they just crash
     FrameHook* pFrameHook = new FrameHook(script, hook, x, y, x2, y2, automap, align, IG);
 
-    if (!pFrameHook)
-        THROW_ERROR(cx, "Failed to create framehook");
-
     JS_SetPrivate(cx, hook, pFrameHook);
-    pFrameHook->SetClickHandler(click);
-    pFrameHook->SetHoverHandler(hover);
+    pFrameHook->SetClickHandler(cx, click);
+    pFrameHook->SetHoverHandler(cx, hover);
+    pFrameHook->Register();
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(hook));
 
@@ -127,10 +146,10 @@ JSAPI_PROP(frame_getProperty) {
         vp.setInt32(pFramehook->GetZOrder());
         break;
     case FRAME_ONCLICK:
-        vp.set(pFramehook->GetClickHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_CLICK));
         break;
     case FRAME_ONHOVER:
-        vp.set(pFramehook->GetHoverHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_HOVER));
         break;
     }
     return JS_TRUE;
@@ -141,42 +160,43 @@ JSAPI_STRICT_PROP(frame_setProperty) {
     if (!pFramehook)
         return JS_TRUE;
 
+    int32_t n;
     jsval ID;
     JS_IdToValue(cx, id, &ID);
     switch (JSVAL_TO_INT(ID)) {
     case FRAME_X:
-        if (vp.isInt32())
-            pFramehook->SetX(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pFramehook->SetX(n);
         break;
     case FRAME_Y:
-        if (vp.isInt32())
-            pFramehook->SetY(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pFramehook->SetY(n);
         break;
     case FRAME_XSIZE:
-        if (vp.isInt32())
-            pFramehook->SetXSize(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pFramehook->SetXSize(n);
         break;
     case FRAME_YSIZE:
-        if (vp.isInt32())
-            pFramehook->SetYSize(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pFramehook->SetYSize(n);
         break;
     case FRAME_ALIGN:
-        if (vp.isInt32())
-            pFramehook->SetAlign((Align)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pFramehook->SetAlign((Align)n);
         break;
     case FRAME_VISIBLE:
         if (vp.isBoolean())
             pFramehook->SetIsVisible(!!vp.toBoolean());
         break;
     case FRAME_ZORDER:
-        if (vp.isInt32())
-            pFramehook->SetZOrder((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pFramehook->SetZOrder((ushort)n);
         break;
     case FRAME_ONCLICK:
-        pFramehook->SetClickHandler(vp.get());
+        pFramehook->SetClickHandler(cx, vp.get());
         break;
     case FRAME_ONHOVER:
-        pFramehook->SetHoverHandler(vp.get());
+        pFramehook->SetHoverHandler(cx, vp.get());
         break;
     }
     return JS_TRUE;
@@ -194,21 +214,22 @@ JSAPI_FUNC(box_ctor) {
     Align align = Left;
     bool automap = false;
     jsval click = JSVAL_VOID, hover = JSVAL_VOID;
+    int32_t n;
 
-    if (argc > 0 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
-        x = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
-    if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
-        y = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc > 2 && JSVAL_IS_INT(JS_ARGV(cx, vp)[2]))
-        x2 = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-    if (argc > 3 && JSVAL_IS_INT(JS_ARGV(cx, vp)[3]))
-        y2 = JSVAL_TO_INT(JS_ARGV(cx, vp)[3]);
-    if (argc > 4 && JSVAL_IS_INT(JS_ARGV(cx, vp)[4]))
-        color = (ushort)JSVAL_TO_INT(JS_ARGV(cx, vp)[4]);
-    if (argc > 5 && JSVAL_IS_INT(JS_ARGV(cx, vp)[5]))
-        opacity = (ushort)JSVAL_TO_INT(JS_ARGV(cx, vp)[5]);
-    if (argc > 6 && JSVAL_IS_INT(JS_ARGV(cx, vp)[6]))
-        align = (Align)JSVAL_TO_INT(JS_ARGV(cx, vp)[6]);
+    if (argc > 0 && HookNumberArg(JS_ARGV(cx, vp)[0], &n))
+        x = n;
+    if (argc > 1 && HookNumberArg(JS_ARGV(cx, vp)[1], &n))
+        y = n;
+    if (argc > 2 && HookNumberArg(JS_ARGV(cx, vp)[2], &n))
+        x2 = n;
+    if (argc > 3 && HookNumberArg(JS_ARGV(cx, vp)[3], &n))
+        y2 = n;
+    if (argc > 4 && HookNumberArg(JS_ARGV(cx, vp)[4], &n))
+        color = (ushort)n;
+    if (argc > 5 && HookNumberArg(JS_ARGV(cx, vp)[5], &n))
+        opacity = (ushort)n;
+    if (argc > 6 && HookNumberArg(JS_ARGV(cx, vp)[6], &n))
+        align = (Align)n;
     if (argc > 7 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[7]))
         automap = !!JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[7]);
     if (argc > 8 && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[8]))
@@ -222,12 +243,10 @@ JSAPI_FUNC(box_ctor) {
 
     BoxHook* pBoxHook = new BoxHook(script, hook, x, y, x2, y2, color, opacity, automap, align, state);
 
-    if (!pBoxHook)
-        THROW_ERROR(cx, "Unable to initalize a box class.");
-
     JS_SetPrivate(cx, hook, pBoxHook);
-    pBoxHook->SetClickHandler(click);
-    pBoxHook->SetHoverHandler(hover);
+    pBoxHook->SetClickHandler(cx, click);
+    pBoxHook->SetHoverHandler(cx, hover);
+    pBoxHook->Register();
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(hook));
 
@@ -271,10 +290,10 @@ JSAPI_PROP(box_getProperty) {
         vp.setInt32(pBoxHook->GetZOrder());
         break;
     case BOX_ONCLICK:
-        vp.set(pBoxHook->GetClickHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_CLICK));
         break;
     case BOX_ONHOVER:
-        vp.set(pBoxHook->GetHoverHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_HOVER));
         break;
     }
     return JS_TRUE;
@@ -285,50 +304,51 @@ JSAPI_STRICT_PROP(box_setProperty) {
     if (!pBoxHook)
         return JS_TRUE;
 
+    int32_t n;
     jsval ID;
     JS_IdToValue(cx, id, &ID);
     switch (JSVAL_TO_INT(ID)) {
     case BOX_X:
-        if (vp.isInt32())
-            pBoxHook->SetX(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pBoxHook->SetX(n);
         break;
     case BOX_Y:
-        if (vp.isInt32())
-            pBoxHook->SetY(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pBoxHook->SetY(n);
         break;
     case BOX_XSIZE:
-        if (vp.isInt32())
-            pBoxHook->SetXSize(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pBoxHook->SetXSize(n);
         break;
     case BOX_YSIZE:
-        if (vp.isInt32())
-            pBoxHook->SetYSize(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pBoxHook->SetYSize(n);
         break;
     case BOX_OPACITY:
-        if (vp.isInt32())
-            pBoxHook->SetOpacity((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pBoxHook->SetOpacity((ushort)n);
         break;
     case BOX_COLOR:
-        if (vp.isInt32())
-            pBoxHook->SetColor((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pBoxHook->SetColor((ushort)n);
         break;
     case BOX_ALIGN:
-        if (vp.isInt32())
-            pBoxHook->SetAlign((Align)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pBoxHook->SetAlign((Align)n);
         break;
     case BOX_VISIBLE:
         if (vp.isBoolean())
             pBoxHook->SetIsVisible(!!vp.toBoolean());
         break;
     case BOX_ZORDER:
-        if (vp.isInt32())
-            pBoxHook->SetZOrder((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pBoxHook->SetZOrder((ushort)n);
         break;
     case BOX_ONCLICK:
-        pBoxHook->SetClickHandler(vp.get());
+        pBoxHook->SetClickHandler(cx, vp.get());
         break;
     case BOX_ONHOVER:
-        pBoxHook->SetHoverHandler(vp.get());
+        pBoxHook->SetHoverHandler(cx, vp.get());
         break;
     }
     return JS_TRUE;
@@ -345,17 +365,18 @@ JSAPI_FUNC(line_ctor) {
     ushort color = 0;
     bool automap = false;
     jsval click = JSVAL_VOID, hover = JSVAL_VOID;
+    int32_t n;
 
-    if (argc > 0 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
-        x = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
-    if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
-        y = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc > 2 && JSVAL_IS_INT(JS_ARGV(cx, vp)[2]))
-        x2 = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-    if (argc > 3 && JSVAL_IS_INT(JS_ARGV(cx, vp)[3]))
-        y2 = JSVAL_TO_INT(JS_ARGV(cx, vp)[3]);
-    if (argc > 4 && JSVAL_IS_INT(JS_ARGV(cx, vp)[4]))
-        color = (ushort)JSVAL_TO_INT(JS_ARGV(cx, vp)[4]);
+    if (argc > 0 && HookNumberArg(JS_ARGV(cx, vp)[0], &n))
+        x = n;
+    if (argc > 1 && HookNumberArg(JS_ARGV(cx, vp)[1], &n))
+        y = n;
+    if (argc > 2 && HookNumberArg(JS_ARGV(cx, vp)[2], &n))
+        x2 = n;
+    if (argc > 3 && HookNumberArg(JS_ARGV(cx, vp)[3], &n))
+        y2 = n;
+    if (argc > 4 && HookNumberArg(JS_ARGV(cx, vp)[4], &n))
+        color = (ushort)n;
     if (argc > 5 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[5]))
         automap = !!JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[5]);
     if (argc > 6 && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[6]))
@@ -369,12 +390,10 @@ JSAPI_FUNC(line_ctor) {
 
     LineHook* pLineHook = new LineHook(script, hook, x, y, x2, y2, color, automap, Left, state);
 
-    if (!pLineHook)
-        THROW_ERROR(cx, "Unable to initalize a line class.");
-
     JS_SetPrivate(cx, hook, pLineHook);
-    pLineHook->SetClickHandler(click);
-    pLineHook->SetHoverHandler(hover);
+    pLineHook->SetClickHandler(cx, click);
+    pLineHook->SetHoverHandler(cx, hover);
+    pLineHook->Register();
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(hook));
 
@@ -413,10 +432,10 @@ JSAPI_PROP(line_getProperty) {
         vp.setInt32(pLineHook->GetZOrder());
         break;
     case LINE_ONCLICK:
-        vp.set(pLineHook->GetClickHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_CLICK));
         break;
     case LINE_ONHOVER:
-        vp.set(pLineHook->GetHoverHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_HOVER));
         break;
     }
     return JS_TRUE;
@@ -427,42 +446,43 @@ JSAPI_STRICT_PROP(line_setProperty) {
     if (!pLineHook)
         return JS_TRUE;
 
+    int32_t n;
     jsval ID;
     JS_IdToValue(cx, id, &ID);
     switch (JSVAL_TO_INT(ID)) {
     case LINE_X:
-        if (vp.isInt32())
-            pLineHook->SetX(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pLineHook->SetX(n);
         break;
     case LINE_Y:
-        if (vp.isInt32())
-            pLineHook->SetY(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pLineHook->SetY(n);
         break;
     case LINE_XSIZE:
-        if (vp.isInt32())
-            pLineHook->SetX2(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pLineHook->SetX2(n);
         break;
     case LINE_YSIZE:
-        if (vp.isInt32())
-            pLineHook->SetY2(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pLineHook->SetY2(n);
         break;
     case LINE_COLOR:
-        if (vp.isInt32())
-            pLineHook->SetColor((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pLineHook->SetColor((ushort)n);
         break;
     case LINE_VISIBLE:
         if (vp.isBoolean())
             pLineHook->SetIsVisible(!!vp.toBoolean());
         break;
     case LINE_ZORDER:
-        if (vp.isInt32())
-            pLineHook->SetZOrder((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pLineHook->SetZOrder((ushort)n);
         break;
     case LINE_ONCLICK:
-        pLineHook->SetClickHandler(vp.get());
+        pLineHook->SetClickHandler(cx, vp.get());
         break;
     case LINE_ONHOVER:
-        pLineHook->SetHoverHandler(vp.get());
+        pLineHook->SetHoverHandler(cx, vp.get());
         break;
     }
     return JS_TRUE;
@@ -480,22 +500,23 @@ JSAPI_FUNC(text_ctor) {
     Align align = Left;
     bool automap = false;
     jsval click = JSVAL_VOID, hover = JSVAL_VOID;
+    int32_t n;
     const wchar_t* szText = L"";
 
     if (argc > 0 && JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
         szText = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     if (!szText)
         return JS_FALSE;
-    if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
-        x = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc > 2 && JSVAL_IS_INT(JS_ARGV(cx, vp)[2]))
-        y = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-    if (argc > 3 && JSVAL_IS_INT(JS_ARGV(cx, vp)[3]))
-        color = (ushort)JSVAL_TO_INT(JS_ARGV(cx, vp)[3]);
-    if (argc > 4 && JSVAL_IS_INT(JS_ARGV(cx, vp)[4]))
-        font = (ushort)JSVAL_TO_INT(JS_ARGV(cx, vp)[4]);
-    if (argc > 5 && JSVAL_IS_INT(JS_ARGV(cx, vp)[5]))
-        align = (Align)JSVAL_TO_INT(JS_ARGV(cx, vp)[5]);
+    if (argc > 1 && HookNumberArg(JS_ARGV(cx, vp)[1], &n))
+        x = n;
+    if (argc > 2 && HookNumberArg(JS_ARGV(cx, vp)[2], &n))
+        y = n;
+    if (argc > 3 && HookNumberArg(JS_ARGV(cx, vp)[3], &n))
+        color = (ushort)n;
+    if (argc > 4 && HookNumberArg(JS_ARGV(cx, vp)[4], &n))
+        font = (ushort)n;
+    if (argc > 5 && HookNumberArg(JS_ARGV(cx, vp)[5], &n))
+        align = (Align)n;
     if (argc > 6 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[6]))
         automap = !!JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[6]);
     if (argc > 7 && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[7]))
@@ -508,13 +529,17 @@ JSAPI_FUNC(text_ctor) {
         THROW_ERROR(cx, "Failed to create text object");
 
     TextHook* pTextHook = new TextHook(script, hook, szText, x, y, font, color, automap, align, state);
-
-    if (!pTextHook)
-        THROW_ERROR(cx, "Failed to create texthook");
+    // The text is copied in the constructor; a failed copy fails the constructor rather than leave a hook with no text.
+    if (!pTextHook->GetText()) {
+        delete pTextHook;
+        JS_ReportOutOfMemory(cx);
+        return JS_FALSE;
+    }
 
     JS_SetPrivate(cx, hook, pTextHook);
-    pTextHook->SetClickHandler(click);
-    pTextHook->SetHoverHandler(hover);
+    pTextHook->SetClickHandler(cx, click);
+    pTextHook->SetHoverHandler(cx, hover);
+    pTextHook->Register();
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(hook));
 
@@ -544,7 +569,8 @@ JSAPI_PROP(text_getProperty) {
         vp.setInt32(pTextHook->GetFont());
         break;
     case TEXT_TEXT:
-        if (!StoreString(vp, JS_InternUCString(cx, pTextHook->GetText())))
+        // Never NULL on a constructed hook; the empty-string fallback keeps a NULL away from JS_InternUCString.
+        if (!StoreString(vp, JS_InternUCString(cx, pTextHook->GetText() ? pTextHook->GetText() : L"")))
             return JS_FALSE;
         break;
     case TEXT_ALIGN:
@@ -557,10 +583,10 @@ JSAPI_PROP(text_getProperty) {
         vp.setInt32(pTextHook->GetZOrder());
         break;
     case TEXT_ONCLICK:
-        vp.set(pTextHook->GetClickHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_CLICK));
         break;
     case TEXT_ONHOVER:
-        vp.set(pTextHook->GetHoverHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_HOVER));
         break;
     }
     return JS_TRUE;
@@ -571,50 +597,54 @@ JSAPI_STRICT_PROP(text_setProperty) {
     if (!pTextHook)
         return JS_TRUE;
 
+    int32_t n;
     jsval ID;
     JS_IdToValue(cx, id, &ID);
     switch (JSVAL_TO_INT(ID)) {
     case TEXT_X:
-        if (vp.isInt32())
-            pTextHook->SetX(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pTextHook->SetX(n);
         break;
     case TEXT_Y:
-        if (vp.isInt32())
-            pTextHook->SetY(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pTextHook->SetY(n);
         break;
     case TEXT_COLOR:
-        if (vp.isInt32())
-            pTextHook->SetColor((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pTextHook->SetColor((ushort)n);
         break;
     case TEXT_FONT:
-        if (vp.isInt32())
-            pTextHook->SetFont((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pTextHook->SetFont((ushort)n);
         break;
     case TEXT_TEXT:
         if (vp.isString()) {
             const wchar_t* pText = JS_GetStringCharsZ(cx, vp.toString());
             if (!pText)
                 return JS_FALSE;
-            pTextHook->SetText(pText);
+            if (!pTextHook->SetText(pText)) {
+                JS_ReportOutOfMemory(cx);
+                return JS_FALSE;
+            }
         }
         break;
     case TEXT_ALIGN:
-        if (vp.isInt32())
-            pTextHook->SetAlign((Align)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pTextHook->SetAlign((Align)n);
         break;
     case TEXT_VISIBLE:
         if (vp.isBoolean())
             pTextHook->SetIsVisible(!!vp.toBoolean());
         break;
     case TEXT_ZORDER:
-        if (vp.isInt32())
-            pTextHook->SetZOrder((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pTextHook->SetZOrder((ushort)n);
         break;
     case TEXT_ONCLICK:
-        pTextHook->SetClickHandler(vp.get());
+        pTextHook->SetClickHandler(cx, vp.get());
         break;
     case TEXT_ONHOVER:
-        pTextHook->SetHoverHandler(vp.get());
+        pTextHook->SetHoverHandler(cx, vp.get());
         break;
     }
     return JS_TRUE;
@@ -628,7 +658,7 @@ static bool IsValidImageName(const wchar_t* name) {
 
 // Function to create a image which gets called on a "new Image ()"
 
-// Parameters: image, x, y, color, align, automap, onHover, onimage
+// Parameters: image, x, y, color, align, automap, onClick, onHover
 JSAPI_FUNC(image_ctor) {
     Script* script = (Script*)JS_GetContextPrivate(cx);
 
@@ -638,6 +668,7 @@ JSAPI_FUNC(image_ctor) {
     Align align = Left;
     bool automap = false;
     jsval click = JSVAL_VOID, hover = JSVAL_VOID;
+    int32_t n;
     const wchar_t* szText = L"";
     wchar_t path[_MAX_FNAME + _MAX_PATH];
 
@@ -645,14 +676,14 @@ JSAPI_FUNC(image_ctor) {
         szText = JS_GetStringCharsZ(cx, JS_ValueToString(cx, JS_ARGV(cx, vp)[0]));
     if (!szText)
         return JS_FALSE;
-    if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
-        x = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
-    if (argc > 2 && JSVAL_IS_INT(JS_ARGV(cx, vp)[2]))
-        y = JSVAL_TO_INT(JS_ARGV(cx, vp)[2]);
-    if (argc > 3 && JSVAL_IS_INT(JS_ARGV(cx, vp)[3]))
-        color = (ushort)JSVAL_TO_INT(JS_ARGV(cx, vp)[3]);
-    if (argc > 4 && JSVAL_IS_INT(JS_ARGV(cx, vp)[4]))
-        align = (Align)JSVAL_TO_INT(JS_ARGV(cx, vp)[4]);
+    if (argc > 1 && HookNumberArg(JS_ARGV(cx, vp)[1], &n))
+        x = n;
+    if (argc > 2 && HookNumberArg(JS_ARGV(cx, vp)[2], &n))
+        y = n;
+    if (argc > 3 && HookNumberArg(JS_ARGV(cx, vp)[3], &n))
+        color = (ushort)n;
+    if (argc > 4 && HookNumberArg(JS_ARGV(cx, vp)[4], &n))
+        align = (Align)n;
     if (argc > 5 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[5]))
         automap = !!JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[5]);
     if (argc > 6 && JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[6]))
@@ -669,13 +700,17 @@ JSAPI_FUNC(image_ctor) {
         THROW_ERROR(cx, "Failed to create image object");
 
     ImageHook* pImageHook = new ImageHook(script, hook, path, x, y, color, automap, align, state, 3);
-
-    if (!pImageHook)
-        THROW_ERROR(cx, "Failed to create ImageHook");
+    // The file name is copied in the constructor; a failed copy fails the constructor rather than leave a hook with no name.
+    if (!pImageHook->GetImage()) {
+        delete pImageHook;
+        JS_ReportOutOfMemory(cx);
+        return JS_FALSE;
+    }
 
     JS_SetPrivate(cx, hook, pImageHook);
-    pImageHook->SetClickHandler(click);
-    pImageHook->SetHoverHandler(hover);
+    pImageHook->SetClickHandler(cx, click);
+    pImageHook->SetHoverHandler(cx, hover);
+    pImageHook->Register();
 
     JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(hook));
 
@@ -699,7 +734,8 @@ JSAPI_PROP(image_getProperty) {
         vp.setInt32(pImageHook->GetY());
         break;
     case IMAGE_LOCATION:
-        if (!StoreString(vp, JS_InternUCString(cx, pImageHook->GetImage())))
+        // Never NULL on a constructed hook; the empty-string fallback keeps a NULL away from JS_InternUCString.
+        if (!StoreString(vp, JS_InternUCString(cx, pImageHook->GetImage() ? pImageHook->GetImage() : L"")))
             return JS_FALSE;
         break;
     case IMAGE_ALIGN:
@@ -712,10 +748,10 @@ JSAPI_PROP(image_getProperty) {
         vp.setInt32(pImageHook->GetZOrder());
         break;
     case IMAGE_ONCLICK:
-        vp.set(pImageHook->GetClickHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_CLICK));
         break;
     case IMAGE_ONHOVER:
-        vp.set(pImageHook->GetHoverHandler());
+        vp.set(JS_GetReservedSlot(obj, HOOK_SLOT_HOVER));
         break;
     }
     return JS_TRUE;
@@ -726,16 +762,17 @@ JSAPI_STRICT_PROP(image_setProperty) {
     if (!pImageHook)
         return JS_TRUE;
 
+    int32_t n;
     jsval ID;
     JS_IdToValue(cx, id, &ID);
     switch (JSVAL_TO_INT(ID)) {
     case IMAGE_X:
-        if (vp.isInt32())
-            pImageHook->SetX(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pImageHook->SetX(n);
         break;
     case IMAGE_Y:
-        if (vp.isInt32())
-            pImageHook->SetY(vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pImageHook->SetY(n);
         break;
     case IMAGE_LOCATION:
         if (vp.isString()) {
@@ -744,26 +781,29 @@ JSAPI_STRICT_PROP(image_setProperty) {
                 return JS_FALSE;
             if (!IsValidImageName(pimage))
                 THROW_ERROR(cx, "Invalid image file path");
-            pImageHook->SetImage(pimage);
+            if (!pImageHook->SetImage(pimage)) {
+                JS_ReportOutOfMemory(cx);
+                return JS_FALSE;
+            }
         }
         break;
     case IMAGE_ALIGN:
-        if (vp.isInt32())
-            pImageHook->SetAlign((Align)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pImageHook->SetAlign((Align)n);
         break;
     case IMAGE_VISIBLE:
         if (vp.isBoolean())
             pImageHook->SetIsVisible(!!vp.toBoolean());
         break;
     case IMAGE_ZORDER:
-        if (vp.isInt32())
-            pImageHook->SetZOrder((ushort)vp.toInt32());
+        if (HookNumberArg(vp.get(), &n))
+            pImageHook->SetZOrder((ushort)n);
         break;
     case IMAGE_ONCLICK:
-        pImageHook->SetClickHandler(vp.get());
+        pImageHook->SetClickHandler(cx, vp.get());
         break;
     case IMAGE_ONHOVER:
-        pImageHook->SetHoverHandler(vp.get());
+        pImageHook->SetHoverHandler(cx, vp.get());
         break;
     }
     return JS_TRUE;

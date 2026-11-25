@@ -34,7 +34,8 @@
  */
 typedef ClickHandler (bool*)(int button, int x, int y);
 
-/** The type of a hover handler.
+/** The type of a hover handler. D2BS never calls a hover handler; it is kept
+ * for scripts that read it back.
  *
  * \ingroup handlers
  *

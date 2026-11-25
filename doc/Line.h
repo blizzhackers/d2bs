@@ -2,6 +2,8 @@
 
 /** A 2d line.
  *
+ * Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
+ *
  * \todo Verify all the documentation in this class.
  */
 class Line
@@ -24,11 +26,11 @@ public:
 	 * \param automap Whether the Line is in automap coordinate space (true) or
 	 * screen coordinate space (false).
 	 *
-	 * \param click The click handler that gets called when the Line is
-	 * clicked.
+	 * \param click A click function for the Line, kept but never called (a
+	 * click never hits a Line); any other value sets no handler.
 	 *
-	 * \param hover The hover handler that gets called when the Line gets
-	 * hovered over.
+	 * \param hover A hover function for the Line, kept but never called; any
+	 * other value sets no handler.
 	 */
 	Line(int x = 0, int y = 0, int x2 = 0, int y2 = 0, int color = 0,
 		bool automap = false, ClickHandler click = null,
@@ -68,11 +70,15 @@ public:
 	 */
 	int zorder;
 
-	/** The click handler that gets called when the Line is clicked.
+	/** The click handler for the Line. D2BS keeps it and returns it from
+	 * `click`, but never calls it: a click never hits a Line. Assign null or
+	 * undefined to remove it; a value that is not a function is ignored.
 	 */
 	ClickHandler click;
 
-	/** The hover handler that gets called when the Line gets hovered over.
+	/** A hover handler for the Line. D2BS keeps it and returns it from `hover`,
+	 * but never calls it. Assign null or undefined to remove it; a value that
+	 * is not a function is ignored.
 	 */
 	HoverHandler hover;
 };

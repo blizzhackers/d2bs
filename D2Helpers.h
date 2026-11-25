@@ -89,7 +89,6 @@ POINT GetScreenSize();
 int D2GetScreenSizeX();
 int D2GetScreenSizeY();
 
-CellFile* LoadCellFile(const char* lpszPath, DWORD bMPQ = TRUE);
 CellFile* LoadCellFile(const wchar_t* lpszPath, DWORD bMPQ = 3);
 
 AutomapLayer* InitAutomapLayer(DWORD levelno);
@@ -99,10 +98,8 @@ DWORD ReadFile(HANDLE hFile, void* buf, DWORD len);
 void* memcpy2(void* dest, const void* src, size_t count);
 HANDLE OpenFileRead(const char* filename);
 HANDLE OpenFileRead(const wchar_t* filename);
-BYTE* AllocReadFile(const char* filename);
-BYTE* AllocReadFile(const wchar_t* filename);
+BYTE* AllocReadFile(const wchar_t* filename, DWORD* pSize);
 CellFile* LoadBmpCellFile(BYTE* buf1, int width, int height);
-CellFile* LoadBmpCellFile(const char* filename);
 CellFile* LoadBmpCellFile(const wchar_t* filename);
 CellFile* myInitCellFile(CellFile* cf);
 

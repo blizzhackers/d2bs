@@ -2,6 +2,8 @@
 
 /** A Box screen hook
  *
+ * Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color`, `opacity` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
+ *
  * \todo Explain (and understand) this better.
  * \todo Verify all the documentation in this class.
  */
@@ -35,11 +37,11 @@ public:
 	 * \param automap Whether the Box is in automap coordinate space (true) or
 	 * screen coordinate space (false).
 	 *
-	 * \param click The click handler that gets called when the Box is
-	 * clicked.
+	 * \param click A function to call when the Box is clicked; any other value
+	 * sets no handler.
 	 *
-	 * \param hover The hover handler that gets called when the Box gets
-	 * hovered over.
+	 * \param hover A hover function for the Box, kept but never called; any
+	 * other value sets no handler.
 	 */
 	Box(int x = 0, int y = 0, int x2 = 0, int y2 = 0, int color = 0,
 		int opacity = 0, int align = 0, bool automap = false,
@@ -83,11 +85,14 @@ public:
 	 */
 	int zorder;
 
-	/** The click handler that gets called when the Box is clicked.
+	/** The click handler that gets called when the Box is clicked. Assign null
+	 * or undefined to remove it; a value that is not a function is ignored.
 	 */
 	ClickHandler click;
 
-	/** The hover handler that gets called when the Box gets hovered over.
+	/** A hover handler for the Box. D2BS keeps it and returns it from `hover`,
+	 * but never calls it. Assign null or undefined to remove it; a value that
+	 * is not a function is ignored.
 	 */
 	HoverHandler hover;
 

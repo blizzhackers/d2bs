@@ -1,0 +1,1 @@
+- **Custom path searches stop when the player leaves.** With reduction type 3, `getPath()` calls neither your `reject` nor your `mutate` function again once the player leaves the area, act or game the search started in during one of them, and returns an empty path.

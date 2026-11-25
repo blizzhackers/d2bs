@@ -34,11 +34,6 @@ typedef std::list<Level*> LevelList;
 typedef std::set<Point> PointSet;
 typedef std::map<Room2*, PointSet> RoomPointSet;
 
-static RoomPointSet avoidRoomPointSet;
-static RoomList RoomsAdded;
-static RoomList roomCache;
-static LevelList levelCache;
-
 class ActMap : public Map {
   public:
     enum CollisionFlag {
@@ -72,7 +67,12 @@ class ActMap : public Map {
     int width, height;
     int posX, posY;
     Matrix<CollisionFlag> mapPoints;
-    RoomList addedRooms;
+    // Each map owns the rooms it loaded and its lookup caches, so one map's CleanUp never unloads or forgets another's;
+    // the readers are const methods, hence mutable.
+    mutable RoomPointSet avoidRoomPointSet;
+    mutable RoomList RoomsAdded;
+    mutable RoomList roomCache;
+    mutable LevelList levelCache;
 
     // Level* cachedLevel;
     CRITICAL_SECTION* lock;
@@ -158,7 +158,8 @@ class ActMap : public Map {
 };
 
 // A map holds the game lock from construction until CleanUp, so each call owns its map through this holder, which
-// cleans it up and deletes it on every return, on the thread that built it.
+// cleans it up and deletes it on every return, on the thread that built it. The level is looked up and the map built
+// under one hold of that lock: the game thread frees an act's levels only while it holds it.
 class ScopedActMap {
   private:
     ActMap* map;
@@ -167,13 +168,23 @@ class ScopedActMap {
     ScopedActMap& operator=(const ScopedActMap&);
 
   public:
-    explicit ScopedActMap(const Level* level) : map(new ActMap(level)) {
+    // No map is built for a level outside the loaded act (GetLevel's checks): callers test ok() before any other use.
+    explicit ScopedActMap(DWORD levelNo) : map(NULL) {
+        AutoCriticalRoom cRoom;
+        const Level* level = GetLevel(levelNo);
+        if (level)
+            map = new ActMap(level);
     }
     ~ScopedActMap() {
-        map->CleanUp();
-        delete map;
+        if (map) {
+            map->CleanUp();
+            delete map;
+        }
     }
 
+    bool ok() const {
+        return map != NULL;
+    }
     ActMap* get() const {
         return map;
     }

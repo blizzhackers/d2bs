@@ -121,7 +121,8 @@ JSAPI_FUNC(my_getPresetUnits) {
         // so a room is loaded only when it has neither (measured on the rig: the list grew on every reload).
         if (!pRoom->pPreset && !pRoom->pRoom1) {
             D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
-            bAddedRoom = TRUE;
+            // Unloaded afterwards only if the load built the room: a load that failed left nothing to remove.
+            bAddedRoom = pRoom->pRoom1 != NULL;
         }
 
         for (PresetUnit* pUnit = pRoom->pPreset; pUnit && bOk; pUnit = pUnit->pPresetNext) {
@@ -145,8 +146,8 @@ JSAPI_FUNC(my_getPresetUnits) {
                     break;
                 }
 
-                jsval a = OBJECT_TO_JSVAL(unit);
-                bOk = JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
+                // Defined, not set: an Array.prototype index setter would run script with the game lock held.
+                bOk = JS_DefineElement(cx, pReturnArray, dwArrayCount, OBJECT_TO_JSVAL(unit), NULL, NULL, JSPROP_ENUMERATE);
 
                 dwArrayCount++;
             }
@@ -194,7 +195,7 @@ JSAPI_FUNC(my_getPresetUnit) {
 
     if (!pLevel) {
         delete cRoom;
-        THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
+        THROW_ERROR(cx, "getPresetUnit failed, couldn't access the level!");
     }
 
     bool bAddedRoom = FALSE;
@@ -206,7 +207,7 @@ JSAPI_FUNC(my_getPresetUnit) {
         // Loaded only when it has neither its preset list nor its room data: see my_getPresetUnits.
         if (!pRoom->pPreset && !pRoom->pRoom1) {
             D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
-            bAddedRoom = TRUE;
+            bAddedRoom = pRoom->pRoom1 != NULL;
         }
 
         for (PresetUnit* pUnit = pRoom->pPreset; pUnit; pUnit = pUnit->pPresetNext) {

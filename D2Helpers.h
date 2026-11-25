@@ -17,7 +17,37 @@ void LogNoFormat(const wchar_t* szString);
 ClientGameState ClientState(void);
 bool GameReady(void);
 bool WaitForGameReady(void);
+// WaitForGameReady with GameReadyTimeout counted from start, for a native that waits again after it found the game busy
+// under the game lock: the wait reads readiness without that lock, so the game can turn busy before the lock is taken.
+bool WaitForGameReadySince(DWORD start);
+// True once GameReadyTimeout has passed since start; never while it is 0, which waits without a limit.
+bool GameReadyTimedOut(DWORD start);
+// False on a thread running blocking listeners or holding the game lock: on a busy game it fails at once instead of
+// waiting. A native that takes the game lock samples this first, since under the lock every thread holds it.
+bool MayWaitForGame(void);
 DWORD GetPlayerArea(void);
+// GetPlayerArea for a caller that already holds the game lock, such as the path search, which asks on every node.
+DWORD GetPlayerAreaLocked(void);
+bool PlayerActLoaded(void);
+
+// DllMain allocates the per-thread blocking-listener slot before any thread starts and releases it at detach.
+bool AllocBlockingListenerSlot(void);
+void FreeBlockingListenerSlot(void);
+
+// An active scope (a blocker event) marks the current thread, while it lives, as running that event's listeners, so
+// WaitForGameReady fails at once on a busy game (MayWaitForGame), also after the event's sender stopped waiting; the
+// scope restores the previous mark when it ends.
+class BlockingListenerScope {
+  public:
+    explicit BlockingListenerScope(bool active);
+    ~BlockingListenerScope();
+
+  private:
+    bool previous;
+    BlockingListenerScope(const BlockingListenerScope&);
+    BlockingListenerScope& operator=(const BlockingListenerScope&);
+};
+
 void SendMouseClick(int x, int y, int clicktype);
 void SendKeyPress(uint type, uint key, uint ext);
 POINT CalculateTextLen(const char* szwText, int Font);
@@ -26,6 +56,9 @@ void WorldToScreen(POINT* pPos);
 void ScreenToWorld(POINT* ptPos);
 POINT ScreenToAutomap(int x, int y);
 void AutomapToScreen(POINT* pPos);
+// The level of the loaded act with that number, its rooms built; NULL when it is not in that act, the game is not
+// ready, or its rooms could not be built. The pointer is live only while the caller holds the game lock from before
+// the call until its last use, since the game thread frees an act's levels under that lock.
 Level* GetLevel(DWORD dwLevelNo);
 void D2CLIENT_Interact(UnitAny* pUnit, DWORD dwMoveType);
 void myDrawText(const wchar_t* szwText, int x, int y, int color, int font);
@@ -33,6 +66,7 @@ void myDrawCenterText(const wchar_t* szwText, int x, int y, int color, int font,
 // UnitAny* FindItemByPosition(DWORD x, DWORD y, DWORD Location);
 BYTE CalcPercent(DWORD dwVal, DWORD dwMaxVal, BYTE iMin = NULL);
 DWORD GetTileLevelNo(Room2* lpRoom2, DWORD dwTileNo);
+// The caller holds the game lock.
 UnitAny* GetMercUnit(UnitAny* pUnit);
 
 BOOL ClickNPCMenu(DWORD NPCClassId, DWORD MenuId);

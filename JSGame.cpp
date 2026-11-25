@@ -1,3 +1,5 @@
+// rand_s (my_rand) is declared only when this precedes the first <stdlib.h> include of the translation unit.
+#define _CRT_RAND_S
 #include "Constants.h"
 #include "JSGame.h"
 #include "D2Helpers.h"
@@ -301,12 +303,13 @@ JSAPI_FUNC(my_getPath) {
     if (lvl == 0) {
         THROW_ERROR(cx, "Invalid level passed to getPath");
     }
-    Level* level = GetLevel(lvl);
+    if (reductionType > 3)
+        THROW_ERROR(cx, "Invalid path reducer value!");
 
-    if (!level)
-        return JS_FALSE;
-
-    ScopedActMap map(level);
+    ScopedActMap map(lvl);
+    // A level outside the loaded act throws like getCollision: a bare JS_FALSE would end the script with no message.
+    if (!map.ok())
+        THROW_ERROR(cx, "Level Not loaded");
 
     Point start(x, y), end(dx, dy);
 
@@ -339,7 +342,8 @@ JSAPI_FUNC(my_getPath) {
     // box18jsrefcount depth = JS_SuspendRequest(cx);
 
     path.GetPath(start, end, list, true);
-    // The game lock is released before the points are built: BuildObject can run the GC, which the game must not wait on.
+    // The search's hold on the game lock ends before the points are built: BuildObject can run the GC, which the game
+    // must not wait on.
     map->CleanUp();
     // A failed type-3 callback left its exception, stop or out-of-memory report pending.
     if (reducer->Failed()) {
@@ -404,12 +408,9 @@ JSAPI_FUNC(my_getCollision) {
     JS_EndRequest(cx);
 
     Point point(nX, nY);
-    Level* level = GetLevel(nLevelId);
-    if (!level) {
+    ScopedActMap map(nLevelId);
+    if (!map.ok())
         THROW_ERROR(cx, "Level Not loaded");
-    }
-
-    ScopedActMap map(level);
     // if(!map->IsValidPoint(point))  //return avoid instead and make it not lvl depenant
     //	{ map->CleanUp(); THROW_ERROR(cx, "Invalid point!");}
 
@@ -432,6 +433,14 @@ JSAPI_FUNC(my_clickItem) {
     AutoCriticalRoom* cRoom = new AutoCriticalRoom;
 
     if (*p_D2CLIENT_TransactionDialog != 0 || *p_D2CLIENT_TransactionDialogs != 0 || *p_D2CLIENT_TransactionDialogs_2 != 0) {
+        delete cRoom;
+        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+        return JS_TRUE;
+    }
+
+    // Read under the lock: the player can leave between WaitForGameReady and here.
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    if (!pPlayer || !pPlayer->pInventory) {
         delete cRoom;
         JS_SET_RVAL(cx, vp, JSVAL_FALSE);
         return JS_TRUE;
@@ -489,7 +498,7 @@ JSAPI_FUNC(my_clickItem) {
             return JS_TRUE;
         }
 
-        click(D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, pUnit->pItemData->BodyLocation);
+        click(pPlayer, pPlayer->pInventory, pUnit->pItemData->BodyLocation);
         delete cRoom;
         return JS_TRUE;
     } else if (argc == 2 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]) && JSVAL_IS_INT(JS_ARGV(cx, vp)[1])) {
@@ -504,13 +513,13 @@ JSAPI_FUNC(my_clickItem) {
                 return JS_TRUE;
             }
 
-            click(D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, nBodyLoc);
+            click(pPlayer, pPlayer->pInventory, nBodyLoc);
 
         }
         // Click Merc Gear
         else if (nClickType == 4) {
             if (nBodyLoc == 1 || nBodyLoc == 3 || nBodyLoc == 4) {
-                UnitAny* pMerc = GetMercUnit(D2CLIENT_GetPlayerUnit());
+                UnitAny* pMerc = GetMercUnit(pPlayer);
 
                 if (pMerc) {
                     D2CLIENT_MercItemAction(0x61, nBodyLoc);
@@ -549,7 +558,7 @@ JSAPI_FUNC(my_clickItem) {
         InventoryLayout* pLayout = NULL;
 
         if (nClickType == 4) {
-            UnitAny* pMerc = GetMercUnit(D2CLIENT_GetPlayerUnit());
+            UnitAny* pMerc = GetMercUnit(pPlayer);
 
             if (pMerc)
                 if (pUnit->pItemData && pUnit->pItemData->pOwner)
@@ -579,11 +588,11 @@ JSAPI_FUNC(my_clickItem) {
             y = pLayout->Top + y * pLayout->SlotPixelHeight + 10;
 
             if (nClickType == NULL)
-                D2CLIENT_LeftClickItem(ClickLocation, D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, x, y, nClickType, pLayout);
+                D2CLIENT_LeftClickItem(ClickLocation, pPlayer, pPlayer->pInventory, x, y, nClickType, pLayout);
             // D2CLIENT_LeftClickItem(D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, x, y, nClickType, pLayout,
             // pUnit->pItemData->ItemLocation);
             else
-                D2CLIENT_RightClickItem(x, y, ClickLocation, D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory);
+                D2CLIENT_RightClickItem(x, y, ClickLocation, pPlayer, pPlayer->pInventory);
             // D2CLIENT_RightClickItem(x,y, pUnit->pItemData->ItemLocation, D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory);
 
         } else if (InventoryLocation == LOCATION_BELT) {
@@ -602,9 +611,9 @@ JSAPI_FUNC(my_clickItem) {
                 y = 460 - (Belt[i].y * 29);
             }
             if (nClickType == NULL)
-                D2CLIENT_ClickBelt(x, y, D2CLIENT_GetPlayerUnit()->pInventory);
+                D2CLIENT_ClickBelt(x, y, pPlayer->pInventory);
             else
-                D2CLIENT_ClickBeltRight(D2CLIENT_GetPlayerUnit()->pInventory, D2CLIENT_GetPlayerUnit(), nClickType == 1 ? FALSE : TRUE, i);
+                D2CLIENT_ClickBeltRight(pPlayer->pInventory, pPlayer, nClickType == 1 ? FALSE : TRUE, i);
         } else if (D2CLIENT_GetCursorItem() == pUnit) {
             if (nClickType < 1 || nClickType > 12) {
                 delete cRoom;
@@ -618,7 +627,7 @@ JSAPI_FUNC(my_clickItem) {
                 return JS_TRUE;
             }
 
-            click(D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, nClickType);
+            click(pPlayer, pPlayer->pInventory, nClickType);
         }
     } else if (argc == 4) {
         if (JSVAL_IS_INT(JS_ARGV(cx, vp)[0]) && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]) && JSVAL_IS_INT(JS_ARGV(cx, vp)[2]) && JSVAL_IS_INT(JS_ARGV(cx, vp)[3])) {
@@ -673,11 +682,11 @@ JSAPI_FUNC(my_clickItem) {
                 int y = pLayout->Top + nY * pLayout->SlotPixelHeight + 10;
 
                 if (nButton == 0) // Left Click
-                    D2CLIENT_LeftClickItem(clickTarget, D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, x, y, 1, pLayout);
+                    D2CLIENT_LeftClickItem(clickTarget, pPlayer, pPlayer->pInventory, x, y, 1, pLayout);
                 else if (nButton == 1) // Right Click
-                    D2CLIENT_RightClickItem(x, y, clickTarget, D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory);
+                    D2CLIENT_RightClickItem(x, y, clickTarget, pPlayer, pPlayer->pInventory);
                 else if (nButton == 2) // Shift Left Click
-                    D2CLIENT_LeftClickItem(clickTarget, D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, x, y, 5, pLayout);
+                    D2CLIENT_LeftClickItem(clickTarget, pPlayer, pPlayer->pInventory, x, y, 5, pLayout);
 
                 delete cRoom;
                 JS_SET_RVAL(cx, vp, JSVAL_TRUE);
@@ -711,11 +720,11 @@ JSAPI_FUNC(my_clickItem) {
                 }
 
                 if (nButton == 0)
-                    D2CLIENT_ClickBelt(x, y, D2CLIENT_GetPlayerUnit()->pInventory);
+                    D2CLIENT_ClickBelt(x, y, pPlayer->pInventory);
                 else if (nButton == 1)
-                    D2CLIENT_ClickBeltRight(D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, FALSE, z);
+                    D2CLIENT_ClickBeltRight(pPlayer, pPlayer->pInventory, FALSE, z);
                 else if (nButton == 2)
-                    D2CLIENT_ClickBeltRight(D2CLIENT_GetPlayerUnit(), D2CLIENT_GetPlayerUnit()->pInventory, TRUE, z);
+                    D2CLIENT_ClickBeltRight(pPlayer, pPlayer->pInventory, TRUE, z);
 
                 delete cRoom;
                 JS_SET_RVAL(cx, vp, JSVAL_TRUE);
@@ -751,18 +760,12 @@ JSAPI_FUNC(my_rand) {
         return JS_TRUE;
     }
 
-    // only seed the rng once
-    static bool seeded = false;
-    if (!seeded) {
-        srand(GetTickCount());
-        seeded = true;
-    }
-
-    long long seed = 0;
-    if (ClientState() == ClientStateInGame)
-        seed = D2GAME_Rand(D2CLIENT_GetPlayerUnit()->dwSeed);
-    else
-        seed = rand();
+    // Never the game's seed: D2GAME_Rand advances the player's seed, which only the game thread may write. rand_s fails
+    // only if the OS generator is unavailable; the tick count keeps the native from failing then.
+    unsigned int r = 0;
+    if (rand_s(&r) != 0)
+        r = (unsigned int)GetTickCount();
+    long long seed = r;
 
     jsint high;
     jsint low;
@@ -1497,32 +1500,42 @@ JSAPI_FUNC(my_submitItem) {
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    if (UnitAny* pUnit = D2CLIENT_GetCursorItem()) {
-        if (D2CLIENT_GetPlayerUnit()->dwAct == 1) {
-            if (GetPlayerArea() == D2CLIENT_GetPlayerUnit()->pAct->pMisc->dwStaffTombLevel) {
-                *p_D2CLIENT_CursorItemMode = 3;
-                BYTE aPacket[17] = {NULL};
-                aPacket[0] = 0x44;
-                *(DWORD*)&aPacket[1] = D2CLIENT_GetPlayerUnit()->dwUnitId;
-                *(DWORD*)&aPacket[5] = *p_D2CLIENT_OrificeId;
-                *(DWORD*)&aPacket[9] = pUnit->dwUnitId;
-                *(DWORD*)&aPacket[13] = 3;
-                D2NET_SendPacket(17, 1, aPacket);
-                JS_SET_RVAL(cx, vp, JSVAL_TRUE);
-            } else
-                JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-        } else if (D2CLIENT_GetPlayerUnit()->dwAct == 0 || D2CLIENT_GetPlayerUnit()->dwAct == 4) // dwAct is 0-4, not 1-5
-        {
-            if (*p_D2CLIENT_RecentInteractId && D2COMMON_IsTownByLevelNo(GetPlayerArea())) {
-                D2CLIENT_SubmitItem(pUnit->dwUnitId);
-                JS_SET_RVAL(cx, vp, JSVAL_TRUE);
-            } else
-                JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-        } else
-            JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-    } else
-        JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+    enum { SUBMIT_NONE, SUBMIT_ORIFICE, SUBMIT_TOWN } kind = SUBMIT_NONE;
+    DWORD dwItemId = 0, dwPlayerId = 0, dwOrificeId = 0;
+    {
+        // The player's act, room chain, cursor item and orifice id change on the game thread: read them together under its
+        // lock. The sends below stay outside it, so a gamepacketsent listener can still block them.
+        AutoCriticalRoom cRoom;
+        UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+        UnitAny* pItem = D2CLIENT_GetCursorItem();
+        if (pItem && PlayerActLoaded()) {
+            DWORD dwArea = GetPlayerAreaLocked();
+            dwItemId = pItem->dwUnitId;
+            dwPlayerId = pPlayer->dwUnitId;
+            if (pPlayer->dwAct == 1) { // dwAct is 0-4, not 1-5
+                if (dwArea && dwArea == pPlayer->pAct->pMisc->dwStaffTombLevel) {
+                    kind = SUBMIT_ORIFICE;
+                    dwOrificeId = *p_D2CLIENT_OrificeId;
+                }
+            } else if (pPlayer->dwAct == 0 || pPlayer->dwAct == 4) {
+                if (*p_D2CLIENT_RecentInteractId && dwArea && D2COMMON_IsTownByLevelNo(dwArea))
+                    kind = SUBMIT_TOWN;
+            }
+        }
+    }
 
+    if (kind == SUBMIT_ORIFICE) {
+        *p_D2CLIENT_CursorItemMode = 3;
+        BYTE aPacket[17] = {NULL};
+        aPacket[0] = 0x44;
+        *(DWORD*)&aPacket[1] = dwPlayerId;
+        *(DWORD*)&aPacket[5] = dwOrificeId;
+        *(DWORD*)&aPacket[9] = dwItemId;
+        *(DWORD*)&aPacket[13] = 3;
+        D2NET_SendPacket(17, 1, aPacket);
+    } else if (kind == SUBMIT_TOWN)
+        D2CLIENT_SubmitItem(dwItemId);
+    JS_SET_RVAL(cx, vp, kind == SUBMIT_NONE ? JSVAL_FALSE : JSVAL_TRUE);
     return JS_TRUE;
 }
 
@@ -1612,32 +1625,29 @@ JSAPI_FUNC(my_moveNPC) {
 }
 
 JSAPI_FUNC(my_revealLevel) {
-    UnitAny* unit = D2CLIENT_GetPlayerUnit();
-
-    if (!unit) {
-        return JS_TRUE;
-    }
-
-    Level* level = unit->pPath->pRoom1->pRoom2->pLevel;
-
-    if (!level) {
-        return JS_TRUE;
-    }
+    // false = the game was not ready (menu, area or act load); nothing was revealed.
+    JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
     BOOL bDrawPresets = false;
-
-    if (argc == 1 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[0])) {
+    if (argc == 1 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[0]))
         bDrawPresets = !!JSVAL_TO_BOOLEAN(JS_ARGV(cx, vp)[0]);
-    }
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    if (!GameReady()) {
-        delete cRoom;
-        return JS_TRUE;
-    }
 
-    for (Room2* room = level->pRoom2First; room; room = room->pRoom2Next) {
-        RevealRoom(room, bDrawPresets);
-    }
-    delete cRoom;
+    // The player's level is read and walked only under the game lock and only while the player's act is the loaded one:
+    // an act change frees the old act before the player's pointer moves on, and a listener can hold this lock in between.
+    AutoCriticalRoom cRoom;
+    if (!PlayerActLoaded() || !GameReady())
+        return JS_TRUE;
+
+    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+    Level* pLevel = pPlayer && pPlayer->pPath && pPlayer->pPath->pRoom1 && pPlayer->pPath->pRoom1->pRoom2
+                        ? pPlayer->pPath->pRoom1->pRoom2->pLevel
+                        : NULL;
+    if (!pLevel)
+        return JS_TRUE;
+
+    for (Room2* pRoom2 = pLevel->pRoom2First; pRoom2; pRoom2 = pRoom2->pRoom2Next)
+        RevealRoom(pRoom2, bDrawPresets);
+
+    JS_SET_RVAL(cx, vp, JSVAL_TRUE);
     return JS_TRUE;
 }

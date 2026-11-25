@@ -3,27 +3,34 @@
 #include "D2Ptrs.h"
 #include "D2Helpers.h"
 
+// The caller holds the game lock and found pRoom2 in the player's loaded act (revealLevel, Room.reveal). The lock is
+// taken again here (re-entrant) so the player's level is read under it.
 BOOL RevealRoom(Room2* pRoom2, BOOL revealPresets) {
     bool bAdded = false;
     bool bInit = false;
 
-    DWORD dwLevelNo = D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2->pLevel->dwLevelNo;
-    // Make sure we have the room.
     if (!pRoom2)
         return false;
 
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
+    AutoCriticalRoom cRoom;
 
     UnitAny* player = D2CLIENT_GetPlayerUnit();
-    // Check if we have Room1(Needed in order to reveal)
-    if (!(pRoom2 && pRoom2->pLevel && pRoom2->pRoom1)) {
+    if (!player || !player->pPath || !player->pPath->pRoom1 || !player->pPath->pRoom1->pRoom2 ||
+        !player->pPath->pRoom1->pRoom2->pLevel)
+        return false;
+    DWORD dwLevelNo = player->pPath->pRoom1->pRoom2->pLevel->dwLevelNo;
+
+    // Loading the room and choosing its automap layer both need the room's level and its act.
+    if (!pRoom2->pLevel || !pRoom2->pLevel->pMisc)
+        return false;
+
+    // Check if we have Room1 (needed in order to reveal)
+    if (!pRoom2->pRoom1) {
         LoadRoomData(pRoom2->pLevel->pMisc->pAct, pRoom2, NULL);
         bAdded = true;
     }
-    if (!(pRoom2 && pRoom2->pRoom1)) { // second check added to see if we DID indeed init the room!
-        delete cRoom;
+    if (!pRoom2->pRoom1) // the add can fail to build Room1
         return false;
-    }
 
     // If we are somewhere other then the given area, init automap layer to be drawn to.
     if (!(pRoom2 && pRoom2->pLevel && pRoom2->pLevel->dwLevelNo && player->pPath && player->pPath->pRoom1 && player->pPath->pRoom1->pRoom2 &&
@@ -45,7 +52,6 @@ BOOL RevealRoom(Room2* pRoom2, BOOL revealPresets) {
     if (bInit)
         InitAutomapLayer(dwLevelNo);
 
-    delete cRoom;
     return true;
 }
 

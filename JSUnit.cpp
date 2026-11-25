@@ -1873,57 +1873,76 @@ JSAPI_FUNC(unit_getParent) {
 
 // Works only on players sinces monsters _CANT_ have mercs!
 JSAPI_FUNC(unit_getMerc) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
 
-    myUnit* lpUnit = GetUnitPrivate(cx, JS_THIS_OBJECT(cx, vp));
+    myUnit* lpUnit = GetUnitPrivate(cx, self);
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
+    if (!lpUnit || (lpUnit->_dwPrivateType & PRIVATE_UNIT) != PRIVATE_UNIT)
+        return JS_TRUE;
 
-    if (lpUnit && (lpUnit->_dwPrivateType & PRIVATE_UNIT) == PRIVATE_UNIT) {
+    DWORD dwMercId = 0, dwMercClass = 0;
+    bool bFound = false;
+    {
+        // GetMercUnit walks room unit lists the game relinks: copy what the wrapper needs and let go before BuildObject.
+        AutoCriticalRoom cRoom;
         UnitAny* pUnit = D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType);
-        if (pUnit && pUnit->dwType == UNIT_PLAYER) {
-            UnitAny* pMerc = GetMercUnit(pUnit);
-            if (pMerc) {
-                myUnit* pmyUnit = new myUnit;
-
-                pmyUnit->_dwPrivateType = PRIVATE_UNIT;
-                pmyUnit->dwUnitId = pMerc->dwUnitId;
-                pmyUnit->dwClassId = pMerc->dwTxtFileNo;
-                pmyUnit->dwMode = NULL;
-                pmyUnit->dwType = UNIT_MONSTER;
-                pmyUnit->szName[0] = NULL;
-
-                JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
-                // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
-                if (!jsunit) {
-                    delete pmyUnit;
-                    return JS_FALSE;
-                }
-                JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
-            }
+        UnitAny* pMerc = pUnit && pUnit->dwType == UNIT_PLAYER ? GetMercUnit(pUnit) : NULL;
+        if (pMerc) {
+            bFound = true;
+            dwMercId = pMerc->dwUnitId;
+            dwMercClass = pMerc->dwTxtFileNo;
         }
     }
+    if (!bFound)
+        return JS_TRUE;
+
+    myUnit* pmyUnit = new myUnit;
+    pmyUnit->_dwPrivateType = PRIVATE_UNIT;
+    pmyUnit->dwUnitId = dwMercId;
+    pmyUnit->dwClassId = dwMercClass;
+    pmyUnit->dwMode = NULL;
+    pmyUnit->dwType = UNIT_MONSTER;
+    pmyUnit->szName[0] = NULL;
+    JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);
+    // BuildObject attaches the private only when it succeeds; a NULL is an engine failure (out of memory).
+    if (!jsunit) {
+        delete pmyUnit;
+        return JS_FALSE;
+    }
+    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsunit));
     return JS_TRUE;
 }
 
 JSAPI_FUNC(unit_getMercHP) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
     if (!WaitForGameReady())
         THROW_WARNING(cx, vp, "Game not ready");
-    JSObject* test = JS_THIS_OBJECT(cx, vp);
-    jsval* rest = 0;
-    myUnit* lpUnit = (myUnit*)JS_GetInstancePrivate(cx, test, &unit_class, rest);
-    // myUnit* lpUnit = (myUnit*)JS_GetPrivate(cx, test);
+    // Called as a global, `this` is no Unit and the player's merc is read.
+    myUnit* lpUnit = GetUnitPrivate(cx, self);
 
-    UnitAny* pUnit = lpUnit ? D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType) : D2CLIENT_GetPlayerUnit();
-
-    if (pUnit) {
-        UnitAny* pMerc = GetMercUnit(pUnit);
-        if (pMerc)
-            JS_SET_RVAL(cx, vp, (pUnit->dwMode == 12 ? JSVAL_ZERO : INT_TO_JSVAL(D2CLIENT_GetUnitHPPercent(pMerc->dwUnitId))));
+    bool bFound = false;
+    DWORD dwHPPercent = 0;
+    {
+        // GetMercUnit walks room unit lists and the HP lookup walks the unit tables, both relinked by the game thread.
+        AutoCriticalRoom cRoom;
+        UnitAny* pUnit = lpUnit ? D2CLIENT_FindUnit(lpUnit->dwUnitId, lpUnit->dwType) : D2CLIENT_GetPlayerUnit();
+        UnitAny* pMerc = pUnit && pUnit->dwType == UNIT_PLAYER ? GetMercUnit(pUnit) : NULL;
+        if (pMerc) {
+            bFound = true;
+            // The merc's own mode: its dead mode (12) is the player's kick mode, so the owner's mode says nothing here.
+            dwHPPercent = pMerc->dwMode == NPC_MODE_DEAD ? 0 : D2CLIENT_GetUnitHPPercent(pMerc->dwUnitId);
+        }
     }
-
+    if (bFound)
+        JS_SET_RVAL(cx, vp, INT_TO_JSVAL((int)dwHPPercent));
     return JS_TRUE;
 }
 

@@ -76,9 +76,18 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
         switch (ClientState()) {
         case ClientStateInGame: {
             if (bInGame) {
-                if ((Vars.dwMaxGameTime && Vars.dwGameTime && (GetTickCount() - Vars.dwGameTime) > Vars.dwMaxGameTime) ||
-                    (!D2COMMON_IsTownByLevelNo(GetPlayerArea()) && (Vars.nChickenHP && Vars.nChickenHP >= GetUnitHP(D2CLIENT_GetPlayerUnit())) ||
-                     (Vars.nChickenMP && Vars.nChickenMP >= GetUnitMP(D2CLIENT_GetPlayerUnit()))))
+                bool exitGame = Vars.dwMaxGameTime && Vars.dwGameTime && (GetTickCount() - Vars.dwGameTime) > Vars.dwMaxGameTime;
+                if (!exitGame && (Vars.nChickenHP || Vars.nChickenMP)) {
+                    // The player's stats and rooms are game memory a game exit frees, so this thread reads them under the
+                    // game lock; ExitGame runs after it is released, as before.
+                    AutoCriticalRoom cRoom;
+                    UnitAny* player = D2CLIENT_GetPlayerUnit();
+                    DWORD area = GetPlayerAreaLocked();
+                    if (player && area)
+                        exitGame = !D2COMMON_IsTownByLevelNo(area) && ((Vars.nChickenHP && Vars.nChickenHP >= GetUnitHP(player)) ||
+                                                                       (Vars.nChickenMP && Vars.nChickenMP >= GetUnitMP(player)));
+                }
+                if (exitGame)
                     D2CLIENT_ExitGame();
             } else {
                 Vars.dwGameTime = GetTickCount();

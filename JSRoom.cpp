@@ -53,10 +53,9 @@ Level* FindRoomLevel(const RoomSnapshot* pSnap) {
     if (!pSnap || !pSnap->dwLevelNo || !(pSnap->dwSession & 1) || pSnap->dwSession != Vars.dwGameSession)
         return NULL;
 
-    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
-    Act* pAct = *p_D2CLIENT_CurrentAct;
-    if (!pPlayer || !pAct || pPlayer->pAct != pAct || !pAct->pMisc)
+    if (!PlayerActLoaded())
         return NULL;
+    Act* pAct = *p_D2CLIENT_CurrentAct;
 
     for (Level* pLevel = pAct->pMisc->pLevelFirst; pLevel; pLevel = pLevel->pNextLevel) {
         if (pLevel->dwLevelNo != pSnap->dwLevelNo)
@@ -151,8 +150,13 @@ JSAPI_PROP(room_getProperty) {
 }
 
 JSAPI_FUNC(room_getNext) {
+    // Every Room method reads `this` before it sets rval: CallArgs.h documents that JS_THIS_OBJECT may need the callee in
+    // vp[0].
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
     if (!pSnap)
         return JS_TRUE;
 
@@ -167,16 +171,26 @@ JSAPI_FUNC(room_getNext) {
 }
 
 JSAPI_FUNC(room_getPresetUnits) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
 
-    DWORD nType = NULL;
-    DWORD nClass = NULL;
+    // A foreign this gets the neutral result before any argument runs script code.
+    if (!pSnap)
+        return JS_TRUE;
 
-    if (argc > 0 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
-        nType = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
-    if (argc > 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[1]))
-        nClass = JSVAL_TO_INT(JS_ARGV(cx, vp)[1]);
+    // The type and class id convert before the game lock is taken, since a valueOf run under it stalls the game thread.
+    // Each converts as `value >>> 0`; a result of 0, which a value that converts to NaN also gives, means any.
+    uint32 nType = 0;
+    uint32 nClass = 0;
+    JS_BeginRequest(cx);
+    JSBool bConverted = (argc < 1 || JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &nType)) &&
+                        (argc < 2 || JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[1], &nClass));
+    JS_EndRequest(cx);
+    if (!bConverted)
+        return JS_FALSE;
 
     bool bAdded = FALSE;
     DWORD dwArrayCount = NULL;
@@ -197,8 +211,9 @@ JSAPI_FUNC(room_getPresetUnits) {
     // A room's preset list outlives its room data, and loading the data again appends another copy of some presets, so
     // the room is loaded only when it has neither.
     if (!pRoom2->pPreset && !pRoom2->pRoom1) {
-        bAdded = TRUE;
         D2COMMON_AddRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+        // Unloaded afterwards only if the load built the room: a load that failed left nothing to remove.
+        bAdded = pRoom2->pRoom1 != NULL;
     }
 
     // An engine failure (out of memory) still unloads the room data and the root, then goes back to the engine as one.
@@ -223,9 +238,9 @@ JSAPI_FUNC(room_getPresetUnits) {
                 break;
             }
 
-            jsval a = OBJECT_TO_JSVAL(jsUnit);
+            // Defined, not set: an Array.prototype index setter would run script with the game lock held.
             JS_BeginRequest(cx);
-            bOk = JS_SetElement(cx, pReturnArray, dwArrayCount, &a);
+            bOk = JS_DefineElement(cx, pReturnArray, dwArrayCount, OBJECT_TO_JSVAL(jsUnit), NULL, NULL, JSPROP_ENUMERATE);
             JS_EndRequest(cx);
             dwArrayCount++;
         }
@@ -241,8 +256,11 @@ JSAPI_FUNC(room_getPresetUnits) {
     return bOk;
 }
 JSAPI_FUNC(room_getCollisionTypeArray) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
 
     bool bAdded = FALSE;
     CollMap* pCol = NULL;
@@ -255,8 +273,8 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
     }
 
     if (!pRoom2->pRoom1) {
-        bAdded = TRUE;
         LoadRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+        bAdded = pRoom2->pRoom1 != NULL;
     }
 
     JSObject* jsobjy = JS_NewUint16Array(cx, (pRoom2->dwSizeX * 5) * (pRoom2->dwSizeY * 5));
@@ -270,7 +288,7 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
     if (pRoom2->pRoom1)
         pCol = pRoom2->pRoom1->Coll;
 
-    if (!pCol) {
+    if (!pCol || !pCol->pMapStart) {
         JS_RemoveRoot(cx, &jsobjy);
         if (bAdded)
             D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
@@ -314,8 +332,11 @@ JSAPI_FUNC(room_getCollisionTypeArray) {
     return bOk;
 }
 JSAPI_FUNC(room_getCollision) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
 
     bool bAdded = FALSE;
     CollMap* pCol = NULL;
@@ -334,14 +355,14 @@ JSAPI_FUNC(room_getCollision) {
     }
 
     if (!pRoom2->pRoom1) {
-        bAdded = TRUE;
         LoadRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+        bAdded = pRoom2->pRoom1 != NULL;
     }
 
     if (pRoom2->pRoom1)
         pCol = pRoom2->pRoom1->Coll;
 
-    if (!pCol) {
+    if (!pCol || !pCol->pMapStart) {
         JS_RemoveRoot(cx, &jsobjy);
         if (bAdded)
             D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2->pLevel->dwLevelNo, pRoom2->dwPosX, pRoom2->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
@@ -370,17 +391,16 @@ JSAPI_FUNC(room_getCollision) {
             break;
         }
 
+        // Defined, not set: an Array.prototype index setter would run script with the game lock held.
         int nCurrentArrayX = 0;
         for (int i = x; i < nLimitX && bOk; i++) {
-            jsval nNode = INT_TO_JSVAL(*p);
-            bOk = JS_SetElement(cx, jsobjx, nCurrentArrayX, &nNode);
+            bOk = JS_DefineElement(cx, jsobjx, nCurrentArrayX, INT_TO_JSVAL(*p), NULL, NULL, JSPROP_ENUMERATE);
             nCurrentArrayX++;
             p++;
         }
 
-        jsval jsu = OBJECT_TO_JSVAL(jsobjx);
         if (bOk)
-            bOk = JS_SetElement(cx, jsobjy, nCurrentArrayY, &jsu);
+            bOk = JS_DefineElement(cx, jsobjy, nCurrentArrayY, OBJECT_TO_JSVAL(jsobjx), NULL, NULL, JSPROP_ENUMERATE);
         nCurrentArrayY++;
     }
 
@@ -396,8 +416,11 @@ JSAPI_FUNC(room_getCollision) {
 }
 
 JSAPI_FUNC(room_getNearby) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
     JSObject* jsobj = JS_NewArrayObject(cx, NULL, NULL);
 
     if (!jsobj)
@@ -417,9 +440,8 @@ JSAPI_FUNC(room_getNearby) {
             JS_EndRequest(cx);
             return JS_FALSE;
         }
-        jsval jsu = OBJECT_TO_JSVAL(jsroom);
-
-        if (!JS_SetElement(cx, jsobj, dwCount++, &jsu)) {
+        // Defined, not set: an Array.prototype index setter would run script with the game lock held.
+        if (!JS_DefineElement(cx, jsobj, dwCount++, OBJECT_TO_JSVAL(jsroom), NULL, NULL, JSPROP_ENUMERATE)) {
             JS_EndRequest(cx);
             return JS_FALSE;
         }
@@ -431,13 +453,26 @@ JSAPI_FUNC(room_getNearby) {
 
 // Don't know whether it works or not
 JSAPI_FUNC(room_getStat) {
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
 
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
-    if (argc < 1 || !JSVAL_IS_INT(JS_ARGV(cx, vp)[0]))
+    if (!pSnap || argc < 1 || JSVAL_IS_VOID(JS_ARGV(cx, vp)[0]) || JSVAL_IS_NULL(JS_ARGV(cx, vp)[0]))
         return JS_TRUE;
 
-    jsint nStat = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
+    // The stat converts before the game lock is taken, since a valueOf run under it stalls the game thread. Any number or
+    // numeric string names a stat; a value that converts to NaN ("abc", {}) names none and stays null.
+    double dStat = 0;
+    JS_BeginRequest(cx);
+    JSBool bConverted = JS_ValueToNumber(cx, JS_ARGV(cx, vp)[0], &dStat);
+    JS_EndRequest(cx);
+    if (!bConverted)
+        return JS_FALSE;
+    if (MOZ_DOUBLE_IS_NaN(dStat))
+        return JS_TRUE;
+    jsint nStat = JS_DoubleToInt32(dStat);
 
     bool bAdded = false;
 
@@ -448,8 +483,8 @@ JSAPI_FUNC(room_getStat) {
         return JS_TRUE;
     }
     if (!pRoom2->pRoom1) {
-        bAdded = true;
         LoadRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom2, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+        bAdded = pRoom2->pRoom1 != NULL;
     }
 
     // A stat the room has no data for stays null, and room data added above is unloaded on every path.
@@ -500,8 +535,11 @@ JSAPI_FUNC(room_getStat) {
 }
 
 JSAPI_FUNC(room_getFirst) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
     if (!pSnap)
         return JS_TRUE;
 
@@ -521,8 +559,11 @@ JSAPI_FUNC(room_getFirst) {
 }
 
 JSAPI_FUNC(room_unitInRoom) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
     if (!pSnap || argc < 1 || !JSVAL_IS_OBJECT(JS_ARGV(cx, vp)[0]))
         return JS_TRUE;
 
@@ -533,6 +574,10 @@ JSAPI_FUNC(room_unitInRoom) {
         return JS_TRUE;
 
     AutoCriticalRoom cRoom;
+    // The unit's room is read only while the player's act is the loaded one, as for every Room method: an act change frees
+    // the old act before the player's pointer moves on.
+    if (!PlayerActLoaded())
+        return JS_TRUE;
     UnitAny* pUnit = D2CLIENT_FindUnit(pmyUnit->dwUnitId, pmyUnit->dwType);
 
     if (!pUnit)
@@ -553,8 +598,11 @@ JSAPI_FUNC(room_unitInRoom) {
 }
 
 JSAPI_FUNC(room_reveal) {
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
 
     BOOL bDrawPresets = false;
     if (argc == 1 && JSVAL_IS_BOOLEAN(JS_ARGV(cx, vp)[0]))
@@ -580,8 +628,9 @@ JSAPI_FUNC(my_getRoom) {
 
     // Every argument converts before the game lock is taken: a conversion can run script code (valueOf), and script code
     // run under the lock stalls the game thread. A failed conversion (a valueOf that throws) leaves its exception pending,
-    // so it goes back to the engine.
-    bool bByArea = argc == 1 && JSVAL_IS_INT(JS_ARGV(cx, vp)[0]);
+    // so it goes back to the engine. One argument is always an area id, so a numeric string or a Number names the same area
+    // as an int.
+    bool bByArea = argc == 1;
     bool bByPoint = argc == 2 || argc == 3;
     uint32 levelId = 0;
     uint32 nX = 0;
@@ -626,9 +675,10 @@ JSAPI_FUNC(my_getRoom) {
             JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
             return JS_TRUE;
         } else if (levelId == 0) {
-            // WaitForGameReady ran before the lock was taken, so the player can be NULL by now.
-            UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
-            Room1* pRoom1 = pPlayer ? D2COMMON_GetRoomFromUnit(pPlayer) : NULL;
+            // The player's own chain is read only while its act is the loaded one: an act change frees the old act before
+            // the player's pointer moves on, and this lock can be handed to other threads in between.
+            UnitAny* pPlayer = PlayerActLoaded() ? D2CLIENT_GetPlayerUnit() : NULL;
+            Room1* pRoom1 = pPlayer && pPlayer->pPath ? pPlayer->pPath->pRoom1 : NULL;
 
             if (!pRoom1 || !pRoom1->pRoom2) {
                 delete cRoom;
@@ -648,7 +698,7 @@ JSAPI_FUNC(my_getRoom) {
 
         if (argc == 3)
             pLevel = GetLevel(levelId);
-        else if (D2CLIENT_GetPlayerUnit() && D2CLIENT_GetPlayerUnit()->pPath && D2CLIENT_GetPlayerUnit()->pPath->pRoom1 &&
+        else if (PlayerActLoaded() && D2CLIENT_GetPlayerUnit()->pPath && D2CLIENT_GetPlayerUnit()->pPath->pRoom1 &&
                  D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2)
             pLevel = D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2->pLevel;
 
@@ -667,7 +717,7 @@ JSAPI_FUNC(my_getRoom) {
             bool bAdded = FALSE;
             if (!pRoom->pRoom1) {
                 LoadRoomData(D2CLIENT_GetPlayerUnit()->pAct, pRoom, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
-                bAdded = TRUE;
+                bAdded = pRoom->pRoom1 != NULL;
             }
 
             CollMap* map = pRoom->pRoom1 ? pRoom->pRoom1->Coll : NULL;
@@ -696,8 +746,7 @@ JSAPI_FUNC(my_getRoom) {
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
         return JS_TRUE;
     } else {
-        // WaitForGameReady ran before the lock was taken, so the player's room chain can be NULL by now.
-        UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
+        UnitAny* pPlayer = PlayerActLoaded() ? D2CLIENT_GetPlayerUnit() : NULL;
         Room1* pRoom1 = pPlayer && pPlayer->pPath ? pPlayer->pPath->pRoom1 : NULL;
         Level* pLevel = pRoom1 && pRoom1->pRoom2 ? pRoom1->pRoom2->pLevel : NULL;
         if (!pLevel || !pLevel->pRoom2First) {

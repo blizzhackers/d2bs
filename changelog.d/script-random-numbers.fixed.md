@@ -1,0 +1,1 @@
+- **Random numbers in every script.** `rand()` draws from the operating system's random generator in and out of game, so it never waits for the game, is safe to call as a game ends, and out of game no longer gives several scripts the same numbers or covers only the first 32768 values of a wider range.

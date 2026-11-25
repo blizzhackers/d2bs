@@ -1,0 +1,1 @@
+- **No mana chicken in town.** `me.chickenmp` no longer quits the game while the character is in town, the same as `me.chickenhp`.

@@ -7,8 +7,9 @@
  * from and the player's current act, wherever getRoom() could find it. When
  * they can't, getNext() returns false, getNearby() returns an empty array,
  * getStat() returns null and the other methods return undefined. unitInRoom()
- * compares the unit's room with this one instead, and returns false when the
- * unit is in another room, act or game.
+ * compares the unit's room with this one instead: it returns false when the
+ * unit is in another room, act or game, and undefined when the unit can't be
+ * found or an act change is still loading.
  */
 class Room
 {
@@ -27,9 +28,13 @@ public:
 
 	/** Get the PresetUnit s from the current Room.
 	 *
-	 * \param nType The type of Unit to get. See Unit::type.
+	 * \param nType The type of Unit to get, or 0 for any. See Unit::type. A
+	 * number or numeric string converts as `nType >>> 0` does; a result of 0,
+	 * which a value that converts to NaN also gives, matches any.
 	 *
-	 * \param nClass The class id of the Unit (s) to find. See Unit::classId.
+	 * \param nClass The class id of the Unit (s) to find, or 0 for any. See
+	 * Unit::classId. A number or numeric string converts as `nClass >>> 0` does;
+	 * a result of 0, which a value that converts to NaN also gives, matches any.
 	 *
 	 * \return An array of all the PresetUnit s from the current Room.
 	 */
@@ -53,7 +58,8 @@ public:
 
 	/** Get some property of the Room.
 	 *
-	 * \param nStat Which property to get:
+	 * \param nStat Which property to get (any number or numeric string, made a
+	 * 32-bit integer as `nStat | 0` does, so 4.5 reads stat 4):
 	 *
 	 * 0 - xStart (room 1)
 	 *
@@ -87,8 +93,9 @@ public:
 	 *
 	 * 16 - sizeRoomY (coll)
 	 *
-	 * \return The stat value, or null for an unlisted stat or when the room's
-	 * data for it isn't available.
+	 * \return The stat value, or null with no argument, undefined or null, a value
+	 * that converts to NaN, an unlisted stat, when the room's data can't be
+	 * loaded, or for stats 9 to 16 when the room has no collision map.
 	 */
 	int getStat(int nStat);
 

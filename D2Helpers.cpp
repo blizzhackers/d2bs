@@ -125,6 +125,17 @@ return NULL;
 *(DWORD*)&p_D2CLIENT_SelectedInvItem = (DWORD)FindItemByPosition(x, y, dwLocation);
 }*/
 
+// An act change frees the old act before a unit's own act pointer moves on, so a unit's rooms are walked only while
+// its act is the loaded act.
+static bool ActLoadedFor(UnitAny* unit) {
+    Act* pAct = *p_D2CLIENT_CurrentAct;
+    return unit && pAct && unit->pAct == pAct && pAct->pMisc;
+}
+
+bool PlayerActLoaded(void) {
+    return ActLoadedFor(D2CLIENT_GetPlayerUnit());
+}
+
 // Do not edit without the express consent of bsdunx or lord2800
 ClientGameState ClientState(void) {
     ClientGameState state = ClientStateNull;
@@ -136,6 +147,8 @@ ClientGameState ClientState(void) {
             state = ClientStateBusy;
             return state;
         }
+        if (!ActLoadedFor(player))
+            return ClientStateBusy;
         if (player->pInventory && player->pPath &&
             // player->pPath->xPos &&
             player->pPath->pRoom1 && player->pPath->pRoom1->pRoom2 && player->pPath->pRoom1->pRoom2->pLevel && player->pPath->pRoom1->pRoom2->pLevel->dwLevelNo)
@@ -154,8 +167,51 @@ bool GameReady(void) {
     return (ClientState() == ClientStateInGame ? true : false);
 }
 
-bool WaitForGameReady(void) {
-    DWORD start = GetTickCount();
+// Per thread: only the listener's own thread may skip the wait. A TlsAlloc slot, not __declspec(thread): a manually
+// mapped D2BS never gets its static TLS block, so the first access would fault.
+static DWORD blockingListenerSlot = TLS_OUT_OF_INDEXES;
+
+bool AllocBlockingListenerSlot(void) {
+    blockingListenerSlot = TlsAlloc();
+    return blockingListenerSlot != TLS_OUT_OF_INDEXES;
+}
+
+void FreeBlockingListenerSlot(void) {
+    if (blockingListenerSlot != TLS_OUT_OF_INDEXES)
+        TlsFree(blockingListenerSlot);
+    blockingListenerSlot = TLS_OUT_OF_INDEXES;
+}
+
+// Without a slot every thread reads false, which is the plain waiting behaviour.
+static bool InBlockingListener(void) {
+    return blockingListenerSlot != TLS_OUT_OF_INDEXES && TlsGetValue(blockingListenerSlot) != NULL;
+}
+
+static void SetInBlockingListener(bool value) {
+    if (blockingListenerSlot != TLS_OUT_OF_INDEXES)
+        TlsSetValue(blockingListenerSlot, value ? (LPVOID)1 : NULL);
+}
+
+BlockingListenerScope::BlockingListenerScope(bool active) : previous(InBlockingListener()) {
+    if (active)
+        SetInBlockingListener(true);
+}
+
+BlockingListenerScope::~BlockingListenerScope() {
+    SetInBlockingListener(previous);
+}
+
+bool GameReadyTimedOut(DWORD start) {
+    return Vars.dwGameTimeout > 0 && (GetTickCount() - start) >= Vars.dwGameTimeout;
+}
+
+// A blocking listener gets "not ready" at once by policy: the thread waiting for its verdict is usually the game
+// thread, the only one that can end Busy. A thread that holds the game lock keeps the game thread waiting on that lock.
+bool MayWaitForGame(void) {
+    return !InBlockingListener() && !HoldsGameLock();
+}
+
+bool WaitForGameReadySince(DWORD start) {
     do {
         switch (ClientState()) {
         case ClientStateNull:
@@ -164,13 +220,31 @@ bool WaitForGameReady(void) {
         case ClientStateInGame:
             return true;
         }
+        if (!MayWaitForGame())
+            return false;
         Sleep(10);
-    } while ((Vars.dwGameTimeout == 0) || (Vars.dwGameTimeout > 0 && (GetTickCount() - start) < Vars.dwGameTimeout));
+    } while (!GameReadyTimedOut(start));
     return false;
 }
 
+bool WaitForGameReady(void) {
+    return WaitForGameReadySince(GetTickCount());
+}
+
+DWORD GetPlayerAreaLocked(void) {
+    if (ClientState() != ClientStateInGame)
+        return 0;
+    UnitAny* player = D2CLIENT_GetPlayerUnit();
+    if (!ActLoadedFor(player) || !player->pPath || !player->pPath->pRoom1 || !player->pPath->pRoom1->pRoom2 ||
+        !player->pPath->pRoom1->pRoom2->pLevel)
+        return 0;
+    return player->pPath->pRoom1->pRoom2->pLevel->dwLevelNo;
+}
+
 DWORD GetPlayerArea(void) {
-    return (ClientState() == ClientStateInGame ? D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2->pLevel->dwLevelNo : NULL);
+    // Under the game lock: the game frees rooms only while it holds it, so the walk reads live links.
+    AutoCriticalRoom cRoom;
+    return GetPlayerAreaLocked();
 }
 
 Level* GetLevel(DWORD dwLevelNo) {
@@ -178,12 +252,10 @@ Level* GetLevel(DWORD dwLevelNo) {
     AutoCriticalRoom cRoom;
 
     // An act change frees the old act before the player's own pointer moves on, and the game thread can hand this lock to
-    // a packet listener in between, so the player's act is walked only while it is the loaded act. This is checked before
-    // GameReady(), which follows the player's room chain into that act.
-    UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
-    Act* pAct = *p_D2CLIENT_CurrentAct;
-    if (!pPlayer || !pAct || pPlayer->pAct != pAct || !pAct->pMisc)
+    // a packet listener in between, so the player's act is walked only while it is the loaded act.
+    if (!PlayerActLoaded())
         return nullptr;
+    Act* pAct = *p_D2CLIENT_CurrentAct;
 
     if (!GameReady())
         return nullptr;
@@ -196,15 +268,13 @@ Level* GetLevel(DWORD dwLevelNo) {
                 D2COMMON_InitLevel(pLevel);
 
             if (!pLevel->pRoom2First)
-                break;
+                return nullptr;
             return pLevel;
         }
         pLevel = pLevel->pNextLevel;
     }
 
-    // this crashes pretty much every time it's called
-    // pLevel = D2COMMON_GetLevel(D2CLIENT_GetPlayerUnit()->pAct->pMisc, dwLevelNo);
-    return pLevel;
+    return nullptr;
 }
 
 static bool SamePresetUnit(const PresetUnit* a, const PresetUnit* b) {
@@ -532,7 +602,11 @@ DWORD GetTileLevelNo(Room2* lpRoom2, DWORD dwTileNo) {
     return NULL;
 }
 
+// The caller holds the game lock: the game relinks units between room lists on its own thread. An act change frees the
+// old act before a unit's act pointer moves on, so the rooms are walked only while that act is the loaded one.
 UnitAny* GetMercUnit(UnitAny* pUnit) {
+    if (!ActLoadedFor(pUnit))
+        return NULL;
     for (Room1* pRoom = pUnit->pAct->pRoom1; pRoom; pRoom = pRoom->pRoomNext)
         for (UnitAny* pMerc = pRoom->pUnitFirst; pMerc; pMerc = pMerc->pRoomNext)
             if (pMerc->dwType == UNIT_MONSTER &&

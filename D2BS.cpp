@@ -25,6 +25,7 @@ BOOL WINAPI DllMain(HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved) {
     switch (dwReason) {
     case DLL_PROCESS_ATTACH: {
         DisableThreadLibraryCalls(hDll);
+        AllocBlockingListenerSlot(); // before Startup() starts any thread; on failure listeners just wait
         if (lpReserved != NULL) {
             Vars.pModule = (Module*)lpReserved;
 
@@ -102,6 +103,9 @@ BOOL WINAPI DllMain(HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved) {
             Vars.bShutdownFromDllMain = TRUE;
             Shutdown();
         }
+        // At process exit no other thread is left. Shutdown() from DllMain joins no thread, so a live unload with
+        // scripts still running is unsafe with or without this slot.
+        FreeBlockingListenerSlot();
         break;
     }
 

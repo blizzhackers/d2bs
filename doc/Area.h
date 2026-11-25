@@ -1,4 +1,9 @@
-/** Represent an Area of the map.
+/** Represent an Area of the map. Reading a property waits while an area or
+ * act loads. It throws an error while the area is not in the act the player
+ * is in (for example after a waypoint to another act) or the game cannot
+ * build its rooms, and when the game isn't ready: out of game, when the wait
+ * for an area or act load times out, or at once while the game is busy in a
+ * blocking listener or while your script holds the game lock.
  */
 class Area
 {

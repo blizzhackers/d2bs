@@ -13,12 +13,11 @@ ActMap::ActMap(const Level* level) {
     InitializeCriticalSection(lock);
     actCrit = new CriticalRoom;
     actCrit->EnterSection();
-    assert(act != NULL);
     assert(level != NULL);
 
     this->level = level;
     this->act = level->pMisc->pAct;
-    // RoomsAdded= roomsAdded;
+    assert(act != NULL);
     // get the map size
     height = level->dwSizeX * 5;
     width = level->dwSizeY * 5;
@@ -27,9 +26,6 @@ ActMap::ActMap(const Level* level) {
 
     if (!level->pRoom2First)
         D2COMMON_InitLevel(const_cast<Level*>(level));
-
-    // Room2* room = level->pRoom2First;	//unused
-    // cachedLevel = room->pLevel;
 
     posX = (level->dwPosX == -1 ? 0 : level->dwPosX * 5);
     posY = (level->dwPosY == -1 ? 0 : level->dwPosY * 5);
@@ -142,8 +138,12 @@ WORD ActMap::getAvoidLayerPoint(Room2* room, const Point& pt) const {
 WORD ActMap::getCollFromRoom(Room2* room, const Point& pt) const {
     if (!room->pRoom1) {
         AddRoomData(room);
-        RoomsAdded.push_back(room);
+        // The game's room build reports no failure; only a room it really built is unloaded again at CleanUp.
+        if (room->pRoom1)
+            RoomsAdded.push_back(room);
     }
+    if (!room->pRoom1 || !room->pRoom1->Coll || !room->pRoom1->Coll->pMapStart)
+        return ActMap::Avoid;
     CollMap* map = room->pRoom1->Coll;
     WORD val = *(map->pMapStart + (pt.second - map->dwPosGameY) * (map->dwSizeGameX) + (pt.first - map->dwPosGameX));
 
@@ -156,7 +156,7 @@ WORD ActMap::getCollFromRoom(Room2* room, const Point& pt) const {
 }
 
 void ActMap::CleanUp(void) const {
-    // The room lists are shared by every map, so only a map that holds the game lock may unload or clear them.
+    // Rooms are unloaded only under the game lock, and a map that gave the lock up has already emptied its lists.
     if (!actCrit->IsEntered())
         return;
     for (RoomList::iterator it = RoomsAdded.begin(); it != RoomsAdded.end(); it++)
@@ -182,7 +182,9 @@ void ActMap::GetExits(ExitArray& exits) const {
     for (Room2* room = level->pRoom2First; room; room = room->pRoom2Next) {
         if (!room->pRoom1) {
             AddRoomData(room);
-            added.push_back(room);
+            // Only a room the add really built is unloaded below; a failed one is retried, and owned, by getCollFromRoom.
+            if (room->pRoom1)
+                added.push_back(room);
         }
 
         if (room->pLevel->dwLevelNo != level->dwLevelNo)

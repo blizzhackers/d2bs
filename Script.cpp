@@ -19,9 +19,9 @@ static volatile LONG lastScriptId = 0;
 static const DWORD kReplaceWaitMs = 500;
 
 Script::Script(const wchar_t* file, ScriptState state, uint argc, JSAutoStructuredCloneBuffer** argv)
-    : context(NULL), globalObject(NULL), scriptObject(NULL), script(NULL), runtime(NULL), me(NULL), execCount(0), isAborted(false), isPaused(false), isReallyPaused(false), scriptState(state),
-      threadHandle(INVALID_HANDLE_VALUE), threadId(0), id((DWORD)InterlockedIncrement(&lastScriptId)), argc(argc), argv(argv), startFailed(false),
-      predecessor(NULL) {
+    : execCount(0), scriptState(state), context(NULL), hadContext(false), script(NULL), runtime(NULL), me(NULL), argc(argc), argv(argv), globalObject(NULL),
+      scriptObject(NULL), isPaused(false), isReallyPaused(false), isAborted(false), runBegun(false), threadHandle(INVALID_HANDLE_VALUE),
+      id((DWORD)InterlockedIncrement(&lastScriptId)), startFailed(false), predecessor(NULL), refs(1), engineRefReleased(0), threadId(0) {
     // Everything that can throw runs before the event and the lock exist: a throwing constructor runs no destructor.
     if (scriptState == Command && wcslen(file) < 1) {
         fileName = wstring(L"Command Line");
@@ -48,6 +48,7 @@ Script::Script(const wchar_t* file, ScriptState state, uint argc, JSAutoStructur
     if (!eventSignal)
         throw std::exception("Could not create the script's event");
     InitializeCriticalSection(&lock);
+    InitializeCriticalSection(&listenersLock);
 }
 
 Script::~Script(void) {
@@ -64,6 +65,17 @@ Script::~Script(void) {
     // JS_ClearRuntimeThread(rt);
     if (runtime)
         JS_DestroyRuntime(runtime);
+    // A Script that never had a context gets no destroy-callback drain: events queued to it (a message sent before
+    // its Run failed, a console command after its start failed, a DisposeMe) are freed here. Only those kinds can
+    // reach it, since it never ran JS (no listener, hook or timer), and their clear paths free plain memory: clone
+    // buffers need no runtime. One that had a context leaves a late event unfreed: its roots died with the runtime.
+    while (!hadContext && !EventList.empty()) {
+        EnterCriticalSection(&Vars.cEventSection);
+        Event* evt = EventList.back();
+        EventList.pop_back();
+        LeaveCriticalSection(&Vars.cEventSection);
+        ExecScriptEvent(evt, true);
+    }
 
     context = NULL;
     scriptObject = NULL;
@@ -78,12 +90,23 @@ Script::~Script(void) {
         CloseHandle(predecessor);
     LeaveCriticalSection(&lock);
     DeleteCriticalSection(&lock);
+    DeleteCriticalSection(&listenersLock);
 }
 
 void Script::FreeArgs(void) {
     FreeCloneBuffers(argv, argc);
     argv = NULL;
     argc = 0;
+}
+
+void Script::AddRef(void) {
+    InterlockedIncrement(&refs);
+}
+
+// Reaches zero only after DisposeScript released the engine's reference, which it does only for a never-started Script.
+void Script::Release(void) {
+    if (InterlockedDecrement(&refs) == 0)
+        delete this;
 }
 
 int Script::GetExecutionCount(void) {
@@ -95,30 +118,26 @@ DWORD Script::GetThreadId(void) {
 }
 
 void Script::RunCommand(const wchar_t* command) {
-    // RUNCOMMANDSTRUCT* rcs = new RUNCOMMANDSTRUCT;
-    // rcs->script = this;
-    // rcs->command = _wcsdup(command);
-
     if (isAborted) { // this should never happen -bob
-        // RUNCOMMANDSTRUCT* rcs = new RUNCOMMANDSTRUCT;
-
-        // rcs->script = this;
-        // rcs->command = _wcsdup(L"delay(1000000);");
-
         Log(L"Console Aborted HELP!");
-        // HANDLE hwnd = CreateThread(NULL, 0, RunCommandThread, (void*) rcs, 0, NULL);
     }
 
     Event* evt = new Event;
     evt->owner = this;
     evt->argc = argc;
-    evt->name = _strdup("Command");
+    evt->name = "Command";
     evt->arg1 = _wcsdup(command);
+    // Out of memory: drop the command rather than queue a NULL line the console would read.
+    if (!evt->arg1) {
+        delete evt;
+        return;
+    }
     EnterCriticalSection(&Vars.cEventSection);
-    evt->owner->EventList.push_front(evt);
+    EventList.push_front(evt);
     LeaveCriticalSection(&Vars.cEventSection);
-    evt->owner->TriggerOperationCallback();
-    SetEvent(evt->owner->eventSignal);
+    // Only `this` after the push: the console may run and free evt as soon as the event lock is free.
+    TriggerOperationCallback();
+    SetEvent(eventSignal);
 }
 
 bool Script::BeginThread(LPTHREAD_START_ROUTINE ThreadFunc) {
@@ -163,6 +182,7 @@ bool Script::Run(void) {
         context = JS_NewContext(runtime, 0x2000);
         if (!context)
             throw std::exception("Couldn't create the context");
+        hadContext = true;
 
         JS_SetErrorReporter(context, reportError);
         JS_SetOperationCallback(context, operationCallback);
@@ -206,6 +226,7 @@ bool Script::Run(void) {
         JS_EndRequest(context);
         inRequest = false;
     } catch (std::exception& e) {
+        runBegun = true;
         // Leaves no context or runtime behind: ScriptThread disposes this Script next (the console stays listed), and ~Script skips NULL members.
         Log(L"Script %s: %hs", GetShortFilename(), e.what());
         // Cleared under the list lock before the context that owns it is destroyed: UpdatePlayerGid writes through it
@@ -233,6 +254,7 @@ bool Script::Run(void) {
     }
     // only let the script run if it's not already running
     if (IsRunning()) {
+        runBegun = true;
         if (scriptState != Command) {
             JS_RemoveScriptRoot(context, &script);
             script = NULL;
@@ -245,6 +267,7 @@ bool Script::Run(void) {
     // SignalStop's store-then-read: a stop either is seen here or finds hasActiveCX set and interrupts the runtime.
     hasActiveCX = true;
     MemoryBarrier();
+    runBegun = true;
     if (isAborted) {
         hasActiveCX = false;
         if (scriptState != Command) {
@@ -275,8 +298,20 @@ bool Script::Run(void) {
         return false;
     }
 
-    JS_AddValueRoot(GetContext(), &main);
-    JS_AddValueRoot(GetContext(), &dummy);
+    // Out of memory before the script runs: it does not start, as when its arguments can't be read. Removing a root
+    // that was never added does nothing.
+    if (!JS_AddValueRoot(GetContext(), &main) || !JS_AddValueRoot(GetContext(), &dummy)) {
+        JS_RemoveValueRoot(GetContext(), &main);
+        JS_RemoveValueRoot(GetContext(), &dummy);
+        JS_ReportPendingException(context);
+        if (scriptState != Command) {
+            JS_RemoveScriptRoot(context, &script);
+            script = NULL;
+        }
+        JS_EndRequest(GetContext());
+        hasActiveCX = false;
+        return false;
+    }
     JSBool executed = JS_ExecuteScript(GetContext(), globalObject, script, &dummy);
     if (scriptState != Command) {
         JS_RemoveScriptRoot(context, &script);
@@ -295,6 +330,9 @@ bool Script::Run(void) {
     JS_EndRequest(GetContext());
     // Nothing runs on this context any more: running reads false and no event queues for a cached, ended script.
     hasActiveCX = false;
+    // On the owner thread, which the callback roots need: an ended cached copy may never be destroyed, and its timers
+    // can no longer fire.
+    ScriptEngine::DestroyTimers(this);
 
     execCount++;
     // Stop();
@@ -443,94 +481,126 @@ bool Script::IsRunning(void) {
     return context && !(IsAborted() || IsPaused() || !hasActiveCX);
 }
 
+// With the script list lock held. A copy that has not started takes the message without a listener check, since its
+// top level has not added any yet; a started one, running or paused, needs a scriptmsg listener. An ended or
+// stopping copy takes none, nor one whose thread could not start: nothing would run it before the script is destroyed.
+bool Script::AcceptsSentMessage(void) {
+    if (isAborted || startFailed)
+        return false;
+    if (!runBegun)
+        return true;
+    return context && hasActiveCX && IsListenerRegistered("scriptmsg");
+}
+
 bool Script::IsAborted() {
     return isAborted;
 }
 
+namespace {
+// Deletes each listener's root. Called outside listenersLock: removing a root is an engine call.
+void FreeListeners(FunctionList& list) {
+    for (FunctionList::iterator it = list.begin(); it != list.end(); it++) {
+        (*it)->Release();
+        delete *it;
+    }
+    list.clear();
+}
+} // namespace
+
 bool Script::IsListenerRegistered(const char* evtName) {
-    return strlen(evtName) > 0 && functions.count(evtName) > 0;
+    if (evtName[0] == '\0')
+        return false;
+    std::string key(evtName);
+    EnterCriticalSection(&listenersLock);
+    FunctionMap::const_iterator entry = functions.find(key);
+    bool registered = entry != functions.end() && !entry->second.empty();
+    LeaveCriticalSection(&listenersLock);
+    return registered;
 }
 
-void Script::RegisterEvent(const char* evtName, jsval evtFunc) {
-    EnterCriticalSection(&lock);
+bool Script::RegisterEvent(const char* evtName, jsval evtFunc) {
     // Once per function and event, as in a browser: a second copy would run again on every event and keep its root
     // after the one removeEventListener() takes out.
-    if (JSVAL_IS_FUNCTION(context, evtFunc) && strlen(evtName) > 0 && !IsRegisteredEvent(evtName, evtFunc)) {
-        AutoRoot* root = new AutoRoot(context, evtFunc);
-        functions[evtName].push_back(root);
+    if (!JSVAL_IS_FUNCTION(context, evtFunc) || evtName[0] == '\0' || IsRegisteredEvent(evtName, evtFunc))
+        return true;
+    AutoRoot* root = new AutoRoot(context, evtFunc);
+    if (!root->ok()) {
+        delete root;
+        return false;
     }
-    LeaveCriticalSection(&lock);
+    std::string key(evtName);
+    EnterCriticalSection(&listenersLock);
+    functions[key].push_back(root);
+    LeaveCriticalSection(&listenersLock);
+    return true;
 }
 
 bool Script::IsRegisteredEvent(const char* evtName, jsval evtFunc) {
-    // nothing can be registered under an empty name
-    if (strlen(evtName) < 1)
+    if (evtName[0] == '\0')
         return false;
-
-    // if there are no events registered under that name at all, then obviously there
-    // can't be a specific one registered under that name
-    if (functions.count(evtName) < 1)
+    FunctionMap::iterator entry = functions.find(evtName);
+    if (entry == functions.end())
         return false;
-
-    for (FunctionList::iterator it = functions[evtName].begin(); it != functions[evtName].end(); it++)
+    for (FunctionList::iterator it = entry->second.begin(); it != entry->second.end(); it++)
         if (*(*it)->value() == evtFunc)
             return true;
-
     return false;
 }
 
 void Script::UnregisterEvent(const char* evtName, jsval evtFunc) {
-    if (strlen(evtName) < 1)
+    if (evtName[0] == '\0')
         return;
-
-    EnterCriticalSection(&lock);
+    std::string key(evtName);
     AutoRoot* func = NULL;
-    for (FunctionList::iterator it = functions[evtName].begin(); it != functions[evtName].end(); it++) {
-        if (*(*it)->value() == evtFunc) {
-            func = *it;
-            break;
+    EnterCriticalSection(&listenersLock);
+    FunctionMap::iterator entry = functions.find(key);
+    if (entry != functions.end()) {
+        for (FunctionList::iterator it = entry->second.begin(); it != entry->second.end(); it++) {
+            if (*(*it)->value() == evtFunc) {
+                func = *it;
+                entry->second.erase(it);
+                break;
+            }
         }
+        // A key exists only while it has listeners: IsListenerRegistered and the event hooks rely on it.
+        if (entry->second.empty())
+            functions.erase(entry);
     }
-    functions[evtName].remove(func);
-    // func->Release();
+    LeaveCriticalSection(&listenersLock);
     delete func;
-
-    // Remove event completely if there are no listeners for it.
-    if (functions.count(evtName) > 0 && functions[evtName].size() == 0)
-        functions.erase(evtName);
-
-    LeaveCriticalSection(&lock);
 }
 
 void Script::ClearEvent(const char* evtName) {
-    EnterCriticalSection(&lock);
-    for (FunctionList::iterator it = functions[evtName].begin(); it != functions[evtName].end(); it++) {
-        AutoRoot* func = *it;
-        func->Release();
-        delete func;
+    FunctionList cleared;
+    std::string key(evtName);
+    EnterCriticalSection(&listenersLock);
+    FunctionMap::iterator entry = functions.find(key);
+    if (entry != functions.end()) {
+        cleared.swap(entry->second);
+        functions.erase(entry);
     }
-    functions[evtName].clear();
-    LeaveCriticalSection(&lock);
+    LeaveCriticalSection(&listenersLock);
+    FreeListeners(cleared);
 }
 
 void Script::ClearAllEvents(void) {
-    EnterCriticalSection(&lock);
-    for (FunctionMap::iterator it = functions.begin(); it != functions.end(); it++)
-        ClearEvent(it->first.c_str());
-    functions.clear();
-    LeaveCriticalSection(&lock);
+    FunctionMap cleared;
+    EnterCriticalSection(&listenersLock);
+    cleared.swap(functions);
+    LeaveCriticalSection(&listenersLock);
+    for (FunctionMap::iterator it = cleared.begin(); it != cleared.end(); it++)
+        FreeListeners(it->second);
 }
 void Script::FireEvent(Event* evt) {
-    // EnterCriticalSection(&ScriptEngine::lock);
+    // Only `this` once the event is queued: the script may run and free it as soon as the event lock is free. Every
+    // caller passes its own event (evt->owner == this) and keeps this Script alive across the call.
     EnterCriticalSection(&Vars.cEventSection);
-    evt->owner->EventList.push_front(evt);
+    EventList.push_front(evt);
     LeaveCriticalSection(&Vars.cEventSection);
 
-    if (evt->owner && evt->owner->IsRunning()) {
-        evt->owner->TriggerOperationCallback();
-    }
+    if (IsRunning())
+        TriggerOperationCallback();
     SetEvent(eventSignal);
-    // LeaveCriticalSection(&ScriptEngine::lock);
 }
 
 #ifdef DEBUG
@@ -554,25 +624,6 @@ void SetThreadName(DWORD dwThreadID, LPCWSTR szThreadName) {
     }
 }
 #endif
-
-DWORD WINAPI RunCommandThread(void* data) {
-    RUNCOMMANDSTRUCT* rcs = (RUNCOMMANDSTRUCT*)data;
-    JSContext* cx = rcs->script->GetContext();
-    JS_BeginRequest(cx);
-    jsval rval;
-    JS_AddNamedValueRoot(cx, &rval, "Cmd line rtl");
-    if (JS_EvaluateUCScript(cx, JS_GetGlobalObject(cx), rcs->command, wcslen(rcs->command), "Command Line", 0, &rval)) {
-        if (!JSVAL_IS_NULL(rval) && !JSVAL_IS_VOID(rval)) {
-            JS_ConvertValue(cx, rval, JSTYPE_STRING, &rval);
-            const wchar_t* text = JS_GetStringCharsZ(cx, JS_ValueToString(cx, rval));
-            Print(L"%s", text);
-        }
-    }
-    JS_RemoveRoot(cx, &rval);
-    JS_EndRequest(cx);
-    JS_TriggerOperationCallback(JS_GetRuntime(cx));
-    return 0;
-}
 
 void FreeCloneBuffers(JSAutoStructuredCloneBuffer** buffers, uint count) {
     if (!buffers)

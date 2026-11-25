@@ -70,7 +70,7 @@
 `public void `[`js_strict`](#group__globalFunctions_1gae9bcfbfe5b3392c7533b960c25720b4f)`(bool setStrictFlag)`            | Set or clear the JSOPTION_STRICT flag.
 `public String `[`version`](#group__globalFunctions_1ga8972d7cb64b90764c110de40e134cfbc)`()`            | Get the D2BS version string.
 `public void `[`version`](#group__globalFunctions_1ga8e60448ae3ce3cd28e7f438cfa9e11eb)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` a)`            | Print the D2BS version string.
-`public void `[`scriptBroadcast`](#group__globalFunctions_1ga2dea3ce2441ba8f7a7e4c5bdf1be7bba)`(...)`            | Broadcast a message to all other scripts.
+`public void `[`scriptBroadcast`](#group__globalFunctions_1ga2dea3ce2441ba8f7a7e4c5bdf1be7bba)`(...)`            | Send a message to every running script that has a scriptmsg listener, the calling script included.
 `public String `[`sqlite_version`](#group__globalFunctions_1ga182b9023c5495a885298b7f981ee8919)`()`            | Get the sqlite version string (from sqlite3_version).
 `public double `[`sqlite_memusage`](#group__globalFunctions_1gae497b684eaeacd9196d73700e4d57d52)`()`            | Return the sqlite memory usage.
 `public `[`Folder`](#classFolder)` `[`dopen`](#group__globalFunctions_1ga9a23806a759b9bace15e57adbdb90f91)`(String name)`            | Get the [Folder](#classFolder) object for the directory scriptPath\name.
@@ -247,7 +247,7 @@ Returns an array of points that form a path from the source to the destination. 
 
 * `mutate` Called with (x, y) for the start or the end when it is blocked, before the search. Return [x, y] to move that point (fractions are truncated); a return that isn't an object keeps it. A start or end that is outside the current act's levels once mutate returns, moved there or kept, has no path, so getPath returns an empty path without calling reject or mutate again. An object whose elements 0 and 1 don't convert to numbers in the 32-bit integer range makes getPath throw a TypeError.
 
-Reduction type 3 needs all three functions, or getPath throws. They are called with getPath's this (the global object for a plain call). An error one of them throws, or the script being stopped while one runs, ends the getPath call with it. When the script already holds the game lock as getPath starts, for example in a gamepacketsent listener that runs inside clickMap(), they run with the game paused and the D2BS log notes it once for that call; otherwise they run without the game lock, so the game keeps running while one waits, for example in delay(). They may call getCollision() and getPath(). Inside a listener the game is already waiting on, the game also stays paused until getPath returns or the game stops waiting for that listener (after 500 ms for a packet or chat blocker, 1 s for keydownblocker, 3 s for a hook's click handler). After each reject or mutate call that returns normally, getPath checks that the player is still in the same game, act and area; if not, it calls none of the three again and returns an empty path. A trip away and back to the same area within one call may not be noticed. reduce runs after the search, so the path it reduces is still returned.
+Reduction type 3 needs all three functions, or getPath throws. They are called with getPath's this (the global object for a plain call). An error one of them throws, or the script being stopped while one runs, ends the getPath call with it. When the script already holds the game lock as getPath starts, for example in a gamepacketsent listener that runs inside clickMap(), they run with the game paused and the D2BS log notes it once for that call; otherwise they run without the game lock, so the game keeps running while one waits, for example in delay(). They may call getCollision() and getPath(). Inside a listener the game is already waiting on, the game also stays paused until getPath returns or the game stops waiting for that listener (after 500 ms for a packet or chat blocker, 1 s for keyupblocker or keydownblocker, 3 s for a hook's click handler). After each reject or mutate call that returns normally, getPath checks that the player is still in the same game, act and area; if not, it calls none of the three again and returns an empty path. A trip away and back to the same area within one call may not be noticed. reduce runs after the search, so the path it reduces is still returned.
 
 #### Returns
 The path as an array of objects with x and y properties. Throws an error when the area is not in the act the player is in.
@@ -1008,7 +1008,7 @@ Whether not the key is pressed.
 
 #### `public void `[`addEventListener`](#group__globalFunctions_1gaef5f2e6f72ff80cc13fd4ab84ab34810)`(String event,Function eventHandler)` 
 
-Add an event handler to the list of listeners for the given event. A function already listening to that event is not added again, so it runs once per event and one removeEventListener() call removes it.
+Add an event handler to the list of listeners for the given event. A function already listening to that event is not added again, so it runs once per event and one removeEventListener() call removes it. Listeners run in the order they were added. A listener removed while an event is being delivered (with removeEventListener(), clearEvent() or clearAllEvents(), also from inside a listener) is not called for that event if it has not run yet (unless it is added again before its turn), and one added meanwhile runs from the next event. An error a listener throws is printed when it is thrown, the event's other listeners still run, and the error never blocks the event or reaches the rest of the script. Once the script is stopped (or, for an in-game script, its game ends), no further listener of the event runs.
 
 #### Parameters
 * `event` The name of the event. Can be:
@@ -1021,9 +1021,9 @@ keyup (uint32_t key)
 
 keydown (uint32_t key)
 
-bool keyupblock (uint32_t key) - Returns true to block event from Diablo II
+bool keyupblocker (uint32_t key) - Returns true to block event from Diablo II. Blocking a key-up whose key-down reached the game leaves that key held down in the game until a later key-up for it passes.
 
-bool keydownblock (uint32_t key) - Returns true to block event from Diablo II
+bool keydownblocker (uint32_t key) - Returns true to block event from Diablo II
 
 playerassign (uint32_t unitId)
 
@@ -1065,7 +1065,7 @@ mode:
 
 0x0b - <Unknown> 0x0c - <Unknown> 0x0d - "%Name1 is not listening to you." 0x0e - Received on 'Not enough mana' speech. 0x0f - "Realm going down in %Param1 minutes." 0x10 - "You must wait a short time to declare hostility with that player." 0x11 - "%Param1 Stones of Jordan Sold to Merchants" 0x12 - "Diablo Walks the Earth"
 
-A listener whose result can block its event (`keydownblocker`, `chatmsgblocker`, `chatinputblocker`, `whispermsgblocker`, `gamepacket`, `gamepacketsent`, `realmpacket`, and a hook's click handler) runs while the game, or the script that sent the packet, may be waiting for its answer. A call in it that needs a ready game returns its "Game not ready" result at once while the game is busy (an area or act loading, or the moment the player moves between rooms), rather than waiting. A `gamepacketsent` listener for a packet its own script sent runs inside that send instead; its calls wait as usual unless the send was made while the script holds the game lock or from inside a listener whose result can block its event, when they get "Game not ready" at once.
+A listener whose result can block its event (`keyupblocker`, `keydownblocker`, `chatmsgblocker`, `chatinputblocker`, `whispermsgblocker`, `gamepacket`, `gamepacketsent`, `realmpacket`, and a hook's click handler) runs while the game, or the script that sent the packet, may be waiting for its answer. A call in it that needs a ready game returns its "Game not ready" result at once while the game is busy (an area or act loading, or the moment the player moves between rooms), rather than waiting. A `gamepacketsent` listener for a packet its own script sent runs inside that send instead; its calls wait as usual unless the send was made while the script holds the game lock or from inside a listener whose result can block its event, when they get "Game not ready" at once.
 
 #### Parameters
 * `eventHandler` A function with the signature listed above that handles the event.
@@ -1098,7 +1098,7 @@ Clear all event handlers (from all events). Timers keep running: they stop with 
 
 #### `public int `[`setTimeout`](#group__globalFunctions_setTimeout)`(Function callback,double delay,...)` 
 
-Call a function once, after a delay.
+Call a function once, after a delay. An error the callback throws is reported when it happens, as one in main() is.
 
 #### Parameters
 * `callback` The function to call.
@@ -1108,11 +1108,11 @@ Call a function once, after a delay.
 * `...` Extra arguments, passed on to the callback.
 
 #### Returns
-The timer's id, for clearTimeout(); null, with an error reported, when the delay is missing or not a number, and null when the callback is not a function.
+The timer's id, a whole number from 1 up, for clearTimeout(). Throws an error the script can catch when the callback is not a function, when the delay is missing or not a number, or when Windows could not create or set the timer.
 
 #### `public int `[`setInterval`](#group__globalFunctions_setInterval)`(Function callback,double period,...)` 
 
-Call a function every period until the timer is cleared or its script ends. A period of 0 (or a negative or NaN one) repeats every millisecond. A call is not started while the previous one is still running (for example inside delay()), and periods missed while the script was busy give one call.
+Call a function every period until the timer is cleared or its script ends. A period of 0 (or a negative or NaN one) repeats every millisecond. A call is not started while the previous one is still running (for example inside delay()), and periods missed while the script was busy give one call. An error the callback throws is reported and the interval keeps running; clear it to stop it.
 
 #### Parameters
 * `callback` The function to call.
@@ -1122,18 +1122,18 @@ Call a function every period until the timer is cleared or its script ends. A pe
 * `...` Extra arguments, passed on to the callback.
 
 #### Returns
-The timer's id, for clearInterval(); null, with an error reported, when the period is missing or not a number, and null when the callback is not a function.
+The timer's id, a whole number from 1 up, for clearInterval(). Throws an error the script can catch when the callback is not a function, when the period is missing or not a number, or when Windows could not create or set the timer.
 
 #### `public void `[`clearTimeout`](#group__globalFunctions_clearTimeout)`(int id)` 
 
-Cancel a timer by id. clearTimeout() and clearInterval() are the same function: either cancels a timer of either kind, and of any script.
+Cancel a timer by id. clearTimeout() and clearInterval() are the same function: either cancels a timer of either kind, and of any script. With no id, undefined or null it does nothing; a fraction is cut to a whole number (1.5 cancels timer 1); a number that is no timer's id (0, or a timer already cancelled) cancels nothing; any other value throws an error the script can catch.
 
 #### Parameters
 * `id` The id setTimeout() or setInterval() returned.
 
 #### `public void `[`clearInterval`](#group__globalFunctions_clearInterval)`(int id)` 
 
-Cancel a timer by id; the same function as clearTimeout().
+Cancel a timer by id; the same function as clearTimeout(), with the same handling of undefined, null, fractions and other values.
 
 #### Parameters
 * `id` The id setTimeout() or setInterval() returned.
@@ -1172,9 +1172,9 @@ Print the D2BS version string.
 
 #### `public void `[`scriptBroadcast`](#group__globalFunctions_1ga2dea3ce2441ba8f7a7e4c5bdf1be7bba)`(...)` 
 
-Broadcast a message to all other scripts.
+Send a message to every running script that has a scriptmsg listener, the calling script included.
 
-D2BS calls each scripts scriptmsg event listeners with the messages passed in.
+D2BS calls each such script's scriptmsg listeners with copies of the values passed in. The values are copied once, so getters on them run once however many scripts listen, and not at all when none does. When a script listens, a value that can't be copied (a function, or a game object such as a Unit) throws an error and no script gets the message. A paused script, or one that has not started yet, does not get it; script.send() reaches those.
 
 #### `public String `[`sqlite_version`](#group__globalFunctions_1ga182b9023c5495a885298b7f981ee8919)`()` 
 
@@ -2417,6 +2417,8 @@ Whether there was another script or not.
 
 Pause the script.
 
+Messages sent to it with send(), and its setTimeout/setInterval callbacks, wait until resume() (or, in game, run while it waits inside a game call such as a skill change); each pending timer runs once then, however many periods passed. Game events that arrive while it is paused are not delivered.
+
 #### `public void `[`resume`](#classD2BSScript_1ae16e135f6467d23dfb8a67582c817485)`()` 
 
 Resume the script.
@@ -2435,7 +2437,7 @@ Stop the script.
 
 Send some values to the script.
 
-Has the effect of calling any listeners to scriptmsg with the parameters provided. A value that can't be copied (a function, or a game object such as a Unit) throws an error and nothing is sent.
+Has the effect of calling any listeners to scriptmsg with the parameters provided. The message reaches a script that is running or paused and has a scriptmsg listener, or one that has not started yet (just loaded, or waiting for the copy it replaces to end). A script that has not started usually gets the message at its first delay() or event, so a listener its top level adds before then receives it; an engine interrupt during its top level (a garbage collection, for example) can deliver it earlier, before such a listener exists. A paused script gets it once it resumes (or, in game, while it waits inside a game call such as a skill change). Nothing is copied or sent when the script has ended or is stopping, or has started (running or paused) without a scriptmsg listener. A value that can't be copied (a function, or a game object such as a Unit) throws an error and nothing is sent.
 
 # class `DBStatement` 
 

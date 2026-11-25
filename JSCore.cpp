@@ -81,26 +81,27 @@ JSAPI_FUNC(my_print) {
 
 // setTimeout(callback, delay, ...args) / setInterval: returns the timer's id; the extra arguments go to the callback.
 static JSBool StartTimer(JSContext* cx, uint argc, jsval* vp, bool repeat) {
+    const char* name = repeat ? "setInterval" : "setTimeout";
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
-
+    if (argc < 1 || !JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[0])) {
+        JS_ReportError(cx, "%s: the callback must be a function", name);
+        return JS_FALSE;
+    }
+    // No default delay: a missing one is more often a mistake than a request for "at once".
     if (argc < 2 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1])) {
-        JS_ReportError(cx, "invalid params passed to %s", repeat ? "setInterval" : "setTimeout");
-        return JS_TRUE;
+        JS_ReportError(cx, "%s: the %s must be a number", name, repeat ? "period" : "delay");
+        return JS_FALSE;
     }
 
-    if (JSVAL_IS_FUNCTION(cx, JS_ARGV(cx, vp)[0])) {
-        jsdouble delay = 0;
-        JS_ValueToNumber(cx, JS_ARGV(cx, vp)[1], &delay);
-        // NaN and negative delays run at once, like 0.
-        int delayMs = delay >= 0x7FFFFFFF ? 0x7FFFFFFF : (delay > 0 ? (int)delay : 0);
-        Script* self = (Script*)JS_GetContextPrivate(cx);
-        int id = 0;
-        if (!ScriptEngine::AddTimer(self, cx, JS_ARGV(cx, vp)[0], argc - 2, JS_ARGV(cx, vp) + 2, delayMs, repeat, &id))
-            return JS_FALSE;
-        if (id)
-            JS_SET_RVAL(cx, vp, INT_TO_JSVAL(id));
-    }
-
+    jsdouble delay = 0;
+    JS_ValueToNumber(cx, JS_ARGV(cx, vp)[1], &delay);
+    // NaN and negative delays run at once, like 0.
+    int delayMs = delay >= 0x7FFFFFFF ? 0x7FFFFFFF : (delay > 0 ? (int)delay : 0);
+    Script* self = (Script*)JS_GetContextPrivate(cx);
+    int id = 0;
+    if (!ScriptEngine::AddTimer(self, cx, JS_ARGV(cx, vp)[0], argc - 2, JS_ARGV(cx, vp) + 2, delayMs, repeat, &id))
+        return JS_FALSE;
+    JS_SET_RVAL(cx, vp, INT_TO_JSVAL(id));
     return JS_TRUE;
 }
 
@@ -112,17 +113,21 @@ JSAPI_FUNC(my_setInterval) {
     return StartTimer(cx, argc, vp, true);
 }
 
-// clearTimeout and clearInterval: any script's timer, by id.
+// clearTimeout and clearInterval: any script's timer, by id. undefined and null cancel nothing, as in browsers; a
+// fraction is cut to a whole number, so any id from 1 up to but not including 2^31 cancels that truncated id; any
+// other number cancels nothing, and a value that is not a number throws.
 JSAPI_FUNC(my_clearInterval) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
-    if (argc < 1 || !JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0])) {
-        JS_ReportError(cx, "invalid params passed to clearInterval");
+    if (argc < 1 || JSVAL_IS_VOID(JS_ARGV(cx, vp)[0]) || JSVAL_IS_NULL(JS_ARGV(cx, vp)[0]))
         return JS_TRUE;
+    if (!JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[0])) {
+        JS_ReportError(cx, "clearTimeout/clearInterval: the id must be a number");
+        return JS_FALSE;
     }
 
     jsdouble id = 0;
     JS_ValueToNumber(cx, JS_ARGV(cx, vp)[0], &id);
-    if (id >= 1 && id <= 0x7FFFFFFF)
+    if (id >= 1.0 && id < 2147483648.0)
         ScriptEngine::ClearTimer((int)id);
     return JS_TRUE;
 }
@@ -156,7 +161,8 @@ JSAPI_FUNC(my_delay) {
             if (ScriptMustEnd(script))
                 return JS_FALSE;
 
-            while (script->EventList.size() > 0 && !ScriptMustEnd(script)) {
+            // Messages and events queued to a paused script run after resume, in the operation callback's drain.
+            while (script->EventList.size() > 0 && !ScriptMustEnd(script) && !script->IsPaused()) {
                 EnterCriticalSection(&Vars.cEventSection);
                 Event* evt = script->EventList.back();
                 script->EventList.pop_back();
@@ -552,8 +558,14 @@ JSAPI_FUNC(my_addEventListener) {
             THROW_ERROR(cx, "Event name is invalid!");
         }
         Script* self = (Script*)JS_GetContextPrivate(cx);
-        self->RegisterEvent(evtName, JS_ARGV(cx, vp)[1]);
+        bool added = self->RegisterEvent(evtName, JS_ARGV(cx, vp)[1]);
         JS_free(cx, evtName);
+        if (!added) {
+            // A failed root may or may not have reported; JS_FALSE with nothing pending would end the script silently.
+            if (!JS_IsExceptionPending(cx))
+                JS_ReportOutOfMemory(cx);
+            return JS_FALSE;
+        }
     }
     return JS_TRUE;
 }
@@ -628,7 +640,9 @@ JSAPI_FUNC(my_scriptBroadcast) {
     if (argc < 1)
         THROW_ERROR(cx, "You must specify something to broadcast");
 
-    ScriptBroadcastEvent(cx, argc, JS_ARGV(cx, vp));
+    // A value that can't be cloned throws here, as with script.send, and no script gets the message.
+    if (!ScriptBroadcastEvent(cx, argc, JS_ARGV(cx, vp)))
+        return JS_FALSE;
     return JS_TRUE;
 }
 

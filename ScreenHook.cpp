@@ -186,7 +186,7 @@ Event* Genhook::ClickEvent(int button, POINT* loc) {
     Event* evt = new Event;
     evt->owner = owner;
     evt->argc = 3;
-    evt->name = _strdup("ScreenHookClick");
+    evt->name = "ScreenHookClick";
     evt->arg1 = new DWORD((DWORD)button);
     evt->arg2 = new DWORD((DWORD)loc->x);
     evt->arg3 = new DWORD((DWORD)loc->y);

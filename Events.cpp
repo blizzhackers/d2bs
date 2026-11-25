@@ -8,7 +8,7 @@ bool __fastcall LifeEventCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup("melife");
+        evt->name = "melife";
         evt->arg1 = new DWORD(helper->arg1);
 
         script->FireEvent(evt);
@@ -27,7 +27,7 @@ bool __fastcall ManaEventCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup("memana");
+        evt->name = "memana";
         evt->arg1 = new DWORD(helper->arg1);
 
         script->FireEvent(evt);
@@ -47,12 +47,12 @@ static void FreeKeyBlockerArgs(Event* evt) {
 
 bool __fastcall KeyEventCallback(Script* script, void* argv, uint argc) {
     KeyEventHelper* helper = (KeyEventHelper*)argv;
-    char* name = (helper->up ? "keyup" : "keydown");
+    const char* name = (helper->up ? "keyup" : "keydown");
     if (script->IsRunning() && script->IsListenerRegistered(name)) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup(name);
+        evt->name = name;
         evt->arg1 = new DWORD((DWORD)helper->key);
 
         script->FireEvent(evt);
@@ -63,7 +63,7 @@ bool __fastcall KeyEventCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup(name);
+        evt->name = name;
         evt->arg1 = new DWORD((DWORD)helper->key);
         evt->arg4 = new DWORD(false);
         evt->freeArgs = FreeKeyBlockerArgs;
@@ -84,7 +84,7 @@ bool __fastcall PlayerAssignCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup("playerassign");
+        evt->name = "playerassign";
         evt->arg1 = new DWORD((DWORD)helper->arg1);
 
         script->FireEvent(evt);
@@ -103,7 +103,7 @@ bool __fastcall MouseClickCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup("mouseclick");
+        evt->name = "mouseclick";
         evt->arg1 = new DWORD(helper->arg1);
         evt->arg2 = new DWORD(helper->arg2);
         evt->arg3 = new DWORD(helper->arg3);
@@ -125,7 +125,7 @@ bool __fastcall MouseMoveCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup("mousemove");
+        evt->name = "mousemove";
         evt->arg1 = new DWORD(helper->arg1);
         evt->arg2 = new DWORD(helper->arg2);
 
@@ -143,27 +143,53 @@ void MouseMoveEvent(POINT pt) {
 
 bool __fastcall BCastEventCallback(Script* script, void* argv, uint argc) {
     BCastEventHelper* helper = (BCastEventHelper*)argv;
+    if (helper->failed || !script->IsRunning() || !script->IsListenerRegistered("scriptmsg"))
+        return true;
 
-    if (script->IsRunning() && script->IsListenerRegistered("scriptmsg")) {
-        Event* evt = new Event;
-        evt->owner = script;
-        evt->argc = argc;
-        evt->name = _strdup("scriptmsg");
-        evt->arg1 = new DWORD(argc);
-        evt->argv = new JSAutoStructuredCloneBuffer*[argc];
+    // On the sender's thread: a value that can't be cloned fails its call before any script has the message.
+    if (!helper->written) {
+        JSAutoStructuredCloneBuffer** buffers = new JSAutoStructuredCloneBuffer*[argc];
         for (uint i = 0; i < argc; i++) {
-            evt->argv[i] = new JSAutoStructuredCloneBuffer;
-            evt->argv[i]->write(helper->cx, helper->argv[i]);
+            buffers[i] = new JSAutoStructuredCloneBuffer;
+            if (!buffers[i]->write(helper->cx, helper->argv[i])) {
+                FreeCloneBuffers(buffers, i + 1);
+                helper->failed = true;
+                return true;
+            }
         }
-
-        script->FireEvent(evt);
+        helper->buffers = buffers;
+        helper->written = true;
     }
+
+    JSAutoStructuredCloneBuffer** copies = new JSAutoStructuredCloneBuffer*[argc];
+    for (uint i = 0; i < argc; i++) {
+        copies[i] = new JSAutoStructuredCloneBuffer;
+        if (!copies[i]->copy(helper->buffers[i]->data(), helper->buffers[i]->nbytes())) {
+            FreeCloneBuffers(copies, i + 1);
+            JS_ReportOutOfMemory(helper->cx);
+            helper->failed = true;
+            return true;
+        }
+    }
+
+    Event* evt = new Event;
+    evt->owner = script;
+    evt->argc = argc;
+    evt->name = "scriptmsg";
+    evt->arg1 = new DWORD(argc);
+    evt->argv = copies;
+    script->FireEvent(evt);
     return true;
 }
 
-void ScriptBroadcastEvent(JSContext* cx, uint argc, jsval* args) {
-    BCastEventHelper helper = {cx, args, argc};
+// False with the sender's error set when a value can't be cloned (no script gets the message) or a copy runs out of
+// memory (scripts before it already have it).
+bool ScriptBroadcastEvent(JSContext* cx, uint argc, jsval* args) {
+    BCastEventHelper helper = {cx, args, argc, NULL, false, false};
     ScriptEngine::ForEachScript(BCastEventCallback, &helper, argc);
+    if (helper.written)
+        FreeCloneBuffers(helper.buffers, argc);
+    return !helper.failed;
 }
 
 static void FreeChatBlockerArgs(Event* evt) {
@@ -178,21 +204,19 @@ bool __fastcall ChatEventCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup(helper->name);
+        evt->name = helper->name;
         evt->arg1 = _strdup(helper->nick);
         evt->arg2 = _wcsdup(helper->msg);
 
         script->FireEvent(evt);
     }
-    std::string evtname = helper->name;
-    evtname = evtname + "blocker";
     bool block = false;
 
-    if (script->IsRunning() && script->IsListenerRegistered(evtname.c_str())) {
+    if (script->IsRunning() && script->IsListenerRegistered(helper->blockerName)) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup(evtname.c_str());
+        evt->name = helper->blockerName;
         evt->arg1 = _strdup(helper->nick);
         evt->arg2 = _wcsdup(helper->msg);
         evt->arg4 = new DWORD(false);
@@ -203,17 +227,17 @@ bool __fastcall ChatEventCallback(Script* script, void* argv, uint argc) {
 }
 
 bool ChatEvent(char* lpszNick, wchar_t* lpszMsg) {
-    ChatEventHelper helper = {"chatmsg", lpszNick, lpszMsg};
+    ChatEventHelper helper = {"chatmsg", "chatmsgblocker", lpszNick, lpszMsg};
     return ScriptEngine::ForEachScript(ChatEventCallback, &helper, 2);
 }
 
 bool ChatInputEvent(wchar_t* lpszMsg) {
-    ChatEventHelper helper = {"chatinput", "me", lpszMsg};
+    ChatEventHelper helper = {"chatinput", "chatinputblocker", "me", lpszMsg};
     return ScriptEngine::ForEachScript(ChatEventCallback, &helper, 2);
 }
 
 bool WhisperEvent(char* lpszNick, wchar_t* lpszMsg) {
-    ChatEventHelper helper = {"whispermsg", lpszNick, lpszMsg};
+    ChatEventHelper helper = {"whispermsg", "whispermsgblocker", lpszNick, lpszMsg};
     return ScriptEngine::ForEachScript(ChatEventCallback, &helper, 2);
 }
 
@@ -223,7 +247,7 @@ bool __fastcall CopyDataCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup("copydata");
+        evt->name = "copydata";
         evt->arg1 = new DWORD(helper->mode);
         evt->arg2 = _wcsdup(helper->msg);
 
@@ -243,7 +267,7 @@ bool __fastcall ItemEventCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup("itemaction");
+        evt->name = "itemaction";
         evt->arg1 = new DWORD(helper->id);
         evt->arg2 = _strdup(helper->code);
         evt->arg3 = new DWORD(helper->mode);
@@ -265,7 +289,7 @@ bool __fastcall GameActionEventCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup("gameevent");
+        evt->name = "gameevent";
         evt->arg1 = new BYTE(helper->mode);
         evt->arg2 = new DWORD(helper->param1);
         evt->arg3 = new DWORD(helper->param2);
@@ -295,7 +319,7 @@ bool __fastcall PacketEventCallback(Script* script, void* argv, uint argc) {
         Event* evt = new Event;
         evt->owner = script;
         evt->argc = argc;
-        evt->name = _strdup(helper->name);
+        evt->name = helper->name;
         evt->arg1 = new BYTE[helper->dwSize];
         evt->arg2 = new DWORD(helper->dwSize);
         evt->arg4 = new DWORD(false);
@@ -387,6 +411,5 @@ void ReleaseBlocker(Event* evt) {
         CloseHandle(evt->done);
     if (evt->freeArgs)
         evt->freeArgs(evt);
-    free(evt->name);
     delete evt;
 }

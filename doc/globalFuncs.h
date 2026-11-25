@@ -345,10 +345,10 @@ D2BSScript getScript();
  *
  * \return The first room in the area, or the controlled unit's room for 0.
  * Waits while an area or act loads; undefined when the area is not in the
- * player's act, or when an act change, a move between rooms or the end of the
- * game begins as the call runs. Throws "Get Room Game not ready" out of game,
- * when that wait times out, or at once while the game is busy in a blocking
- * listener or while your script holds the game lock.
+ * player's act, and can be undefined when an act change, a move between rooms
+ * or the end of the game begins as the call runs. Throws "Get Room Game not
+ * ready" out of game, when that wait times out, or at once while the game is
+ * busy in a blocking listener or while your script holds the game lock.
  */
 Room getRoom(uint32_t levelId);
 

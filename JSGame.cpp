@@ -1509,7 +1509,7 @@ JSAPI_FUNC(my_submitItem) {
         UnitAny* pPlayer = D2CLIENT_GetPlayerUnit();
         UnitAny* pItem = D2CLIENT_GetCursorItem();
         if (pItem && PlayerActLoaded()) {
-            DWORD dwArea = GetPlayerArea();
+            DWORD dwArea = GetPlayerAreaLocked();
             dwItemId = pItem->dwUnitId;
             dwPlayerId = pPlayer->dwUnitId;
             if (pPlayer->dwAct == 1) { // dwAct is 0-4, not 1-5

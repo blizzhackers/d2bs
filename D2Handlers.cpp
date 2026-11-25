@@ -82,7 +82,7 @@ DWORD WINAPI D2Thread(LPVOID lpParam) {
                     // game lock; ExitGame runs after it is released, as before.
                     AutoCriticalRoom cRoom;
                     UnitAny* player = D2CLIENT_GetPlayerUnit();
-                    DWORD area = GetPlayerArea();
+                    DWORD area = GetPlayerAreaLocked();
                     if (player && area)
                         exitGame = !D2COMMON_IsTownByLevelNo(area) && ((Vars.nChickenHP && Vars.nChickenHP >= GetUnitHP(player)) ||
                                                                        (Vars.nChickenMP && Vars.nChickenMP >= GetUnitMP(player)));

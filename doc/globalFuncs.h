@@ -1365,9 +1365,11 @@ void scriptBroadcast(...);
  */
 String sqlite_version();
 
-/** Return the sqlite memory usage.
+/** Return the number of bytes of memory SQLite currently holds.
  *
  * \ingroup globalFunctions
+ *
+ * \return The memory SQLite holds, in bytes (0 before SQLite is first used).
  */
 double sqlite_memusage();
 

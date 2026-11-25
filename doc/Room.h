@@ -28,13 +28,13 @@ public:
 
 	/** Get the PresetUnit s from the current Room.
 	 *
-	 * \param nType The type of Unit to get, or 0 for any. See Unit::type. Any
-	 * number or numeric string filters; 0 and a value that converts to NaN match
-	 * any.
+	 * \param nType The type of Unit to get, or 0 for any. See Unit::type. A
+	 * number or numeric string converts as `nType >>> 0` does; a result of 0,
+	 * which a value that converts to NaN also gives, matches any.
 	 *
 	 * \param nClass The class id of the Unit (s) to find, or 0 for any. See
-	 * Unit::classId. Any number or numeric string filters; 0 and a value that
-	 * converts to NaN match any.
+	 * Unit::classId. A number or numeric string converts as `nClass >>> 0` does;
+	 * a result of 0, which a value that converts to NaN also gives, matches any.
 	 *
 	 * \return An array of all the PresetUnit s from the current Room.
 	 */
@@ -58,7 +58,8 @@ public:
 
 	/** Get some property of the Room.
 	 *
-	 * \param nStat Which property to get (any number or numeric string):
+	 * \param nStat Which property to get (any number or numeric string, made a
+	 * 32-bit integer as `nStat | 0` does, so 4.5 reads stat 4):
 	 *
 	 * 0 - xStart (room 1)
 	 *
@@ -93,8 +94,8 @@ public:
 	 * 16 - sizeRoomY (coll)
 	 *
 	 * \return The stat value, or null with no argument, undefined or null, a value
-	 * that converts to NaN, an unlisted stat, or when the room's data for it isn't
-	 * available.
+	 * that converts to NaN, an unlisted stat, when the room's data can't be
+	 * loaded, or for stats 9 to 16 when the room has no collision map.
 	 */
 	int getStat(int nStat);
 

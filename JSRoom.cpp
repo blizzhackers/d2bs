@@ -182,7 +182,7 @@ JSAPI_FUNC(room_getPresetUnits) {
         return JS_TRUE;
 
     // The type and class id convert before the game lock is taken, since a valueOf run under it stalls the game thread.
-    // Any number or numeric string filters; 0, and a value that converts to NaN, means any.
+    // Each converts as `value >>> 0`; a result of 0, which a value that converts to NaN also gives, means any.
     uint32 nType = 0;
     uint32 nClass = 0;
     JS_BeginRequest(cx);
@@ -453,7 +453,10 @@ JSAPI_FUNC(room_getNearby) {
 
 // Don't know whether it works or not
 JSAPI_FUNC(room_getStat) {
-    RoomSnapshot* pSnap = GetSnapshot(cx, JS_THIS_OBJECT(cx, vp));
+    JSObject* self = JS_THIS_OBJECT(cx, vp);
+    if (!self)
+        return JS_FALSE;
+    RoomSnapshot* pSnap = GetSnapshot(cx, self);
 
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     if (!pSnap || argc < 1 || JSVAL_IS_VOID(JS_ARGV(cx, vp)[0]) || JSVAL_IS_NULL(JS_ARGV(cx, vp)[0]))

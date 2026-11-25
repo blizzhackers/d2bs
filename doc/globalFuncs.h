@@ -118,11 +118,13 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  * otherwise they run without the game lock, so the game keeps running while one
  * waits, for example in delay(). They may call getCollision() and getPath().
  * Inside a listener the game is already waiting on, the game also stays paused
- * until getPath returns. After each reject or mutate call, getPath checks that
- * the player is still in the same game, act and area; if not, it calls none of
- * the three again and returns an empty path. A trip away and back to the same
- * area within one call may not be noticed. reduce runs after the search, so
- * the path it reduces is still returned.
+ * until getPath returns or the game stops waiting for that listener (after
+ * 500 ms for a packet or chat blocker, 1 s for keydownblocker, 3 s for a hook's
+ * click handler). After each reject or mutate call that returns normally,
+ * getPath checks that the player is still in the same game, act and area; if
+ * not, it calls none of the three again and returns an empty path. A trip away
+ * and back to the same area within one call may not be noticed. reduce runs
+ * after the search, so the path it reduces is still returned.
  *
  * \return The path as an array of objects with x and y properties.
  * Throws an error when the area is not in the act the player is in.
@@ -384,8 +386,8 @@ Room getRoom(int x, int y);
  *
  * \ingroup globalFunctions
  *
- * \return The first room in the current area; undefined when an act change
- * begins as the call runs. Throws "Get Room Game not ready" out of game, when
+ * \return The first room in the current area; can be undefined when an act
+ * change begins as the call runs. Throws "Get Room Game not ready" out of game, when
  * the wait for an area or act load times out, or at once while the game is busy
  * in a blocking listener or while your script holds the game lock.
  */
@@ -1266,12 +1268,13 @@ bool keystate(int vKey);
  * A listener whose result can block its event (keydownblocker, chatmsgblocker,
  * chatinputblocker, whispermsgblocker, gamepacket, gamepacketsent, realmpacket,
  * and a hook's click handler) runs while the game, or the script that sent the
- * packet, waits for its answer. A call in it that needs a ready game returns
- * its "Game not ready" result at once while the game is busy (an area or act
- * loading, or the moment the player moves between rooms), rather than waiting.
- * A gamepacketsent listener for a packet its own script sent runs inside that
- * send instead; its calls wait as usual unless the send was made while the
- * script holds the game lock, when they get "Game not ready" at once.
+ * packet, may be waiting for its answer. A call in it that needs a ready game
+ * returns its "Game not ready" result at once while the game is busy (an area
+ * or act loading, or the moment the player moves between rooms), rather than
+ * waiting. A gamepacketsent listener for a packet its own script sent runs
+ * inside that send instead; its calls wait as usual unless the send was made
+ * while the script holds the game lock or from inside a listener whose result
+ * can block its event, when they get "Game not ready" at once.
  *
  * \param eventHandler A function with the signature listed above that handles
  * the event.

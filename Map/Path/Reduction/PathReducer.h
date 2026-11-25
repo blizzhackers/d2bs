@@ -24,6 +24,10 @@ class PathReducer {
     virtual bool Failed() const {
         return false;
     }
+    // True once a reducer stopped the search; getPath then returns an empty path, unless Failed() is true as well.
+    virtual bool Stopped() const {
+        return false;
+    }
 };
 
 } // namespace Reducing

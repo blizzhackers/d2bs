@@ -28,8 +28,9 @@ class JSPathReducer : public PathReducer {
     bool failed_;
     // Where the search started, captured under the game lock before any callback.
     SearchOrigin origin_;
-    // Set when the player left the search's origin during a callback, or the start or end lies outside the act's levels
-    // after mutate: no further script call is made and getPath returns an empty path. Unlike failed_, nothing is pending.
+    // Set when no origin could be captured, the player left the search's origin during a callback, or the start or end
+    // lies outside the act's levels after mutate: no further script call is made and getPath returns an empty path.
+    // A stop leaves nothing pending; when a callback also failed, failed_ is set too and its error wins.
     bool stopped_;
     // reject's answer for each point it was asked about: it is asked at most once per point, which the docs promise.
     std::map<Point, bool> verdicts_;
@@ -53,7 +54,7 @@ class JSPathReducer : public PathReducer {
             Log(L"getPath: reject, mutate and reduce run with the game paused (this thread already held the game lock)");
         }
     }
-    // The game ran during the callback: a player who left the search's origin makes the rest of the search moot.
+    // The game may have run during the callback: a player who left the search's origin ends the search.
     void RetakeGame() {
         map->actCrit->EnterSection();
         if (!stopped_ && !SearchOriginHolds(origin_))
@@ -68,7 +69,8 @@ class JSPathReducer : public PathReducer {
         static const JSErrorFormatString format = {"getPath mutate must return [x, y] with two numbers in the 32-bit integer range", 0, (int16_t)JSEXN_TYPEERR};
         return &format;
     }
-    // Runs without the game lock: the element reads run getters and the conversions run valueOf, both script.
+    // Runs without the search's hold on the game lock: the element reads run getters and the conversions run valueOf,
+    // both script.
     bool CallMutate(int& x, int& y) {
         jsval rval = JSVAL_VOID;
         jsval argv[] = {INT_TO_JSVAL(x), INT_TO_JSVAL(y)};
@@ -121,9 +123,12 @@ class JSPathReducer : public PathReducer {
     bool Failed() const {
         return failed_;
     }
+    bool Stopped() const {
+        return stopped_;
+    }
 
     void Reduce(PointList const& in, PointList& out, bool abs) {
-        // The last game-lock use of the search: the points are built and the callbacks run without it.
+        // The last game-lock use of the search: the points are built and the callbacks run without the search's hold.
         ReleaseGame();
         if (failed_ || stopped_)
             return;
@@ -173,7 +178,7 @@ class JSPathReducer : public PathReducer {
         }
     }
     bool Reject(Point const& pt, bool abs) {
-        // After a failure or a stop every point is blocked, so the search drains without calling script again.
+        // After a failure or a stop every point is blocked, so the search ends without calling script again.
         if (failed_ || stopped_ || !InLevels(pt))
             return true;
         std::map<Point, bool>::const_iterator known = verdicts_.find(pt);

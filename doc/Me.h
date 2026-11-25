@@ -901,11 +901,11 @@ public:
 	 */
 	int runwalk;
 
-	/** The health at which to chicken if the character drops below, outside town.
+	/** The health at or below which to chicken, outside town; 0 turns it off.
 	 */
 	int chickenhp;
 
-	/** The mana at which to chicken if the character drops below, outside town.
+	/** The mana at or below which to chicken, outside town; 0 turns it off.
 	 */
 	int chickenmp;
 

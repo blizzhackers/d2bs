@@ -23,56 +23,74 @@ JSAPI_PROP(area_getProperty) {
     if (!pArea)
         THROW_ERROR(cx, "Area not loaded");
 
-    // Waits out a load like getPath, so a read mid-walk does not throw; a blocking listener fails fast instead.
-    if (!WaitForGameReady())
-        THROW_ERROR(cx, "Area not loaded");
+    jsval ID;
+    JS_IdToValue(cx, id, &ID);
+    const int32 nProp = JSVAL_TO_INT(ID);
+    // The exits are cached in the area's reserved slot, so the GC keeps the list exactly as long as the area object.
+    jsval exitList = JSVAL_VOID;
+    if (nProp == AUNIT_EXITS) {
+        JS_BeginRequest(cx);
+        exitList = JS_GetReservedSlot(obj, 0);
+        JS_EndRequest(cx);
+    }
+    const bool bBuildExits = nProp == AUNIT_EXITS && JSVAL_IS_VOID(exitList);
 
-    // The level is looked up and read under one hold of the game lock, which the game thread needs to free an act's
-    // levels; the hold ends before any value is built, since building one can run the GC.
-    bool bLoaded = false;
+    // Waits out a load, so a read mid-walk does not throw; a blocking listener or a thread that holds the game lock
+    // fails fast instead. The wait reads readiness without the game lock, so a game found busy again under the lock
+    // sends the read back to wait, against the same deadline. bMayWait is sampled before the getter takes the lock.
+    const bool bMayWait = MayWaitForGame();
+    const DWORD start = GetTickCount();
+    bool bLoaded = false, bRetry = false;
     DWORD dwPosX = 0, dwPosY = 0, dwSizeX = 0, dwSizeY = 0, dwLevelNo = 0;
-    {
+    ExitArray exits;
+    do {
+        // A busy game seen under the lock gets the wait's own poll before the next probe: the deadline, a pause, then
+        // the deadline again.
+        if (bRetry) {
+            if (GameReadyTimedOut(start))
+                break;
+            Sleep(10);
+            if (GameReadyTimedOut(start))
+                break;
+        }
+        if (!WaitForGameReadySince(start))
+            THROW_ERROR(cx, "Area not loaded");
+        // The level and its exits are read under one hold of the game lock, which the game thread needs to free an
+        // act's levels; the hold ends before any value is built, since building one can run the GC.
         AutoCriticalRoom cRoom;
         Level* pLevel = GetLevel(pArea->AreaId);
-        if (pLevel) {
-            bLoaded = true;
-            dwPosX = pLevel->dwPosX;
-            dwPosY = pLevel->dwPosY;
-            dwSizeX = pLevel->dwSizeX;
-            dwSizeY = pLevel->dwSizeY;
-            dwLevelNo = pLevel->dwLevelNo;
+        if (!pLevel) {
+            bRetry = bMayWait && ClientState() == ClientStateBusy;
+            if (bRetry)
+                continue;
+            break;
         }
-    }
+        dwPosX = pLevel->dwPosX;
+        dwPosY = pLevel->dwPosY;
+        dwSizeX = pLevel->dwSizeX;
+        dwSizeY = pLevel->dwSizeY;
+        dwLevelNo = pLevel->dwLevelNo;
+        if (bBuildExits) {
+            ScopedActMap map(pArea->AreaId);
+            if (!map.ok())
+                break;
+            map->GetExits(exits);
+        }
+        bLoaded = true;
+    } while (!bLoaded);
     if (!bLoaded)
         THROW_ERROR(cx, "Area not loaded");
 
-    jsval ID;
-    JS_IdToValue(cx, id, &ID);
-    switch (JSVAL_TO_INT(ID)) {
+    switch (nProp) {
     case AUNIT_EXITS: {
         JS_BeginRequest(cx);
-        // Cached in the area's reserved slot, so the GC keeps the list exactly as long as the area object.
-        jsval exitList = JS_GetReservedSlot(obj, 0);
-        if (JSVAL_IS_VOID(exitList)) {
+        if (bBuildExits) {
             JS::RootedObject exitArray(cx, JS_NewArrayObject(cx, 0, NULL));
             if (!exitArray) {
                 JS_EndRequest(cx);
                 return JS_FALSE;
             }
 
-            ExitArray exits;
-            bool bMapped = false;
-            {
-                ScopedActMap map(pArea->AreaId);
-                bMapped = map.ok();
-                if (bMapped)
-                    map->GetExits(exits);
-            }
-            // The act can change between the read above and this map; that is the same not-loaded case.
-            if (!bMapped) {
-                JS_EndRequest(cx);
-                THROW_ERROR(cx, "Area not loaded");
-            }
             int count = exits.size();
             for (int i = 0; i < count; i++) {
                 myExit* exit = new myExit;

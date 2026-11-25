@@ -17,15 +17,26 @@ void LogNoFormat(const wchar_t* szString);
 ClientGameState ClientState(void);
 bool GameReady(void);
 bool WaitForGameReady(void);
+// WaitForGameReady with GameReadyTimeout counted from start, for a native that waits again after it found the game busy
+// under the game lock: the wait reads readiness without that lock, so the game can turn busy before the lock is taken.
+bool WaitForGameReadySince(DWORD start);
+// True once GameReadyTimeout has passed since start; never while it is 0, which waits without a limit.
+bool GameReadyTimedOut(DWORD start);
+// False on a thread running blocking listeners or holding the game lock: on a busy game it fails at once instead of
+// waiting. A native that takes the game lock samples this first, since under the lock every thread holds it.
+bool MayWaitForGame(void);
 DWORD GetPlayerArea(void);
+// GetPlayerArea for a caller that already holds the game lock, such as the path search, which asks on every node.
+DWORD GetPlayerAreaLocked(void);
 bool PlayerActLoaded(void);
 
 // DllMain allocates the per-thread blocking-listener slot before any thread starts and releases it at detach.
 bool AllocBlockingListenerSlot(void);
 void FreeBlockingListenerSlot(void);
 
-// Marks the current thread, for its lifetime, as running listeners whose verdict another thread waits for (a blocker
-// event); WaitForGameReady then fails at once instead of waiting for a state only that waiting thread can change.
+// An active scope (a blocker event) marks the current thread, while it lives, as running that event's listeners, so
+// WaitForGameReady fails at once on a busy game (MayWaitForGame), also after the event's sender stopped waiting; the
+// scope restores the previous mark when it ends.
 class BlockingListenerScope {
   public:
     explicit BlockingListenerScope(bool active);

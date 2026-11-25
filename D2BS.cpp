@@ -103,7 +103,9 @@ BOOL WINAPI DllMain(HINSTANCE hDll, DWORD dwReason, LPVOID lpReserved) {
             Vars.bShutdownFromDllMain = TRUE;
             Shutdown();
         }
-        FreeBlockingListenerSlot(); // after Shutdown() has stopped the script threads
+        // At process exit no other thread is left. Shutdown() from DllMain joins no thread, so a live unload with
+        // scripts still running is unsafe with or without this slot.
+        FreeBlockingListenerSlot();
         break;
     }
 

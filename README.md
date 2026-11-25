@@ -247,7 +247,7 @@ Returns an array of points that form a path from the source to the destination. 
 
 * `mutate` Called with (x, y) for the start or the end when it is blocked, before the search. Return [x, y] to move that point (fractions are truncated); a return that isn't an object keeps it. A start or end that is outside the current act's levels once mutate returns, moved there or kept, has no path, so getPath returns an empty path without calling reject or mutate again. An object whose elements 0 and 1 don't convert to numbers in the 32-bit integer range makes getPath throw a TypeError.
 
-Reduction type 3 needs all three functions, or getPath throws. They are called with getPath's this (the global object for a plain call). An error one of them throws, or the script being stopped while one runs, ends the getPath call with it. When the script already holds the game lock as getPath starts, for example in a gamepacketsent listener that runs inside clickMap(), they run with the game paused and the D2BS log notes it once for that call; otherwise they run without the game lock, so the game keeps running while one waits, for example in delay(). They may call getCollision() and getPath(). Inside a listener the game is already waiting on, the game also stays paused until getPath returns. After each reject or mutate call, getPath checks that the player is still in the same game, act and area; if not, it calls none of the three again and returns an empty path. A trip away and back to the same area within one call may not be noticed. reduce runs after the search, so the path it reduces is still returned.
+Reduction type 3 needs all three functions, or getPath throws. They are called with getPath's this (the global object for a plain call). An error one of them throws, or the script being stopped while one runs, ends the getPath call with it. When the script already holds the game lock as getPath starts, for example in a gamepacketsent listener that runs inside clickMap(), they run with the game paused and the D2BS log notes it once for that call; otherwise they run without the game lock, so the game keeps running while one waits, for example in delay(). They may call getCollision() and getPath(). Inside a listener the game is already waiting on, the game also stays paused until getPath returns or the game stops waiting for that listener (after 500 ms for a packet or chat blocker, 1 s for keydownblocker, 3 s for a hook's click handler). After each reject or mutate call that returns normally, getPath checks that the player is still in the same game, act and area; if not, it calls none of the three again and returns an empty path. A trip away and back to the same area within one call may not be noticed. reduce runs after the search, so the path it reduces is still returned.
 
 #### Returns
 The path as an array of objects with x and y properties. Throws an error when the area is not in the act the player is in.
@@ -446,7 +446,7 @@ Get the first room in area given by level id.
 * `levelId` The id of the area to get the room from, or 0 to get the room the controlled unit is in. Any number or numeric string is read as an area id; undefined, null and values that convert to NaN read as 0.
 
 #### Returns
-The first room in the area, or the controlled unit's room for 0. Waits while an area or act loads; undefined when the area is not in the player's act, or when an act change, a move between rooms or the end of the game begins as the call runs. Throws "Get Room Game not ready" out of game, when that wait times out, or at once while the game is busy in a blocking listener or while your script holds the game lock.
+The first room in the area, or the controlled unit's room for 0. Waits while an area or act loads; undefined when the area is not in the player's act, and can be undefined when an act change, a move between rooms or the end of the game begins as the call runs. Throws "Get Room Game not ready" out of game, when that wait times out, or at once while the game is busy in a blocking listener or while your script holds the game lock.
 
 #### `public `[`Room`](#classRoom)` `[`getRoom`](#group__globalFunctions_1ga6c10567ae9eac427ef0770edb2ab8c21)`(uint32_t levelId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y)` 
 
@@ -479,7 +479,7 @@ The room at the given point. Throws "Get Room Game not ready" out of game, when 
 Get the first room in the current area.
 
 #### Returns
-The first room in the current area; undefined when an act change begins as the call runs. Throws "Get Room Game not ready" out of game, when the wait for an area or act load times out, or at once while the game is busy in a blocking listener or while your script holds the game lock.
+The first room in the current area; can be undefined when an act change begins as the call runs. Throws "Get Room Game not ready" out of game, when the wait for an area or act load times out, or at once while the game is busy in a blocking listener or while your script holds the game lock.
 
 #### `public `[`Party`](#classParty)` `[`getParty`](#group__globalFunctions_1gae1a5223caa888f3cc2429fad719fc7eb)`()` 
 
@@ -1065,7 +1065,7 @@ mode:
 
 0x0b - <Unknown> 0x0c - <Unknown> 0x0d - "%Name1 is not listening to you." 0x0e - Received on 'Not enough mana' speech. 0x0f - "Realm going down in %Param1 minutes." 0x10 - "You must wait a short time to declare hostility with that player." 0x11 - "%Param1 Stones of Jordan Sold to Merchants" 0x12 - "Diablo Walks the Earth"
 
-A listener whose result can block its event (`keydownblocker`, `chatmsgblocker`, `chatinputblocker`, `whispermsgblocker`, `gamepacket`, `gamepacketsent`, `realmpacket`, and a hook's click handler) runs while the game, or the script that sent the packet, waits for its answer. A call in it that needs a ready game returns its "Game not ready" result at once while the game is busy (an area or act loading, or the moment the player moves between rooms), rather than waiting. A `gamepacketsent` listener for a packet its own script sent runs inside that send instead; its calls wait as usual unless the send was made while the script holds the game lock, when they get "Game not ready" at once.
+A listener whose result can block its event (`keydownblocker`, `chatmsgblocker`, `chatinputblocker`, `whispermsgblocker`, `gamepacket`, `gamepacketsent`, `realmpacket`, and a hook's click handler) runs while the game, or the script that sent the packet, may be waiting for its answer. A call in it that needs a ready game returns its "Game not ready" result at once while the game is busy (an area or act loading, or the moment the player moves between rooms), rather than waiting. A `gamepacketsent` listener for a packet its own script sent runs inside that send instead; its calls wait as usual unless the send was made while the script holds the game lock or from inside a listener whose result can block its event, when they get "Game not ready" at once.
 
 #### Parameters
 * `eventHandler` A function with the signature listed above that handles the event.
@@ -2045,7 +2045,7 @@ tcpIpJoin            |
 
 # class `Area` 
 
-Represent an [Area](#classArea) of the map. Reading a property throws an error while the area is not in the act the player is in, for example after a waypoint to another act, or when the game isn't ready (out of game, or in a blocking listener while an area loads).
+Represent an [Area](#classArea) of the map. Reading a property waits while an area or act loads. It throws an error while the area is not in the act the player is in (for example after a waypoint to another act) or the game cannot build its rooms, and when the game isn't ready: out of game, when the wait for an area or act load times out, or at once while the game is busy in a blocking listener or while your script holds the game lock.
 
 ## Summary
 
@@ -3361,8 +3361,8 @@ Technically, also called [Unit](#classUnit), but since C++ doesn't support class
 `public String `[`realm`](#classMe_1a9d5e5a2fec0a033316b6d49073b961d5) | The realm name.
 `public String `[`realmshort`](#classMe_1aa8bdeb8ae3ba0db767a64f84ba489094) | The short realm name.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`mercrevivecost`](#classMe_1a913adbc2fce146ef6c9f5268a76ebfc5) | The cost to revive the merc.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`chickenhp`](#classMe_1a215c51bfd214de4bff2eeefdc5ecd5ab) | The health at which to chicken if the character drops below, outside town.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`chickenmp`](#classMe_1a7e95aede9d9b33b217e2c74b0aed9865) | The mana at which to chicken if the character drops below, outside town.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`chickenhp`](#classMe_1a215c51bfd214de4bff2eeefdc5ecd5ab) | The health at or below which to chicken, outside town; 0 turns it off.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`chickenmp`](#classMe_1a7e95aede9d9b33b217e2c74b0aed9865) | The mana at or below which to chicken, outside town; 0 turns it off.
 `public bool `[`quitonhostile`](#classMe_1a2b52680cdbc8a340cf1b83a11f288e9a) | Whether to chicken if another player hostiles the controlled character.
 `public bool `[`blockKeys`](#classMe_1a32b0fe4966c613767100bca03d4cff54) | Block keys...
 `public bool `[`blockMouse`](#classMe_1aa9360f70984b69d889ca7744a977d031) | Block mouse...
@@ -3781,11 +3781,11 @@ The cost to revive the merc.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`chickenhp`](#classMe_1a215c51bfd214de4bff2eeefdc5ecd5ab) 
 
-The health at which to chicken if the character drops below, outside town.
+The health at or below which to chicken, outside town; 0 turns it off.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`chickenmp`](#classMe_1a7e95aede9d9b33b217e2c74b0aed9865) 
 
-The mana at which to chicken if the character drops below, outside town.
+The mana at or below which to chicken, outside town; 0 turns it off.
 
 #### `public bool `[`quitonhostile`](#classMe_1a2b52680cdbc8a340cf1b83a11f288e9a) 
 
@@ -4757,9 +4757,9 @@ Whether or not the [Room](#classRoom) was successfully revealed.
 Get the [PresetUnit](#classPresetUnit) s from the current [Room](#classRoom).
 
 #### Parameters
-* `nType` The type of [Unit](#classUnit) to get, or 0 for any. See [Unit::type](#classUnit_1a45243122ae655f50179f96bc831bfb1d). Any number or numeric string filters; 0 and a value that converts to NaN match any.
+* `nType` The type of [Unit](#classUnit) to get, or 0 for any. See [Unit::type](#classUnit_1a45243122ae655f50179f96bc831bfb1d). A number or numeric string converts as `nType >>> 0` does; a result of 0, which a value that converts to NaN also gives, matches any.
 
-* `nClass` The class id of the [Unit](#classUnit) (s) to find, or 0 for any. See Unit::classId. Any number or numeric string filters; 0 and a value that converts to NaN match any.
+* `nClass` The class id of the [Unit](#classUnit) (s) to find, or 0 for any. See Unit::classId. A number or numeric string converts as `nClass >>> 0` does; a result of 0, which a value that converts to NaN also gives, matches any.
 
 #### Returns
 An array of all the [PresetUnit](#classPresetUnit) s from the current [Room](#classRoom).
@@ -4785,7 +4785,7 @@ An array of the nearby Rooms.
 Get some property of the [Room](#classRoom).
 
 #### Parameters
-* `nStat` Which property to get (any number or numeric string):
+* `nStat` Which property to get (any number or numeric string, made a 32-bit integer as `nStat | 0` does, so 4.5 reads stat 4):
 
 0 - xStart (room 1)
 
@@ -4820,7 +4820,7 @@ Get some property of the [Room](#classRoom).
 16 - sizeRoomY (coll)
 
 #### Returns
-The stat value, or null with no argument, undefined or null, a value that converts to NaN, an unlisted stat, or when the room's data for it isn't available.
+The stat value, or null with no argument, undefined or null, a value that converts to NaN, an unlisted stat, when the room's data can't be loaded, or for stats 9 to 16 when the room has no collision map.
 
 #### `public `[`Room`](#classRoom)` `[`getFirst`](#classRoom_1ad9a6e43e97d1f9368eeecc578dcd6e26)`()` 
 

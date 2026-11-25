@@ -342,7 +342,8 @@ JSAPI_FUNC(my_getPath) {
     // box18jsrefcount depth = JS_SuspendRequest(cx);
 
     path.GetPath(start, end, list, true);
-    // The game lock is released before the points are built: BuildObject can run the GC, which the game must not wait on.
+    // The search's hold on the game lock ends before the points are built: BuildObject can run the GC, which the game
+    // must not wait on.
     map->CleanUp();
     // A failed type-3 callback left its exception, stop or out-of-memory report pending.
     if (reducer->Failed()) {

@@ -125,11 +125,11 @@ return NULL;
 *(DWORD*)&p_D2CLIENT_SelectedInvItem = (DWORD)FindItemByPosition(x, y, dwLocation);
 }*/
 
-// An act change frees the old act before the player's own pointer moves on, so the player's rooms are walked only
-// while its act is the loaded act.
-static bool ActLoadedFor(UnitAny* player) {
+// An act change frees the old act before a unit's own act pointer moves on, so a unit's rooms are walked only while
+// its act is the loaded act.
+static bool ActLoadedFor(UnitAny* unit) {
     Act* pAct = *p_D2CLIENT_CurrentAct;
-    return player && pAct && player->pAct == pAct && pAct->pMisc;
+    return unit && pAct && unit->pAct == pAct && pAct->pMisc;
 }
 
 bool PlayerActLoaded(void) {
@@ -201,8 +201,17 @@ BlockingListenerScope::~BlockingListenerScope() {
     SetInBlockingListener(previous);
 }
 
-bool WaitForGameReady(void) {
-    DWORD start = GetTickCount();
+bool GameReadyTimedOut(DWORD start) {
+    return Vars.dwGameTimeout > 0 && (GetTickCount() - start) >= Vars.dwGameTimeout;
+}
+
+// A blocking listener gets "not ready" at once by policy: the thread waiting for its verdict is usually the game
+// thread, the only one that can end Busy. A thread that holds the game lock keeps the game thread waiting on that lock.
+bool MayWaitForGame(void) {
+    return !InBlockingListener() && !HoldsGameLock();
+}
+
+bool WaitForGameReadySince(DWORD start) {
     do {
         switch (ClientState()) {
         case ClientStateNull:
@@ -211,18 +220,18 @@ bool WaitForGameReady(void) {
         case ClientStateInGame:
             return true;
         }
-        // Only the game thread can end Busy: a blocking listener's verdict is usually what it waits for, and a thread
-        // that holds the game lock keeps it waiting on that lock, so neither wait could end before the timeout.
-        if (InBlockingListener() || HoldsGameLock())
+        if (!MayWaitForGame())
             return false;
         Sleep(10);
-    } while ((Vars.dwGameTimeout == 0) || (Vars.dwGameTimeout > 0 && (GetTickCount() - start) < Vars.dwGameTimeout));
+    } while (!GameReadyTimedOut(start));
     return false;
 }
 
-DWORD GetPlayerArea(void) {
-    // Under the game lock: the game frees rooms only while it holds it, so the walk below reads live links.
-    AutoCriticalRoom cRoom;
+bool WaitForGameReady(void) {
+    return WaitForGameReadySince(GetTickCount());
+}
+
+DWORD GetPlayerAreaLocked(void) {
     if (ClientState() != ClientStateInGame)
         return 0;
     UnitAny* player = D2CLIENT_GetPlayerUnit();
@@ -232,13 +241,18 @@ DWORD GetPlayerArea(void) {
     return player->pPath->pRoom1->pRoom2->pLevel->dwLevelNo;
 }
 
+DWORD GetPlayerArea(void) {
+    // Under the game lock: the game frees rooms only while it holds it, so the walk reads live links.
+    AutoCriticalRoom cRoom;
+    return GetPlayerAreaLocked();
+}
+
 Level* GetLevel(DWORD dwLevelNo) {
     // On the stack, so every return gives the game lock back: a held lock freezes the game thread.
     AutoCriticalRoom cRoom;
 
     // An act change frees the old act before the player's own pointer moves on, and the game thread can hand this lock to
-    // a packet listener in between, so the player's act is walked only while it is the loaded act. This is checked before
-    // GameReady(), which follows the player's room chain into that act.
+    // a packet listener in between, so the player's act is walked only while it is the loaded act.
     if (!PlayerActLoaded())
         return nullptr;
     Act* pAct = *p_D2CLIENT_CurrentAct;
@@ -591,10 +605,9 @@ DWORD GetTileLevelNo(Room2* lpRoom2, DWORD dwTileNo) {
 // The caller holds the game lock: the game relinks units between room lists on its own thread. An act change frees the
 // old act before a unit's act pointer moves on, so the rooms are walked only while that act is the loaded one.
 UnitAny* GetMercUnit(UnitAny* pUnit) {
-    Act* pAct = *p_D2CLIENT_CurrentAct;
-    if (!pUnit || !pAct || pUnit->pAct != pAct)
+    if (!ActLoadedFor(pUnit))
         return NULL;
-    for (Room1* pRoom = pAct->pRoom1; pRoom; pRoom = pRoom->pRoomNext)
+    for (Room1* pRoom = pUnit->pAct->pRoom1; pRoom; pRoom = pRoom->pRoomNext)
         for (UnitAny* pMerc = pRoom->pUnitFirst; pMerc; pMerc = pMerc->pRoomNext)
             if (pMerc->dwType == UNIT_MONSTER &&
                 (pMerc->dwTxtFileNo == MERC_A1 || pMerc->dwTxtFileNo == MERC_A2 || pMerc->dwTxtFileNo == MERC_A3 || pMerc->dwTxtFileNo == MERC_A5) &&

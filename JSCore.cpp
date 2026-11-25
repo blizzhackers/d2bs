@@ -114,8 +114,8 @@ JSAPI_FUNC(my_setInterval) {
 }
 
 // clearTimeout and clearInterval: any script's timer, by id. undefined and null cancel nothing, as in browsers; a
-// fraction is cut to a whole number, so any id from 1 up to but not including 2^31 cancels that truncated id; anything
-// else cancels nothing.
+// fraction is cut to a whole number, so any id from 1 up to but not including 2^31 cancels that truncated id; any
+// other number cancels nothing, and a value that is not a number throws.
 JSAPI_FUNC(my_clearInterval) {
     JS_SET_RVAL(cx, vp, JSVAL_NULL);
     if (argc < 1 || JSVAL_IS_VOID(JS_ARGV(cx, vp)[0]) || JSVAL_IS_NULL(JS_ARGV(cx, vp)[0]))

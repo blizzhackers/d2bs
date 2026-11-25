@@ -1338,7 +1338,7 @@ void clearAllEvents();
  * \return The timer's id, a whole number from 1 up, for clearTimeout().
  *
  * Throws an error the script can catch when the callback is not a function, when the delay is missing or not a
- * number, or when Windows could not create the timer.
+ * number, or when Windows could not create or set the timer.
  */
 int setTimeout(Function callback, double delay, ...);
 
@@ -1358,7 +1358,7 @@ int setTimeout(Function callback, double delay, ...);
  * \return The timer's id, a whole number from 1 up, for clearInterval().
  *
  * Throws an error the script can catch when the callback is not a function, when the period is missing or not a
- * number, or when Windows could not create the timer.
+ * number, or when Windows could not create or set the timer.
  */
 int setInterval(Function callback, double period, ...);
 

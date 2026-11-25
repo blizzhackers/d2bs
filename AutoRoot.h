@@ -10,16 +10,20 @@ class AutoRoot {
     jsval var;
     int count;
     JSContext* cx;
+    bool rooted;
     AutoRoot(const AutoRoot&);
     AutoRoot& operator=(const AutoRoot&);
 
   public:
-    AutoRoot() : var(JSVAL_NULL), count(0) {
-    }
     AutoRoot(JSContext* cx, jsval var);
     ~AutoRoot();
     void Take();
     void Release();
+    // False when the value could not be rooted (out of memory, which the engine may not have reported): the caller
+    // must delete this AutoRoot rather than keep the value.
+    bool ok() const {
+        return rooted;
+    }
     jsval* value() {
         return &var;
     }

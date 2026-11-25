@@ -43,7 +43,9 @@ class ScriptEngine {
 
     static Script* CompileFile(const wchar_t* file, ScriptState state, uint argc = 0, JSAutoStructuredCloneBuffer** argv = NULL, bool recompile = false);
     static void RunCommand(const wchar_t* command);
-    static void DisposeScript(Script* script);
+    // fromPass: the caller is a ForEachScript callback. A never-started Script's engine reference is released only by
+    // a call with fromPass false (its loader's, after the loader's last use of it); a pass only unlists it.
+    static void DisposeScript(Script* script, bool fromPass = false);
     // True while the script is in the scripts map; a replaced or disposed script never is.
     static bool IsListed(Script* script);
     // The live Script with this id, or NULL (0 never matches). The caller holds the list lock and keeps holding it
@@ -59,15 +61,14 @@ class ScriptEngine {
     static unsigned int GetCount(bool active = true, bool unexecuted = false);
 
     static void StopAll(bool forceStop = false);
-    static void ExecEventAsync(char* evtName, AutoRoot** argv, uint argc);
     // Both return false on an engine failure (out of memory): they run inside JS_NewContext's callback, which must not throw.
     static bool InitClass(JSContext* context, JSObject* globalObject, JSClass* classp, JSFunctionSpec* methods, JSPropertySpec* props, JSFunctionSpec* s_methods,
                           JSPropertySpec* s_props);
     static bool DefineConstant(JSContext* context, JSObject* globalObject, const char* name, int value);
     static void UpdateConsole();
     // setTimeout / setInterval. A timer belongs to the script that set it, whose thread alone runs its callback and
-    // frees it; any thread may cancel it by id. Returns false only when the arguments' array could not be made (an
-    // engine failure, already reported); otherwise *id is the timer's id, or 0 when no timer could be set.
+    // frees it; any thread may cancel it by id. Returns false, already reported, when no timer could be made (a Windows
+    // timer failure or an engine failure); otherwise *id is the timer's id, 1..INT_MAX.
     static bool AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat, int* id);
     static void ClearTimer(int id);
     static int ClearTimers(Script* owner);
@@ -78,13 +79,6 @@ class ScriptEngine {
 
 // these ForEachScript helpers are exposed in case they can be of use somewhere
 bool __fastcall StopIngameScript(Script* script, void*, uint);
-bool __fastcall ExecEventOnScript(Script* script, void* argv, uint argc);
-struct EventHelper {
-    char* evtName;
-    AutoRoot** argv;
-    uint argc;
-    bool executed;
-};
 JSBool operationCallback(JSContext* cx);
 JSBool contextCallback(JSContext* cx, uint contextOp);
 // gcCallback(JSContext* cx, JSGCStatus status);

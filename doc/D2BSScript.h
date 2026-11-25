@@ -10,7 +10,11 @@ public:
 	 */
 	bool getNext();
 
-	/** Pause the script.
+	/** Pause the script. Messages sent to it with send(), and its
+	 * setTimeout/setInterval callbacks, wait until resume() (or, in game, run
+	 * while it waits inside a game call such as a skill change); each pending
+	 * timer runs once then, however many periods passed. Game events that
+	 * arrive while it is paused are not delivered.
 	 */
 	void pause();
 
@@ -28,9 +32,19 @@ public:
 	void stop();
 
 	/** Send some values to the script. Has the effect of calling any
-	 * listeners to scriptmsg with the parameters provided. A value that can't
-	 * be copied (a function, or a game object such as a Unit) throws an error
-	 * and nothing is sent.
+	 * listeners to scriptmsg with the parameters provided. The message reaches
+	 * a script that is running or paused and has a scriptmsg listener, or one
+	 * that has not started yet (just loaded, or waiting for the copy it
+	 * replaces to end). A script that has not started usually gets the message
+	 * at its first delay() or event, so a listener its top level adds before
+	 * then receives it; an engine interrupt during its top level (a garbage
+	 * collection, for example) can deliver it earlier, before such a listener
+	 * exists. A paused script gets it once it resumes (or, in game, while it
+	 * waits inside a game call such as a skill change).
+	 * Nothing is copied or sent when the script has ended or is stopping, or
+	 * has started (running or paused) without a scriptmsg listener. A value
+	 * that can't be copied (a function, or a game object such as a Unit)
+	 * throws an error and nothing is sent.
 	 */
 	void send(...);
 

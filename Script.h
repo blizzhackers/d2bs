@@ -26,7 +26,7 @@ struct Event {
     FunctionList functions;
     JSAutoStructuredCloneBuffer** argv;
     uint argc;
-    char* name;
+    const char* name; // a string literal: never copied or freed
     void* arg1;
     void* arg2;
     void* arg3;
@@ -61,6 +61,9 @@ class Script {
     int execCount;
     ScriptState scriptState;
     JSContext* context;
+    // Set once Run has created the context: ~Script then frees no queued event itself, since a late one's roots and
+    // buffers belong to the runtime that is already gone.
+    bool hadContext;
     JSScript* script;
     JSRuntime* runtime;
     myUnit* me;
@@ -69,6 +72,8 @@ class Script {
 
     JSObject *globalObject, *scriptObject;
     bool isLocked, isPaused, isReallyPaused, isAborted;
+    // Set by Run once the copy has started, failed or found a stop; read by script.send under the script list lock.
+    volatile bool runBegun;
 
     IncludeList includes, inProgress;
 
@@ -77,8 +82,20 @@ class Script {
     bool startFailed; // BeginThread could not create the thread
     // The replaced copy's thread, waited for at the top of Run so the loader never stalls; NULL when none.
     HANDLE predecessor;
+    // One reference belongs to the engine from construction; ScriptEngine::ForEachScript takes one more per entry it
+    // calls back on. A started Script is deleted only by its own thread once the others are released (its runtime must
+    // die there). A timeout of DisposeScript's bound during main() is retried at thread exit; the Script is left
+    // undeleted only when no retry follows (the console) or the retry also times out. A never-started one goes with
+    // the last release.
+    volatile LONG refs;
+    volatile LONG engineRefReleased; // 1 once DisposeScript has released the engine's reference
+    void AddRef(void);
+    void Release(void);
 
     CRITICAL_SECTION lock;
+    // Guards the structure of `functions` (keys and lists), never the listeners' calls: the event hooks read it from
+    // other threads. Held only for map operations: no lock but the CRT heap's, no JS call, root change or wait inside it.
+    CRITICAL_SECTION listenersLock;
 
     // Script(const char* file, ScriptState state, uint argc = 0, JSAutoStructuredCloneBuffer** argv = NULL);
     Script(const wchar_t* file, ScriptState state, uint argc = 0, JSAutoStructuredCloneBuffer** argv = NULL);
@@ -146,24 +163,22 @@ class Script {
 
     // UGLY HACK to fix up the player gid on game join for cached scripts/oog scripts
     void UpdatePlayerGid(void);
-    // Hack. Include from console needs to run on the RunCommandThread / cx.
-    //		 a better solution may be to keep a list of threadId / cx and have a GetCurrentThreadCX()
     inline void SetContext(JSContext* cx) {
         context = cx;
     }
     bool IsRunning(void);
+    bool AcceptsSentMessage(void);
     bool IsAborted(void);
-    void Lock() {
-        EnterCriticalSection(&lock);
-    } // needed for events walking function list
-    void Unlock() {
-        LeaveCriticalSection(&lock);
-    }
     bool IsIncluded(const wchar_t* file);
     bool Include(const wchar_t* file);
 
+    // Any thread. True while at least one listener is registered for evtName; takes only listenersLock.
     bool IsListenerRegistered(const char* evtName);
-    void RegisterEvent(const char* evtName, jsval evtFunc);
+    // False only when the listener could not be rooted (out of memory, maybe unreported); nothing is added then. A
+    // non-function, an empty name or a function already listening for evtName adds nothing and returns true.
+    bool RegisterEvent(const char* evtName, jsval evtFunc);
+    // The registry's mutators and IsRegisteredEvent run on the script's own thread, or at teardown after it has ended,
+    // so the owner reads `functions` without the lock.
     bool IsRegisteredEvent(const char* evtName, jsval evtFunc);
     void UnregisterEvent(const char* evtName, jsval evtFunc);
     void ClearEvent(const char* evtName);
@@ -172,12 +187,6 @@ class Script {
     std::list<Event*> EventList;
 };
 
-struct RUNCOMMANDSTRUCT {
-    Script* script;
-    const wchar_t* command;
-};
-
-DWORD WINAPI RunCommandThread(void* data);
 DWORD WINAPI ScriptThread(void* data);
 DWORD WINAPI FuncThread(void* data);
 DWORD WINAPI EventThread(LPVOID lpParam);

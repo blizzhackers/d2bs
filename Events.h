@@ -14,7 +14,7 @@ bool KeyDownUpEvent(WPARAM bByte, BYTE bUp);
 void PlayerAssignEvent(DWORD dwUnitId);
 void MouseClickEvent(int button, POINT pt, bool bUp);
 void MouseMoveEvent(POINT pt);
-void ScriptBroadcastEvent(JSContext* cx, uint argc, jsval* argv);
+bool ScriptBroadcastEvent(JSContext* cx, uint argc, jsval* argv);
 void GoldDropEvent(DWORD GID, BYTE Mode);
 void ItemActionEvent(DWORD GID, char* Code, BYTE Mode, bool Global);
 bool GamePacketEvent(BYTE* pPacket, DWORD dwSize);
@@ -25,7 +25,9 @@ void ReleaseGameLock(void);
 void TakeGameLock(void);
 
 struct ChatEventHelper {
-    char *name, *nick;
+    const char* name;        // literal event name
+    const char* blockerName; // literal name + "blocker"
+    char* nick;
     wchar_t* msg;
 };
 
@@ -72,9 +74,13 @@ struct BCastEventHelper {
     JSContext* cx;
     jsval* argv;
     uint argc;
+    // Written at the first script that listens and copied for each: getters run once, and none run with no listener.
+    JSAutoStructuredCloneBuffer** buffers;
+    bool written;
+    bool failed; // the sender's error is set on cx; no further script gets the message
 };
 struct PacketEventHelper {
-    char* name;
+    const char* name;
     BYTE* pPacket;
     DWORD dwSize;
 };

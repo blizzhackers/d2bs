@@ -3,6 +3,7 @@
 #include <vector>
 #include <assert.h>
 #include <io.h>
+#include <limits.h>
 
 #include "ScriptEngine.h"
 #include "Core.h"
@@ -35,13 +36,13 @@ struct DelayedTimer {
     bool cancelled;
 };
 
-// Guards timers and every DelayedTimer field but the AutoRoots, which only the owner's thread touches. Taken before
-// Vars.cEventSection, never inside it. A record leaves the map before its owner's thread frees it, and the timer's
-// completion routine is passed the id, not the record, so a late one finds nothing.
+// Guards timers, lastTimerId and every DelayedTimer field but the AutoRoots, which only the owner's thread touches.
+// Taken before Vars.cEventSection, never inside it. A record leaves the map before its owner's thread frees it, and the
+// timer's completion routine is passed the id, not the record, so a late one finds nothing.
 std::map<int, DelayedTimer*> timers;
 CRITICAL_SECTION timerLock;
 bool timerLockReady = false;
-volatile LONG lastTimerId = 0;
+int lastTimerId = 0;
 } // namespace
 // internal ForEachScript helpers
 bool __fastcall DisposeScript(Script* script, void*, uint);
@@ -113,7 +114,7 @@ void ScriptEngine::RunCommand(const wchar_t* command) {
     }
 }
 
-void ScriptEngine::DisposeScript(Script* script) {
+void ScriptEngine::DisposeScript(Script* script, bool fromPass) {
     LockScriptList("DisposeScript");
     // Only this Script's own entry: a replacement of the same file may already hold the name.
     for (ScriptMap::iterator it = scripts.begin(); it != scripts.end(); it++) {
@@ -123,16 +124,38 @@ void ScriptEngine::DisposeScript(Script* script) {
         }
     }
 
-    // A script whose thread never started holds no engine state, so any thread may delete it.
-    if (GetCurrentThreadId() == script->threadId || script->startFailed) {
+    if (GetCurrentThreadId() == script->threadId) {
         UnLockScriptList("DisposeScript");
+        // Unlisted, it gains no new reference, so the count only falls; each holder releases after its own entry's
+        // callback in a ForEachScript pass. The delete stays on this thread because the runtime must die here. Bounded:
+        // a holder whose pass runs JS that waits for this script (join()) would otherwise hang both threads.
+        for (DWORD start = GetTickCount(); InterlockedCompareExchange(&script->refs, 1, 1) != 1; Sleep(1)) {
+            if (GetTickCount() - start > 10000) {
+                // Unlisted, nothing else would stop it or take its hooks off screen: stopped first, since Clean also
+                // unlists the visible hooks of any stopped owner. A DisposeMe met while main() runs is retried by
+                // ScriptThread's own call once main() unwinds (never for the console); otherwise this is a one-off leak.
+                script->SignalStop();
+                Genhook::Clean(script);
+                if (script->hasActiveCX && script->GetState() != Command)
+                    Log(L"Script %s still in use after 10 s; deletion deferred to its thread's exit", script->GetShortFilename());
+                else
+                    Log(L"Script %s still in use after 10 s; left undeleted", script->GetShortFilename());
+                return;
+            }
+        }
         delete script;
+    } else if (script->startFailed) {
+        UnLockScriptList("DisposeScript");
+        // No thread and no engine state: the last holder deletes it. A pass only unlists it, since the loader still
+        // reads it after a pass's release could have freed it. Released once, for a loader that calls twice.
+        if (!fromPass && InterlockedExchange(&script->engineRefReleased, 1) == 0)
+            script->Release();
     } else {
         // Queued before the list lock is free: once unlisted, the script's own thread deletes it as soon as it can
         // take the lock, and only its own thread may destroy its runtime.
         Event* evt = new Event;
         evt->owner = script;
-        evt->name = _strdup("DisposeMe");
+        evt->name = "DisposeMe";
         script->FireEvent(evt);
         UnLockScriptList("DisposeScript");
     }
@@ -223,6 +246,9 @@ void ScriptEngine::Shutdown(void) {
 
         // clear all scripts now that they're stopped
         ForEachScript(::DisposeScript, NULL, 0);
+        // The pass only unlists a never-started Script; the console has no loader to release it, so this call does.
+        if (console->startFailed)
+            DisposeScript(console);
 
         if (!scripts.empty())
             scripts.clear();
@@ -269,19 +295,23 @@ bool ScriptEngine::ForEachScript(ScriptCallback callback, void* argv, uint argc)
     bool block = false;
 
     LockScriptList("forEachScript");
-
-    // damn std::list not supporting operator[]...
-    std::vector<Script*> list;
-    for (ScriptMap::iterator it = scripts.begin(); it != scripts.end(); it++)
-        list.push_back(it->second);
-
+    // A reference per entry keeps it alive through its callback; the caller's own Script takes none: only its own
+    // thread deletes it, and a callback that runs its listeners here (a packet its native sent) would wait on itself.
+    DWORD self = GetCurrentThreadId();
+    std::vector<std::pair<Script*, bool> > list;
+    for (ScriptMap::iterator it = scripts.begin(); it != scripts.end(); it++) {
+        bool held = it->second->threadId != self;
+        if (held)
+            it->second->AddRef();
+        list.push_back(std::make_pair(it->second, held));
+    }
     UnLockScriptList("forEachScript");
 
-    int count = list.size();
-    // damn std::iterator not supporting manipulating the list...
-    for (int i = 0; i < count; i++) {
-        if (callback(list[i], argv, argc))
+    for (size_t i = 0; i < list.size(); i++) {
+        if (callback(list[i].first, argv, argc))
             block = true;
+        if (list[i].second)
+            list[i].first->Release();
     }
 
     return block;
@@ -298,14 +328,14 @@ bool ScriptEngine::DefineConstant(JSContext* context, JSObject* globalObject, co
 
 // internal ForEachScript helper functions
 bool __fastcall DisposeScript(Script* script, void*, uint) {
-    ScriptEngine::DisposeScript(script);
+    ScriptEngine::DisposeScript(script, true);
     return true;
 }
 
 // The console is not a cached script: ScriptEngine::console and its map key keep pointing at it after a flush.
 bool __fastcall DisposeCachedScript(Script* script, void*, uint) {
     if (script->GetState() != Command)
-        ScriptEngine::DisposeScript(script);
+        ScriptEngine::DisposeScript(script, true);
     return true;
 }
 
@@ -382,7 +412,8 @@ JSBool operationCallback(JSContext* cx) {
         script->SetPauseState(false);
 
     if (!ScriptMustEnd(script)) {
-        while (script->EventList.size() > 0 && !ScriptMustEnd(script)) {
+        // A pause that lands mid-drain leaves the rest queued for the drain after resume, as in delay().
+        while (script->EventList.size() > 0 && !ScriptMustEnd(script) && !script->IsPaused()) {
             EnterCriticalSection(&Vars.cEventSection);
             Event* evt = script->EventList.back();
             script->EventList.pop_back();
@@ -545,12 +576,75 @@ void reportError(JSContext* cx, const char* message, JSErrorReport* report) {
         Console::ShowBuffer();
 }
 
+// The step after each listener or timer callback call: true when the next one may run. Every dispatch runs inside a
+// native that returns true (delay(), the operation callback, a sending native), so a thrown error is reported here or
+// it stays pending and resurfaces later. Nothing pending means the call was ended (a stop, or an error scripts cannot
+// catch), so nothing more of this event runs.
+static bool ListenerCallContinues(JSContext* cx, JSBool ok) {
+    if (ok)
+        return true;
+    if (!JS_IsExceptionPending(cx))
+        return false;
+    JS_ReportPendingException(cx);
+    return true;
+}
+
+// Calls each function of fns; with checkRegistry, one that owner no longer holds for evtName (removed during this
+// dispatch) is skipped. A call's result counts toward *block only when the call returned normally. False once the
+// script is ending or a call was ended.
+static bool CallListenerValues(JSContext* cx, Script* owner, const char* evtName, bool checkRegistry, JS::AutoValueVector& fns, uint argc,
+                               jsval* argv, bool* block) {
+    for (size_t i = 0; i < fns.length(); i++) {
+        if (ScriptMustEnd(owner))
+            return false;
+        if (checkRegistry && !owner->IsRegisteredEvent(evtName, fns[i]))
+            continue;
+        jsval rval = JSVAL_VOID;
+        JSBool ok = JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), fns[i], argc, argv, &rval);
+        if (!ListenerCallContinues(cx, ok))
+            return false;
+        if (ok && block && JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval))
+            *block = true;
+    }
+    return true;
+}
+
+// Copies evtName's listeners of owner and calls them; one added during the calls waits for the next event and one
+// removed is skipped, as in a browser. The lookup must not create the name: an empty entry would keep the game
+// waiting on this script for an event it no longer listens to.
+static bool CallListeners(JSContext* cx, Script* owner, const char* evtName, uint argc, jsval* argv, bool* block) {
+    FunctionMap::iterator found = owner->functions.find(evtName);
+    if (found == owner->functions.end())
+        return true;
+    JS::AutoValueVector fns(cx);
+    for (FunctionList::iterator it = found->second.begin(); it != found->second.end(); it++) {
+        if (!fns.append(*(*it)->value())) {
+            JS_ReportPendingException(cx); // the failed append has already reported its out-of-memory error
+            return true;
+        }
+    }
+    return CallListenerValues(cx, owner, evtName, true, fns, argc, argv, block);
+}
+
+// A hook's handlers come with its event (copies the hook made), not from the script's listener list, so none is
+// skipped. The event keeps owning the roots; only their values are copied.
+static bool CallHookListeners(JSContext* cx, Script* owner, FunctionList& functions, uint argc, jsval* argv, bool* block) {
+    JS::AutoValueVector fns(cx);
+    for (FunctionList::iterator it = functions.begin(); it != functions.end(); it++) {
+        if (!fns.append(*(*it)->value())) {
+            JS_ReportPendingException(cx); // the failed append has already reported its out-of-memory error
+            return true;
+        }
+    }
+    return CallListenerValues(cx, owner, "", false, fns, argc, argv, block);
+}
+
 bool ExecScriptEvent(Event* evt, bool clearList) {
     JSContext* cx;
 
     if (!clearList)
         cx = evt->owner->GetContext();
-    char* evtName = (char*)evt->name;
+    const char* evtName = evt->name;
     if (strcmp(evtName, "itemaction") == 0) {
         if (!clearList) {
             DWORD* gid = (DWORD*)evt->arg1;
@@ -568,9 +662,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 JSString* str = JS_NewStringCopyZ(cx, code);
                 if (str) {
                     argv[2] = STRING_TO_JSVAL(str);
-                    jsval rval;
-                    for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++)
-                        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 4, argv.begin(), &rval);
+                    CallListeners(cx, evt->owner, evtName, 4, argv.begin(), NULL);
                 }
             }
             JS_EndRequest(cx);
@@ -579,7 +671,6 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         free(evt->arg2);
         delete evt->arg3;
         delete evt->arg4;
-        free(evt->name);
         delete evt;
         return true;
     }
@@ -598,10 +689,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 JSString* str2 = str1 ? JS_NewUCStringCopyZ(cx, (wchar_t*)evt->arg5) : NULL;
                 if (str2) {
                     argv[4] = STRING_TO_JSVAL(str2);
-                    jsval rval;
-                    for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 5, argv.begin(), &rval);
-                    }
+                    CallListeners(cx, evt->owner, evtName, 5, argv.begin(), NULL);
                 }
             }
             JS_EndRequest(cx);
@@ -611,7 +699,6 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         delete evt->arg3;
         free(evt->arg4);
         free(evt->arg5);
-        free(evt->name);
         delete evt;
         return true;
     }
@@ -624,17 +711,13 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 JSString* str = JS_NewUCStringCopyZ(cx, (wchar_t*)evt->arg2);
                 if (str) {
                     argv[1] = STRING_TO_JSVAL(str);
-                    jsval rval;
-                    for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv.begin(), &rval);
-                    }
+                    CallListeners(cx, evt->owner, evtName, 2, argv.begin(), NULL);
                 }
             }
             JS_EndRequest(cx);
         }
         delete evt->arg1;
         free(evt->arg2);
-        free(evt->name);
         delete evt;
         return true;
     }
@@ -652,12 +735,8 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 JSString* str2 = str1 ? JS_NewUCStringCopyZ(cx, (wchar_t*)evt->arg2) : NULL;
                 if (str2) {
                     argv[1] = STRING_TO_JSVAL(str2);
-                    jsval rval;
                     BlockingListenerScope blocking(evt->done != NULL);
-                    for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv.begin(), &rval);
-                        block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
-                    }
+                    CallListeners(cx, evt->owner, evtName, 2, argv.begin(), &block);
                 }
             }
             JS_EndRequest(cx);
@@ -667,7 +746,6 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         } else {
             free(evt->arg1);
             free(evt->arg2);
-            free(evt->name);
             delete evt;
         }
         return true;
@@ -680,13 +758,10 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 argv[0] = JS_NumberValue(*(DWORD*)evt->arg1);
                 argv[1] = JS_NumberValue(*(DWORD*)evt->arg2);
 
-                jsval rval;
                 if (strcmp(evtName, "ScreenHookHover") == 0) {
-                    for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++)
-                        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv.begin(), &rval);
+                    CallHookListeners(cx, evt->owner, evt->functions, 2, argv.begin(), NULL);
                 } else {
-                    for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++)
-                        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 2, argv.begin(), &rval);
+                    CallListeners(cx, evt->owner, evtName, 2, argv.begin(), NULL);
                 }
             }
             JS_EndRequest(cx);
@@ -696,7 +771,6 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             delete *it;
         delete evt->arg1;
         delete evt->arg2;
-        free(evt->name);
         delete evt;
         return true;
     }
@@ -710,10 +784,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 argv[2] = JS_NumberValue(*(DWORD*)evt->arg3);
                 argv[3] = JS_NumberValue(*(DWORD*)evt->arg4);
 
-                jsval rval;
-                for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 4, argv.begin(), &rval);
-                }
+                CallListeners(cx, evt->owner, evtName, 4, argv.begin(), NULL);
             }
             JS_EndRequest(cx);
         }
@@ -721,32 +792,27 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         delete evt->arg2;
         delete evt->arg3;
         delete evt->arg4;
-        free(evt->name);
         delete evt;
         return true;
     }
-    if (strcmp(evtName, "keyup") == 0 || strcmp(evtName, "keydownblocker") == 0 || strcmp(evtName, "keydown") == 0 || strcmp(evtName, "memana") == 0 ||
-        strcmp(evtName, "melife") == 0 || strcmp(evtName, "playerassign") == 0) {
+    if (strcmp(evtName, "keyup") == 0 || strcmp(evtName, "keydown") == 0 || strcmp(evtName, "keyupblocker") == 0 ||
+        strcmp(evtName, "keydownblocker") == 0 || strcmp(evtName, "memana") == 0 || strcmp(evtName, "melife") == 0 ||
+        strcmp(evtName, "playerassign") == 0) {
         bool block = false;
         if (!clearList) {
             JS_BeginRequest(cx);
             JS::AutoValueVector argv(cx);
             if (argv.resize(1)) {
                 argv[0] = JS_NumberValue(*(DWORD*)evt->arg1);
-                jsval rval;
                 BlockingListenerScope blocking(evt->done != NULL);
-                for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 1, argv.begin(), &rval);
-                    block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
-                }
+                CallListeners(cx, evt->owner, evtName, 1, argv.begin(), &block);
             }
             JS_EndRequest(cx);
         }
-        if (strcmp(evtName, "keydownblocker") == 0) {
+        if (strcmp(evtName, "keydownblocker") == 0 || strcmp(evtName, "keyupblocker") == 0) {
             CompleteBlocker(evt, block);
         } else {
             delete evt->arg1;
-            free(evt->name);
             delete evt;
         }
         return true;
@@ -761,13 +827,8 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                 argv[1] = JS_NumberValue(*(DWORD*)evt->arg2);
                 argv[2] = JS_NumberValue(*(DWORD*)evt->arg3);
 
-                jsval rval;
                 BlockingListenerScope blocking(evt->done != NULL);
-                // diffrent function source for hooks
-                for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++) {
-                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 3, argv.begin(), &rval);
-                    block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
-                }
+                CallHookListeners(cx, evt->owner, evt->functions, 3, argv.begin(), &block);
             }
 
             JS_EndRequest(cx);
@@ -793,15 +854,18 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
 
             if (JS_EvaluateUCScript(cx, JS_GetGlobalObject(cx), test.data(), test.length(), "Command Line", 0, &rval)) {
                 if (!JSVAL_IS_NULL(rval) && !JSVAL_IS_VOID(rval)) {
-                    JS_ConvertValue(cx, rval, JSTYPE_STRING, &rval);
-                    const wchar_t* text = JS_GetStringCharsZ(cx, JS_ValueToString(cx, rval));
-                    Print(L"%s", text);
+                    // A value that can't become a string (no toString, or one that throws) is reported, not printed.
+                    JSString* str = JS_ValueToString(cx, rval);
+                    const wchar_t* text = str ? JS_GetStringCharsZ(cx, str) : NULL;
+                    if (text)
+                        Print(L"%s", text);
+                    else
+                        JS_ReportPendingException(cx);
                 }
             }
             JS_EndRequest(cx);
         }
         free(evt->arg1);
-        free(evt->name);
         delete evt;
         return true;
     }
@@ -809,17 +873,16 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         if (!clearList) {
             DWORD* argc = (DWORD*)evt->arg1;
             JS_BeginRequest(cx);
-            // Rooted before the first is read: reading a later one can run the GC.
+            // Rooted before the first is read: reading a later one can run the GC. A message whose values can't all
+            // be held or read is reported and reaches no listener.
             JS::AutoValueVector argv(cx);
-            if (argv.resize(*argc)) {
-                for (uint i = 0; i < *argc; i++)
-                    evt->argv[i]->read(cx, &argv[i]);
-
-                jsval rval;
-                for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                    JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), *argc, argv.begin(), &rval);
-                }
-            }
+            bool haveArgs = argv.resize(*argc);
+            for (uint i = 0; haveArgs && i < *argc; i++)
+                haveArgs = evt->argv[i]->read(cx, &argv[i]);
+            if (haveArgs)
+                CallListeners(cx, evt->owner, evtName, *argc, argv.begin(), NULL);
+            else
+                JS_ReportPendingException(cx); // a failed resize has already reported its out-of-memory error
             JS_EndRequest(cx);
         }
         for (uint i = 0; i < evt->argc; i++) {
@@ -828,7 +891,6 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         }
         delete[] evt->argv;
         delete evt->arg1;
-        free(evt->name);
         delete evt;
         return true;
     }
@@ -858,12 +920,8 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
                     // evt->argv[0]->read(cx, &argv[0]);
                     // JS_AddValueRoot(cx, &argv[0]);
 
-                    jsval rval;
                     BlockingListenerScope blocking(evt->done != NULL);
-                    for (FunctionList::iterator it = evt->owner->functions[evtName].begin(); it != evt->owner->functions[evtName].end(); it++) {
-                        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *(*it)->value(), 1, &argv, &rval);
-                        block |= (JSVAL_IS_BOOLEAN(rval) && JSVAL_TO_BOOLEAN(rval));
-                    }
+                    CallListeners(cx, evt->owner, evtName, 1, &argv, &block);
                 }
                 JS_RemoveRoot(cx, &arr);
             }
@@ -881,12 +939,11 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         // Drained while its script is being destroyed, the request is already being carried out.
         if (!clearList)
             ScriptEngine::DisposeScript(evt->owner);
-        free(evt->name);
         delete evt;
         return true;
     }
 
-    // A blocker event that no branch runs (keyupblocker has none) must still end its wait and drop its reference.
+    // A blocker event that no branch runs must still end its wait and drop its reference.
     if (evt->freeArgs)
         CompleteBlocker(evt, false);
     return true;
@@ -898,7 +955,7 @@ void QueueTimerEvent(DelayedTimer* t) {
     Event* evt = new Event;
     evt->owner = t->owner;
     evt->argc = 0;
-    evt->name = _strdup("timer");
+    evt->name = "timer";
     evt->arg1 = new int(t->id);
     t->owner->FireEvent(evt);
 }
@@ -911,18 +968,34 @@ void FreeTimer(DelayedTimer* t) {
     delete t->args;
     delete t;
 }
+
+// A failed root may not have reported, and the native's JS_FALSE with nothing pending would end the script without a
+// line. An engine out-of-memory report leaves nothing pending, so after one this can print the line a second time.
+void ReportRootFailure(JSContext* cx) {
+    if (!JS_IsExceptionPending(cx))
+        JS_ReportOutOfMemory(cx);
+}
 } // namespace
 
 bool ScriptEngine::AddTimer(Script* owner, JSContext* cx, jsval callback, uint argc, jsval* argv, int delayMs, bool repeat, int* id) {
     *id = 0;
+    const char* name = repeat ? "setInterval" : "setTimeout";
     HANDLE timer = CreateWaitableTimer(NULL, TRUE, NULL);
-    if (!timer)
-        return true;
+    if (!timer) {
+        DWORD err = GetLastError();
+        JS_ReportError(cx, "%s: could not create a timer (error %lu)", name, err);
+        return false;
+    }
     DelayedTimer* t = new DelayedTimer;
     t->owner = owner;
     t->timer = timer;
-    t->callback = new AutoRoot(cx, callback);
     t->args = NULL;
+    t->callback = new AutoRoot(cx, callback);
+    if (!t->callback->ok()) {
+        FreeTimer(t);
+        ReportRootFailure(cx);
+        return false;
+    }
     if (argc > 0) {
         JSObject* args = JS_NewArrayObject(cx, (int)argc, argv);
         if (!args) {
@@ -930,26 +1003,40 @@ bool ScriptEngine::AddTimer(Script* owner, JSContext* cx, jsval callback, uint a
             return false;
         }
         t->args = new AutoRoot(cx, OBJECT_TO_JSVAL(args));
+        if (!t->args->ok()) {
+            FreeTimer(t);
+            ReportRootFailure(cx);
+            return false;
+        }
     }
     t->repeat = repeat;
     t->queued = false;
     t->cancelled = false;
-    int newId = t->id = (int)InterlockedIncrement(&lastTimerId);
 
     LARGE_INTEGER due;
     due.QuadPart = -(LONGLONG)delayMs * 10000; // relative, in 100 ns units
     // A period of 0 makes a one-shot timer, so an interval repeats at least every millisecond.
     LONG period = repeat ? (delayMs > 0 ? delayMs : 1) : 0;
     EnterCriticalSection(&timerLock);
+    // Ids run 1..INT_MAX and wrap to 1, skipping live ones, so clearInterval can name every timer and no record is
+    // replaced; the map can never hold INT_MAX timers, so the loop ends.
+    int newId;
+    do {
+        newId = lastTimerId < INT_MAX ? lastTimerId + 1 : 1;
+        lastTimerId = newId;
+    } while (timers.find(newId) != timers.end());
+    t->id = newId;
     timers[newId] = t;
     // The completion routine runs on this thread, the owner's, while it waits alertably (delay()).
     BOOL set = SetWaitableTimer(timer, &due, period, EventTimerProc, (LPVOID)(INT_PTR)newId, FALSE);
+    DWORD err = set ? 0 : GetLastError();
     if (!set)
         timers.erase(newId);
     LeaveCriticalSection(&timerLock);
     if (!set) {
         FreeTimer(t);
-        return true;
+        JS_ReportError(cx, "%s: could not set a timer (error %lu)", name, err);
+        return false;
     }
     *id = newId;
     return true;
@@ -1009,17 +1096,25 @@ void ScriptEngine::RunTimer(Event* evt, bool clearList) {
         JS_BeginRequest(cx);
         uint32_t argc = 0;
         jsval* argv = NULL;
+        // A stored argument that can't be read fails the call: the callback is skipped, and an error left pending is
+        // reported.
+        JSBool ok = JS_TRUE;
         if (t->args) {
             JSObject* args = JSVAL_TO_OBJECT(*t->args->value());
-            if (JS_GetArrayLength(cx, args, &argc) && argc > 0) {
+            ok = JS_GetArrayLength(cx, args, &argc);
+            if (ok && argc > 0) {
                 argv = new jsval[argc];
-                for (uint32_t i = 0; i < argc; i++)
-                    if (!JS_GetElement(cx, args, i, &argv[i]))
-                        argv[i] = JSVAL_VOID;
+                for (uint32_t i = 0; ok && i < argc; i++)
+                    ok = JS_GetElement(cx, args, i, &argv[i]);
             }
         }
-        jsval rval;
-        JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *t->callback->value(), argc, argv, &rval);
+        if (ok) {
+            jsval rval;
+            ok = JS_CallFunctionValue(cx, JS_GetGlobalObject(cx), *t->callback->value(), argc, argv, &rval);
+        }
+        // A throw is reported and an interval stays scheduled; a call ended with nothing pending reports nothing (a
+        // stop then ends the drain on ScriptMustEnd).
+        ListenerCallContinues(cx, ok);
         delete[] argv;
         JS_EndRequest(cx);
     }
@@ -1035,7 +1130,6 @@ void ScriptEngine::RunTimer(Event* evt, bool clearList) {
     }
     if (done && t)
         FreeTimer(t);
-    free(evt->name);
     delete (int*)evt->arg1;
     delete evt;
 }

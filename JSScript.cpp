@@ -142,9 +142,10 @@ JSAPI_FUNC(script_send) {
 
     ScriptEngine::LockScriptList("script.send");
     Script* script = ScriptEngine::FindScriptById(scriptId);
-    bool running = script && script->IsRunning();
+    bool accepts = script && script->AcceptsSentMessage();
     ScriptEngine::UnLockScriptList("script.send");
-    if (!running)
+    // Nothing is cloned for a script that would not run the message: getters on the values do not run.
+    if (!accepts)
         return JS_TRUE;
 
     // Cloned with the script list unlocked: cloning an object can run its getters.
@@ -157,10 +158,10 @@ JSAPI_FUNC(script_send) {
         }
     }
 
-    // Found again: a getter may have ended the script while the list was unlocked.
+    // Found again: a getter may have ended the script, or removed its listener, while the list was unlocked.
     ScriptEngine::LockScriptList("script.send");
     script = ScriptEngine::FindScriptById(scriptId);
-    if (!script || !script->IsRunning()) {
+    if (!script || !script->AcceptsSentMessage()) {
         ScriptEngine::UnLockScriptList("script.send");
         FreeCloneBuffers(buffers, argc);
         return JS_TRUE;
@@ -168,7 +169,7 @@ JSAPI_FUNC(script_send) {
     Event* evt = new Event;
     evt->owner = script;
     evt->argc = argc;
-    evt->name = _strdup("scriptmsg");
+    evt->name = "scriptmsg";
     evt->arg1 = new DWORD(argc);
     evt->argv = buffers;
 

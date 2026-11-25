@@ -119,12 +119,13 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  * waits, for example in delay(). They may call getCollision() and getPath().
  * Inside a listener the game is already waiting on, the game also stays paused
  * until getPath returns or the game stops waiting for that listener (after
- * 500 ms for a packet or chat blocker, 1 s for keydownblocker, 3 s for a hook's
- * click handler). After each reject or mutate call that returns normally,
- * getPath checks that the player is still in the same game, act and area; if
- * not, it calls none of the three again and returns an empty path. A trip away
- * and back to the same area within one call may not be noticed. reduce runs
- * after the search, so the path it reduces is still returned.
+ * 500 ms for a packet or chat blocker, 1 s for keyupblocker or keydownblocker,
+ * 3 s for a hook's click handler). After each reject or mutate call that
+ * returns normally, getPath checks that the player is still in the same game,
+ * act and area; if not, it calls none of the three again and returns an empty
+ * path. A trip away and back to the same area within one call may not be
+ * noticed. reduce runs after the search, so the path it reduces is still
+ * returned.
  *
  * \return The path as an array of objects with x and y properties.
  * Throws an error when the area is not in the act the player is in.
@@ -1172,7 +1173,13 @@ String sendDDE(int32_t mode, String pszDDEServer, String pszTopic,
 bool keystate(int vKey);
 
 /** Add an event handler to the list of listeners for the given event. A function already listening to that event is
- * not added again, so it runs once per event and one removeEventListener() call removes it.
+ * not added again, so it runs once per event and one removeEventListener() call removes it. Listeners run in the
+ * order they were added. A listener removed while an event is being delivered (with removeEventListener(),
+ * clearEvent() or clearAllEvents(), also from inside a listener) is not called for that event if it has not run
+ * yet (unless it is added again before its turn), and one added meanwhile runs from the next event. An error a
+ * listener throws is printed when it is thrown, the event's other listeners still run, and the error never blocks
+ * the event or reaches the rest of the script. Once the script is stopped (or, for an in-game script, its game
+ * ends), no further listener of the event runs.
  *
  * \ingroup globalFunctions
  *
@@ -1186,9 +1193,12 @@ bool keystate(int vKey);
  *
  * keydown (uint32_t key)
  *
- * bool keyupblock (uint32_t key) - Returns true to block event from Diablo II
+ * bool keyupblocker (uint32_t key) - Returns true to block event from Diablo
+ * 	II. Blocking a key-up whose key-down reached the game leaves that key held
+ * 	down in the game until a later key-up for it passes.
  *
- * bool keydownblock (uint32_t key) - Returns true to block event from Diablo II
+ * bool keydownblocker (uint32_t key) - Returns true to block event from Diablo
+ * 	II
  *
  * playerassign (uint32_t unitId)
  *
@@ -1265,16 +1275,17 @@ bool keystate(int vKey);
  * 0x11 - "%Param1 Stones of Jordan Sold to Merchants"
  * 0x12 - "Diablo Walks the Earth"
  *
- * A listener whose result can block its event (keydownblocker, chatmsgblocker,
- * chatinputblocker, whispermsgblocker, gamepacket, gamepacketsent, realmpacket,
- * and a hook's click handler) runs while the game, or the script that sent the
- * packet, may be waiting for its answer. A call in it that needs a ready game
- * returns its "Game not ready" result at once while the game is busy (an area
- * or act loading, or the moment the player moves between rooms), rather than
- * waiting. A gamepacketsent listener for a packet its own script sent runs
- * inside that send instead; its calls wait as usual unless the send was made
- * while the script holds the game lock or from inside a listener whose result
- * can block its event, when they get "Game not ready" at once.
+ * A listener whose result can block its event (keyupblocker, keydownblocker,
+ * chatmsgblocker, chatinputblocker, whispermsgblocker, gamepacket,
+ * gamepacketsent, realmpacket, and a hook's click handler) runs while the game,
+ * or the script that sent the packet, may be waiting for its answer. A call in
+ * it that needs a ready game returns its "Game not ready" result at once while
+ * the game is busy (an area or act loading, or the moment the player moves
+ * between rooms), rather than waiting. A gamepacketsent listener for a packet
+ * its own script sent runs inside that send instead; its calls wait as usual
+ * unless the send was made while the script holds the game lock or from inside
+ * a listener whose result can block its event, when they get "Game not ready"
+ * at once.
  *
  * \param eventHandler A function with the signature listed above that handles
  * the event.
@@ -1312,7 +1323,8 @@ void clearEvent(String event);
  */
 void clearAllEvents();
 
-/** Call a function once, after a delay.
+/** Call a function once, after a delay. An error the callback throws is reported when it happens, as one in main()
+ * is.
  *
  * \ingroup globalFunctions
  *
@@ -1323,14 +1335,17 @@ void clearAllEvents();
  *
  * \param ... Extra arguments, passed on to the callback.
  *
- * \return The timer's id, for clearTimeout(); null, with an error reported, when the delay is missing or not a
- * number, and null when the callback is not a function.
+ * \return The timer's id, a whole number from 1 up, for clearTimeout().
+ *
+ * Throws an error the script can catch when the callback is not a function, when the delay is missing or not a
+ * number, or when Windows could not create the timer.
  */
 int setTimeout(Function callback, double delay, ...);
 
 /** Call a function every period until the timer is cleared or its script ends. A period of 0 (or a negative or NaN
  * one) repeats every millisecond. A call is not started while the previous one is still running (for example inside
- * delay()), and periods missed while the script was busy give one call.
+ * delay()), and periods missed while the script was busy give one call. An error the callback throws is reported and
+ * the interval keeps running; clear it to stop it.
  *
  * \ingroup globalFunctions
  *
@@ -1340,13 +1355,17 @@ int setTimeout(Function callback, double delay, ...);
  *
  * \param ... Extra arguments, passed on to the callback.
  *
- * \return The timer's id, for clearInterval(); null, with an error reported, when the period is missing or not a
- * number, and null when the callback is not a function.
+ * \return The timer's id, a whole number from 1 up, for clearInterval().
+ *
+ * Throws an error the script can catch when the callback is not a function, when the period is missing or not a
+ * number, or when Windows could not create the timer.
  */
 int setInterval(Function callback, double period, ...);
 
 /** Cancel a timer by id. clearTimeout() and clearInterval() are the same function: either cancels a timer of either
- * kind, and of any script.
+ * kind, and of any script. With no id, undefined or null it does nothing; a fraction is cut to a whole number (1.5
+ * cancels timer 1); a number that is no timer's id (0, or a timer already cancelled) cancels nothing; any other
+ * value throws an error the script can catch.
  *
  * \ingroup globalFunctions
  *
@@ -1354,7 +1373,8 @@ int setInterval(Function callback, double period, ...);
  */
 void clearTimeout(int id);
 
-/** Cancel a timer by id; the same function as clearTimeout().
+/** Cancel a timer by id; the same function as clearTimeout(), with the same handling of undefined, null, fractions
+ * and other values.
  *
  * \ingroup globalFunctions
  *
@@ -1400,8 +1420,14 @@ String version();
  */
 void version(int a);
 
-/** Broadcast a message to all other scripts. D2BS calls each scripts scriptmsg
- * event listeners with the messages passed in.
+/** Send a message to every running script that has a scriptmsg listener, the
+ * calling script included. D2BS calls each such script's scriptmsg listeners
+ * with copies of the values passed in. The values are copied once, so getters
+ * on them run once however many scripts listen, and not at all when none does.
+ * When a script listens, a value that can't be copied (a function, or a game
+ * object such as a Unit) throws an error and no script gets the message. A
+ * paused script, or one that has not started yet, does not get it;
+ * script.send() reaches those.
  *
  * \ingroup globalFunctions
  */

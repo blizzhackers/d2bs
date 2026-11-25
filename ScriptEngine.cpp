@@ -131,9 +131,9 @@ void ScriptEngine::DisposeScript(Script* script, bool fromPass) {
         // a holder whose pass runs JS that waits for this script (join()) would otherwise hang both threads.
         for (DWORD start = GetTickCount(); InterlockedCompareExchange(&script->refs, 1, 1) != 1; Sleep(1)) {
             if (GetTickCount() - start > 10000) {
-                // Unlisted, nothing else would stop it or take its hooks off screen: stopped first, since Clean also
-                // unlists the visible hooks of any stopped owner. A DisposeMe met while main() runs is retried by
-                // ScriptThread's own call once main() unwinds (never for the console); otherwise this is a one-off leak.
+                // Unlisted, nothing else would stop it or take its hooks off screen, so both happen here. A DisposeMe
+                // met while main() runs is retried by ScriptThread's own call once main() unwinds (never for the
+                // console); otherwise this is a one-off leak.
                 script->SignalStop();
                 Genhook::Clean(script);
                 if (script->hasActiveCX && script->GetState() != Command)

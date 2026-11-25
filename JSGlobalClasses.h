@@ -13,7 +13,6 @@ extern JSClass box_class;
 extern JSClass line_class;
 extern JSClass text_class;
 extern JSClass image_class;
-extern JSClass sandbox_class;
 extern JSClass room_class;
 extern JSClass presetunit_class;
 extern JSClass party_class;

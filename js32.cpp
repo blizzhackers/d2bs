@@ -29,34 +29,41 @@ JSObject* BuildObject(JSContext* cx, JSClass* classp, JSFunctionSpec* funcs, JSP
     return obj;
 }
 JSScript* JS_CompileFile(JSContext* cx, JSObject* globalObject, std::wstring fileName) {
+    char* nFileName = UnicodeToAnsi(fileName.c_str());
     std::ifstream t(fileName.c_str(), std::ios::binary);
     std::string str;
 
-    int ch1 = t.get();
-    int ch2 = t.get();
-    int ch3 = t.get();
+    // Sized from the stream and read once, with every step checked: a failed stream reports -1 here, which must become
+    // a script error rather than a C++ throw (include() has no handler, so a throw ends the game).
+    std::streamoff size = -1;
+    if (t.is_open()) {
+        t.seekg(0, std::ios::end);
+        size = t.tellg();
+        t.seekg(0, std::ios::beg);
+    }
+    if (size < 0 || !t) {
+        JS_ReportError(cx, "Couldn't open the script file %s", nFileName);
+        delete[] nFileName;
+        return NULL;
+    }
+    str.resize((size_t)size);
+    if (size > 0 && (!t.read(&str[0], size) || t.gcount() != size)) {
+        JS_ReportError(cx, "Couldn't read the script file %s", nFileName);
+        delete[] nFileName;
+        return NULL;
+    }
+    t.close();
 
-    t.seekg(0, std::ios::end);
-    str.resize(t.tellg());
-    t.seekg(0, std::ios::beg);
-
-    str.assign((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
-
-    if (ch1 == 0xEF && ch2 == 0xBB && ch3 == 0xBF) { // replace utf8-bom with space
+    if (str.size() >= 3 && (unsigned char)str[0] == 0xEF && (unsigned char)str[1] == 0xBB && (unsigned char)str[2] == 0xBF) { // replace utf8-bom with space
         str[0] = ' ';
         str[1] = ' ';
         str[2] = ' ';
     }
 
-    char* nFileName = UnicodeToAnsi(fileName.c_str());
-
     JS::RootedObject obj(cx, globalObject);
     JS::CompileOptions opts(cx);
     opts.setUTF8(true).setFileAndLine(nFileName, 1);
     JSScript* rval = JS::Compile(cx, obj, opts, str.c_str(), str.size());
-    JS_AddNamedScriptRoot(cx, &rval, nFileName);
-    JS_RemoveScriptRoot(cx, &rval);
-    t.close();
     delete[] nFileName;
 
     return rval;

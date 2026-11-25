@@ -21,8 +21,6 @@ class ScriptEngine {
     virtual ~ScriptEngine(void) = 0;
     ScriptEngine(const ScriptEngine&);
     ScriptEngine& operator=(const ScriptEngine&);
-    static JSRuntime* runtime;
-    static JSContext* context;
     static Script* console;
     static EngineState state;
     static CRITICAL_SECTION scriptListLock;
@@ -31,7 +29,6 @@ class ScriptEngine {
     friend class Script;
     static ScriptMap scripts;
 
-    static CRITICAL_SECTION lock;
     static BOOL Startup(void);
     static void Shutdown(void);
     static EngineState GetState(void) {
@@ -47,6 +44,13 @@ class ScriptEngine {
     static Script* CompileFile(const wchar_t* file, ScriptState state, uint argc = 0, JSAutoStructuredCloneBuffer** argv = NULL, bool recompile = false);
     static void RunCommand(const wchar_t* command);
     static void DisposeScript(Script* script);
+    // True while the script is in the scripts map; a replaced or disposed script never is.
+    static bool IsListed(Script* script);
+    // The live Script with this id, or NULL (0 never matches). The caller holds the list lock and keeps holding it
+    // while it uses the result: a Script leaves `scripts` under that lock before it is deleted. While holding it,
+    // never take a Script's own lock or wait on a thread (Include runs script code under the Script's lock, and a
+    // script's thread takes the list lock on its way out).
+    static Script* FindScriptById(DWORD id);
 
     static void LockScriptList(char* loc);
     static void UnLockScriptList(char* loc);
@@ -54,18 +58,12 @@ class ScriptEngine {
     static bool ForEachScript(ScriptCallback callback, void* argv, uint argc);
     static unsigned int GetCount(bool active = true, bool unexecuted = false);
 
-    static JSRuntime* GetRuntime(void) {
-        return runtime;
-    }
-    static JSContext* GetGlobalContext(void) {
-        return context;
-    }
-
     static void StopAll(bool forceStop = false);
     static void ExecEventAsync(char* evtName, AutoRoot** argv, uint argc);
-    static void InitClass(JSContext* context, JSObject* globalObject, JSClass* classp, JSFunctionSpec* methods, JSPropertySpec* props, JSFunctionSpec* s_methods,
+    // Both return false on an engine failure (out of memory): they run inside JS_NewContext's callback, which must not throw.
+    static bool InitClass(JSContext* context, JSObject* globalObject, JSClass* classp, JSFunctionSpec* methods, JSPropertySpec* props, JSFunctionSpec* s_methods,
                           JSPropertySpec* s_props);
-    static void DefineConstant(JSContext* context, JSObject* globalObject, const char* name, int value);
+    static bool DefineConstant(JSContext* context, JSObject* globalObject, const char* name, int value);
     static void UpdateConsole();
     // setTimeout / setInterval. A timer belongs to the script that set it, whose thread alone runs its callback and
     // frees it; any thread may cancel it by id. Returns false only when the arguments' array could not be made (an

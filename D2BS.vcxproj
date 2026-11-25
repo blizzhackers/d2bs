@@ -315,7 +315,6 @@ XCOPY "$(ProjectDir)resources" "$(OutDir)release-pkg"
     <ClCompile Include="JSParty.cpp" />
     <ClCompile Include="JSPresetUnit.cpp" />
     <ClCompile Include="JSRoom.cpp" />
-    <ClCompile Include="JSSandbox.cpp" />
     <ClCompile Include="JSScreenHook.cpp" />
     <ClCompile Include="JSScript.cpp" />
     <ClCompile Include="JSSQLite.cpp" />
@@ -397,7 +396,6 @@ XCOPY "$(ProjectDir)resources" "$(OutDir)release-pkg"
     <ClInclude Include="JSParty.h" />
     <ClInclude Include="JSPresetUnit.h" />
     <ClInclude Include="JSRoom.h" />
-    <ClInclude Include="JSSandbox.h" />
     <ClInclude Include="JSScreenHook.h" />
     <ClInclude Include="JSScript.h" />
     <ClInclude Include="JSSQLite.h" />

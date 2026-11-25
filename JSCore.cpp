@@ -190,9 +190,18 @@ JSAPI_FUNC(my_load) {
         return JS_FALSE;
     }
 
+    if (argc < 1 || !JSVAL_IS_STRING(JS_ARGV(cx, vp)[0]))
+        THROW_ERROR(cx, "load: the file name must be a string");
     const wchar_t* file = JS_GetStringCharsZ(cx, JSVAL_TO_STRING(JS_ARGV(cx, vp)[0]));
+    if (!file)
+        return JS_FALSE;
+    // An empty name would resolve to the script folder itself.
+    if (!file[0])
+        THROW_ERROR(cx, "load: the file name is empty");
 
-    if (wcslen(file) > (_MAX_FNAME + _MAX_PATH - wcslen(Vars.szScriptPath))) {
+    wchar_t buf[_MAX_PATH + _MAX_FNAME];
+    // The script folder, a backslash and the terminator must also fit: a one-short buffer makes swprintf_s end the process.
+    if (wcslen(file) >= _countof(buf) - wcslen(Vars.szScriptPath) - 1) {
         JS_ReportError(cx, "File name too long!");
         return JS_FALSE;
     }
@@ -201,27 +210,34 @@ JSAPI_FUNC(my_load) {
     if (scriptState == Command)
         scriptState = (ClientState() == ClientStateInGame ? InGame : OutOfGame);
 
-    wchar_t buf[_MAX_PATH + _MAX_FNAME];
     swprintf_s(buf, _countof(buf), L"%s\\%s", Vars.szScriptPath, file);
     StringReplace(buf, L'/', L'\\', _countof(buf));
 
-    JSAutoStructuredCloneBuffer** autoBuffer = new JSAutoStructuredCloneBuffer*[argc - 1];
-    for (uint i = 1; i < argc; i++) {
-        autoBuffer[i - 1] = new JSAutoStructuredCloneBuffer;
-        autoBuffer[i - 1]->write(cx, JS_ARGV(cx, vp)[i]);
+    // The new Script owns the buffers once CompileFile returns it; until then they are freed here.
+    uint nArgs = argc - 1;
+    JSAutoStructuredCloneBuffer** autoBuffer = nArgs ? new JSAutoStructuredCloneBuffer*[nArgs] : NULL;
+    for (uint i = 0; i < nArgs; i++) {
+        autoBuffer[i] = new JSAutoStructuredCloneBuffer;
+        if (!autoBuffer[i]->write(cx, JS_ARGV(cx, vp)[i + 1])) {
+            FreeCloneBuffers(autoBuffer, i + 1);
+            return JS_FALSE;
+        }
     }
 
-    Script* newScript = ScriptEngine::CompileFile(buf, scriptState, argc - 1, autoBuffer);
-
-    if (newScript) {
-        newScript->BeginThread(ScriptThread);
-        // JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(BuildObject(cx, &script_class, script_methods, script_props, newScript->GetContext())));
-        JS_SET_RVAL(cx, vp, JSVAL_NULL);
-    } else {
-        // TODO: Should this actually be there? No notification is bad, but do we want this? maybe throw an exception?
+    Script* newScript = ScriptEngine::CompileFile(buf, scriptState, nArgs, autoBuffer);
+    if (!newScript) {
+        FreeCloneBuffers(autoBuffer, nArgs);
         Print(L"File \"%s\" not found.", file);
-        JS_SET_RVAL(cx, vp, JSVAL_NULL);
+        return JS_TRUE;
     }
+
+    // A Script whose thread never started has no thread of its own to dispose of it; disposing frees its buffers.
+    if (!newScript->BeginThread(ScriptThread)) {
+        ScriptEngine::DisposeScript(newScript);
+        return JS_TRUE;
+    }
+
+    JS_SET_RVAL(cx, vp, JSVAL_TRUE);
     return JS_TRUE;
 }
 

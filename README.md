@@ -2431,7 +2431,7 @@ Returns at once when it has already ended. Throws an error when called on the ca
 
 #### `public void `[`stop`](#classD2BSScript_1ab4933bbbe30752c142be6df995226967)`()` 
 
-Stop the script.
+Stop the script. D2BS prints a line such as `Script default.dbj ended` once for each script that starts, when it finishes or is stopped (a script that fails to start prints "failed to start" instead); stop() on a script that has already ended does nothing.
 
 #### `public void `[`send`](#classD2BSScript_1ab615c8319b0575b135a8f127a3cf61cf)`(...)` 
 

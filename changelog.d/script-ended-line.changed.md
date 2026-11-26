@@ -1,0 +1,1 @@
+- **A line as each script ends.** D2BS prints a line such as `Script default.dbj ended` once for each script that starts, as soon as it finishes or is stopped.

@@ -27,7 +27,10 @@ public:
 	 */
 	void join();
 
-	/** Stop the script.
+	/** Stop the script. D2BS prints a line such as "Script default.dbj ended"
+	 * once for each script other than the console, when it finishes or is
+	 * stopped (a script that fails to start prints "failed to start" instead);
+	 * stop() on a script that has already ended prints no second line.
 	 */
 	void stop();
 

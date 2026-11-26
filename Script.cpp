@@ -21,7 +21,7 @@ static const DWORD kReplaceWaitMs = 500;
 Script::Script(const wchar_t* file, ScriptState state, uint argc, JSAutoStructuredCloneBuffer** argv)
     : execCount(0), scriptState(state), context(NULL), hadContext(false), script(NULL), runtime(NULL), me(NULL), argc(argc), argv(argv), globalObject(NULL),
       scriptObject(NULL), isPaused(false), isReallyPaused(false), isAborted(false), runBegun(false), threadHandle(INVALID_HANDLE_VALUE),
-      id((DWORD)InterlockedIncrement(&lastScriptId)), startFailed(false), predecessor(NULL), refs(1), engineRefReleased(0), threadId(0) {
+      id((DWORD)InterlockedIncrement(&lastScriptId)), startFailed(false), predecessor(NULL), refs(1), engineRefReleased(0), endReported(0), threadId(0) {
     // Everything that can throw runs before the event and the lock exist: a throwing constructor runs no destructor.
     if (scriptState == Command && wcslen(file) < 1) {
         fileName = wstring(L"Command Line");
@@ -269,6 +269,8 @@ bool Script::Run(void) {
     MemoryBarrier();
     runBegun = true;
     if (isAborted) {
+        // Stopped before main(): a stop that found hasActiveCX clear left this run's end line to here.
+        ReportEnded();
         hasActiveCX = false;
         if (scriptState != Command) {
             JS_RemoveScriptRoot(context, &script);
@@ -328,6 +330,9 @@ bool Script::Run(void) {
     FreeArgs();
 
     JS_EndRequest(GetContext());
+    // Before hasActiveCX clears: when this natural end logs the line, a caller that waits for the end and then prints
+    // lands after it.
+    ReportEnded();
     // Nothing runs on this context any more: running reads false and no event queues for a cached, ended script.
     hasActiveCX = false;
     // On the owner thread, which the callback roots need: an ended cached copy may never be destroyed, and its timers
@@ -390,14 +395,37 @@ bool Script::SignalStop(void) {
     MemoryBarrier();
     isPaused = false;
     isReallyPaused = false;
-    if (GetState() != Command) {
-        const wchar_t* displayName = fileName.c_str() + wcslen(Vars.szScriptPath) + 1;
-        Print(L"Script %s ended", displayName);
-    }
+    // Only a run that has published hasActiveCX reports here. Read after the barrier above, pairing with Run's: a run
+    // that has not published it yet sees the stop and reports itself, and one that fails first logs "failed to start".
+    if (hasActiveCX)
+        ReportEnded();
     // trigger call back so script ends
     TriggerOperationCallback();
     SetEvent(eventSignal);
     return true;
+}
+
+bool Script::ClaimEndReport(void) {
+    return InterlockedExchange(&endReported, 1) == 0;
+}
+
+void Script::ReportStartFailed(void) {
+    // Hex escapes, split so the colour digit isn't read as hex: a universal-character-name raises C4428.
+    if (ClaimEndReport())
+        Print(L"\xFF" L"c2D2BS\xFF" L"c0 :: Script %s failed to start", GetShortFilename());
+}
+
+// Any thread. The run's first end report wins: Run's end (main() returning or throwing, or the top level finishing
+// or throwing), a stop, or ReportStartFailed's "failed to start"; later ones stay silent. The "ended" line is
+// skipped once the engine leaves Running at shutdown: by then D2BS no longer flushes printed lines, and an ordinary
+// shutdown deletes the print lock only after the engine stops.
+void Script::ReportEnded(void) {
+    if (GetState() == Command || ScriptEngine::GetState() != Running || !ClaimEndReport())
+        return;
+    // Past the script path only when the name is longer: a profile switch can lengthen the path while the script runs.
+    const size_t root = wcslen(Vars.szScriptPath) + 1;
+    const wchar_t* displayName = fileName.c_str() + (fileName.length() > root ? root : 0);
+    Print(L"Script %s ended", displayName);
 }
 
 void Script::Stop(bool force, bool reallyForce) {
@@ -643,8 +671,7 @@ DWORD WINAPI ScriptThread(void* data) {
         bool started = script->Run();
         HangForgetThread();
         if (!started) {
-            // Hex escapes, split so the colour digit isn't read as hex: a universal-character-name raises C4428 here.
-            Print(L"\xFF" L"c2D2BS\xFF" L"c0 :: Script %s failed to start", script->GetShortFilename());
+            script->ReportStartFailed();
             // The console stays: ScriptEngine::console and the map's "console" key keep pointing at it.
             if (script->GetState() != Command)
                 ScriptEngine::DisposeScript(script);

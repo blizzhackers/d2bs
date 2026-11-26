@@ -409,10 +409,16 @@ bool Script::ClaimEndReport(void) {
     return InterlockedExchange(&endReported, 1) == 0;
 }
 
+void Script::ReportStartFailed(void) {
+    // Hex escapes, split so the colour digit isn't read as hex: a universal-character-name raises C4428.
+    if (ClaimEndReport())
+        Print(L"\xFF" L"c2D2BS\xFF" L"c0 :: Script %s failed to start", GetShortFilename());
+}
+
 // Any thread. The run's first end report wins: Run's end (main() returning or throwing, or the top level finishing
-// or throwing), a stop, or "failed to start"; later ones stay silent. The "ended" line is skipped once the engine
-// leaves Running at shutdown: by then D2BS no longer flushes printed lines, and an ordinary shutdown deletes the print
-// lock only after the engine stops.
+// or throwing), a stop, or ReportStartFailed's "failed to start"; later ones stay silent. The "ended" line is
+// skipped once the engine leaves Running at shutdown: by then D2BS no longer flushes printed lines, and an ordinary
+// shutdown deletes the print lock only after the engine stops.
 void Script::ReportEnded(void) {
     if (GetState() == Command || ScriptEngine::GetState() != Running || !ClaimEndReport())
         return;
@@ -665,11 +671,7 @@ DWORD WINAPI ScriptThread(void* data) {
         bool started = script->Run();
         HangForgetThread();
         if (!started) {
-            // A stop that already logged this run's "ended" line keeps this one quiet.
-            if (script->ClaimEndReport()) {
-                // Hex escapes, split so the colour digit isn't read as hex: a universal-character-name raises C4428.
-                Print(L"\xFF" L"c2D2BS\xFF" L"c0 :: Script %s failed to start", script->GetShortFilename());
-            }
+            script->ReportStartFailed();
             // The console stays: ScriptEngine::console and the map's "console" key keep pointing at it.
             if (script->GetState() != Command)
                 ScriptEngine::DisposeScript(script);

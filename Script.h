@@ -89,9 +89,11 @@ class Script {
     // the last release.
     volatile LONG refs;
     volatile LONG engineRefReleased; // 1 once DisposeScript has released the engine's reference
-    // 1 once the run's end is reported, as "ended" or "failed to start": the first report wins, so a run logs at most
-    // one end line. A Script runs at most once, so it is never reset.
+    // 1 once the run's end is reported, as "ended" (ReportEnded) or "failed to start" (ReportStartFailed): the first
+    // report wins, so a run logs at most one end line. A Script runs at most once, so it is never reset.
     volatile LONG endReported;
+    // Any thread: true only for the run's first end report, which then prints its line.
+    bool ClaimEndReport(void);
     void ReportEnded(void);
     void AddRef(void);
     void Release(void);
@@ -134,8 +136,8 @@ class Script {
     }
     // Sets the stop flags and wakes the script without taking its lock or waiting; false when already stopped.
     bool SignalStop(void);
-    // Any thread: true only for the run's first end report, which then prints its line.
-    bool ClaimEndReport(void);
+    // For a Run that returned false: prints "failed to start" unless a stop already logged this run's "ended" line.
+    void ReportStartFailed(void);
     void Stop(bool force = false, bool reallyForce = false);
 
     inline const wchar_t* GetFilename(void) {

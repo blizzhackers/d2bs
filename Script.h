@@ -89,8 +89,8 @@ class Script {
     // the last release.
     volatile LONG refs;
     volatile LONG engineRefReleased; // 1 once DisposeScript has released the engine's reference
-    // 1 once the run's end is reported, as "ended" or "failed to start": the first report wins, so a run logs one end
-    // line. A Script runs at most once, so it is never reset.
+    // 1 once the run's end is reported, as "ended" or "failed to start": the first report wins, so a run logs at most
+    // one end line. A Script runs at most once, so it is never reset.
     volatile LONG endReported;
     void ReportEnded(void);
     void AddRef(void);

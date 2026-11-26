@@ -330,8 +330,8 @@ bool Script::Run(void) {
     FreeArgs();
 
     JS_EndRequest(GetContext());
-    // Before hasActiveCX clears: after a natural end, a caller that waits for running to read false and then prints
-    // lands after this line.
+    // Before hasActiveCX clears: when this natural end logs the line, a caller that waits for the end and then prints
+    // lands after it.
     ReportEnded();
     // Nothing runs on this context any more: running reads false and no event queues for a cached, ended script.
     hasActiveCX = false;
@@ -396,7 +396,7 @@ bool Script::SignalStop(void) {
     isPaused = false;
     isReallyPaused = false;
     // Only a run that has published hasActiveCX reports here. Read after the barrier above, pairing with Run's: a run
-    // that has not yet sees the stop and reports itself, and one that fails before then logs "failed to start".
+    // that has not published it yet sees the stop and reports itself, and one that fails first logs "failed to start".
     if (hasActiveCX)
         ReportEnded();
     // trigger call back so script ends
@@ -409,12 +409,16 @@ bool Script::ClaimEndReport(void) {
     return InterlockedExchange(&endReported, 1) == 0;
 }
 
-// Any thread. The run's first end, main() returning or a stop, logs the line, and later ones stay silent. Skipped
-// once D2BS shuts down: nothing flushes the print queue then, and its lock is deleted soon after.
+// Any thread. The run's first end report wins: Run's end (main() returning or throwing, or the top level finishing
+// or throwing), a stop, or "failed to start"; later ones stay silent. The "ended" line is skipped once the engine
+// leaves Running at shutdown: by then D2BS no longer flushes printed lines, and an ordinary shutdown deletes the print
+// lock only after the engine stops.
 void Script::ReportEnded(void) {
-    if (GetState() == Command || !Vars.bActive || !ClaimEndReport())
+    if (GetState() == Command || ScriptEngine::GetState() != Running || !ClaimEndReport())
         return;
-    const wchar_t* displayName = fileName.c_str() + wcslen(Vars.szScriptPath) + 1;
+    // Past the script path only when the name is longer: a profile switch can lengthen the path while the script runs.
+    const size_t root = wcslen(Vars.szScriptPath) + 1;
+    const wchar_t* displayName = fileName.c_str() + (fileName.length() > root ? root : 0);
     Print(L"Script %s ended", displayName);
 }
 

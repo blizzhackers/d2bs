@@ -62,8 +62,11 @@ Unit getUnit(int type = -1, uint32_t classId = (uint32_t)-1,
  * \param Radius The distance between each point.
  *
  * \return The path as an array of objects with x and y properties.
- * Waits while an area or act loads, also one that begins before it looks the area up.
- * Throws an error when the area is not in the act the player is in.
+ * Waits while an area or act loads, also one that begins before it looks the area up, except in a
+ * blocking listener or while your script holds the game lock.
+ * Throws an error when the area is not in the act the player is in, or when a load that begins as the
+ * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
+ * holds the game lock).
  */
 object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
 	int dstY, uint32_t reductionType = 0, uint32_t Radius = 20);
@@ -129,8 +132,11 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  * returned.
  *
  * \return The path as an array of objects with x and y properties.
- * Waits while an area or act loads, also one that begins before it looks the area up.
- * Throws an error when the area is not in the act the player is in.
+ * Waits while an area or act loads, also one that begins before it looks the area up, except in a
+ * blocking listener or while your script holds the game lock.
+ * Throws an error when the area is not in the act the player is in, or when a load that begins as the
+ * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
+ * holds the game lock).
  */
 object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
 	int dstY, uint32_t reductionType, uint32_t Radius,
@@ -150,8 +156,11 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  *
  * \return The collision flags. For details see:
  * http://forums.d2botnet.org/viewtopic.php?f=18&t=1212 .
- * Waits while an area or act loads, also one that begins before it looks the area up.
- * Throws an error when the area is not in the act the player is in.
+ * Waits while an area or act loads, also one that begins before it looks the area up, except in a
+ * blocking listener or while your script holds the game lock.
+ * Throws an error when the area is not in the act the player is in, or when a load that begins as the
+ * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
+ * holds the game lock).
  */
 unsigned short getCollision(uint32_t nLevelId, int32_t nX, int32_t nY);
 
@@ -466,7 +475,11 @@ Party getParty(Unit player);
  * to NaN matches none.
  *
  * \return The first PresetUnit found of type nType and class ID nClassId.
- * Waits while an area or act loads, also one that begins before it looks the area up.
+ * Waits while an area or act loads, also one that begins before it looks the area up, except in a
+ * blocking listener or while your script holds the game lock.
+ * Throws an error when the area is not in the act the player is in, or when a load that begins as the
+ * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
+ * holds the game lock).
  */
 PresetUnit getPresetUnit(uint32_t levelId, int nType = 0, int nClassId = 0);
 
@@ -485,7 +498,11 @@ PresetUnit getPresetUnit(uint32_t levelId, int nType = 0, int nClassId = 0);
  * to NaN matches none.
  *
  * \return An array of PresetUnit s found of type nType and class ID nClassId.
- * Waits while an area or act loads, also one that begins before it looks the area up.
+ * Waits while an area or act loads, also one that begins before it looks the area up, except in a
+ * blocking listener or while your script holds the game lock.
+ * Throws an error when the area is not in the act the player is in, or when a load that begins as the
+ * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
+ * holds the game lock).
  */
 PresetUnit[] getPresetUnits(uint32_t levelId, int nType = 0, int nClassId = 0);
 
@@ -494,7 +511,10 @@ PresetUnit[] getPresetUnits(uint32_t levelId, int nType = 0, int nClassId = 0);
  * \ingroup globalFunctions
  *
  * \return An Area object for the current object.
- * Waits while an area or act loads, also one that begins before it looks the area up.
+ * Waits while an area or act loads, also one that begins before it looks the area up, except in a
+ * blocking listener or while your script holds the game lock.
+ * False when a load that begins as the call runs leaves its lookup empty past the wait (at once in a
+ * blocking listener or while your script holds the game lock).
  */
 Area getArea();
 
@@ -505,7 +525,11 @@ Area getArea();
  * \param nArea The area ID.
  *
  * \return An Area object.
- * Waits while an area or act loads, also one that begins before it looks the area up.
+ * Waits while an area or act loads, also one that begins before it looks the area up, except in a
+ * blocking listener or while your script holds the game lock.
+ * False when the area is not in the act the player is in, or when a load that begins as the call runs
+ * leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the
+ * game lock).
  */
 Area getArea(int32_t nArea);
 

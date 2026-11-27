@@ -655,7 +655,7 @@ JSAPI_FUNC(my_getRoom) {
     // missing while the game is busy under the lock sends the call back to wait.
     const bool bPlayerRoom = bByArea && levelId == 0;
     // A point with a zero coordinate names no room. It still opens the session and looks its level up, as other calls
-    // do, but never waits for a load.
+    // do, but never waits again for a load that begins after the call's first wait.
     const bool bNoPoint = bByPoint && (!nX || !nY);
     AutoCriticalRoom* cRoom = NULL;
     Room2* pPlayerRoom = NULL;

@@ -218,7 +218,7 @@ Returns an array of points that form a path from the source to the destination. 
 * `Radius` The distance between each point.
 
 #### Returns
-The path as an array of objects with x and y properties. Waits while an area or act loads, also one that begins before it looks the area up. Throws an error when the area is not in the act the player is in.
+The path as an array of objects with x and y properties. Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. Throws an error when the area is not in the act the player is in, or when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
 
 #### `public object[] `[`getPath`](#group__globalFunctions_1ga051897c1e76c0ceeccd946dbedc6ea54)`(uint32_t Area,uint32_t srcX,uint32_t srcY,uint32_t dstX,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dstY,uint32_t reductionType,uint32_t Radius,bool(*)(int32_t x, int32_t y) reject,bool(*)(object curPt, `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac) i, object[] pts)` reduce,int32_t[](*)(int32_t x, int32_t y) mutate)` 
 
@@ -250,7 +250,7 @@ Returns an array of points that form a path from the source to the destination. 
 Reduction type 3 needs all three functions, or getPath throws. They are called with getPath's this (the global object for a plain call). An error one of them throws, or the script being stopped while one runs, ends the getPath call with it. When the script already holds the game lock as getPath starts, for example in a gamepacketsent listener that runs inside clickMap(), they run with the game paused and the D2BS log notes it once for that call; otherwise they run without the game lock, so the game keeps running while one waits, for example in delay(). They may call getCollision() and getPath(). Inside a listener the game is already waiting on, the game also stays paused until getPath returns or the game stops waiting for that listener (after 500 ms for a packet or chat blocker, 1 s for keyupblocker or keydownblocker, 3 s for a hook's click handler). After each reject or mutate call that returns normally, getPath checks that the player is still in the same game, act and area; if not, it calls none of the three again and returns an empty path. A trip away and back to the same area within one call may not be noticed. reduce runs after the search, so the path it reduces is still returned.
 
 #### Returns
-The path as an array of objects with x and y properties. Waits while an area or act loads, also one that begins before it looks the area up. Throws an error when the area is not in the act the player is in.
+The path as an array of objects with x and y properties. Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. Throws an error when the area is not in the act the player is in, or when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
 
 #### `public unsigned short `[`getCollision`](#group__globalFunctions_1gac3a89f2d8c4940ae49dce43fbe2f626b)`(uint32_t nLevelId,int32_t nX,int32_t nY)` 
 
@@ -264,7 +264,7 @@ Get the collision flags at a given point in a given area.
 * `nY` The y coordinate of the point in question.
 
 #### Returns
-The collision flags. For details see: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1212](http://forums.d2botnet.org/viewtopic.php?f=18&t=1212) . Waits while an area or act loads, also one that begins before it looks the area up. Throws an error when the area is not in the act the player is in.
+The collision flags. For details see: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1212](http://forums.d2botnet.org/viewtopic.php?f=18&t=1212) . Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. Throws an error when the area is not in the act the player is in, or when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMercHP`](#group__globalFunctions_1gac4217ed30da8eb07d8addca4cdb51a9d)`()` 
 
@@ -530,7 +530,7 @@ Get the first [PresetUnit](#classPresetUnit) of the given type and class id.
 * `nClassId` The class id to find. See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=986](http://forums.d2botnet.org/viewtopic.php?f=18&t=986) and [http://forums.d2botnet.org/viewtopic.php?f=18&t=985](http://forums.d2botnet.org/viewtopic.php?f=18&t=985) . 0 or omitted matches any class id, and a value that converts to NaN matches none.
 
 #### Returns
-The first [PresetUnit](#classPresetUnit) found of type nType and class ID nClassId. Waits while an area or act loads, also one that begins before it looks the area up.
+The first [PresetUnit](#classPresetUnit) found of type nType and class ID nClassId. Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. Throws an error when the area is not in the act the player is in, or when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
 
 #### `public `[`PresetUnit`](#classPresetUnit)` `[`getPresetUnits`](#group__globalFunctions_1gaf77d2fb8bcab572d328c5764155be78d)`(uint32_t levelId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nType,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nClassId)` 
 
@@ -544,14 +544,14 @@ Get an array of [PresetUnit](#classPresetUnit) s of the given type and class id.
 * `nClassId` The class id to find. See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=986](http://forums.d2botnet.org/viewtopic.php?f=18&t=986) and [http://forums.d2botnet.org/viewtopic.php?f=18&t=985](http://forums.d2botnet.org/viewtopic.php?f=18&t=985) . 0 or omitted matches any class id, and a value that converts to NaN matches none.
 
 #### Returns
-An array of [PresetUnit](#classPresetUnit) s found of type nType and class ID nClassId. Waits while an area or act loads, also one that begins before it looks the area up.
+An array of [PresetUnit](#classPresetUnit) s found of type nType and class ID nClassId. Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. Throws an error when the area is not in the act the player is in, or when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
 
 #### `public `[`Area`](#classArea)` `[`getArea`](#group__globalFunctions_1ga096676595eb6e9e2361dffe28acd8397)`()` 
 
 Get the [Area](#classArea) where the controlled unit currently resides.
 
 #### Returns
-An [Area](#classArea) object for the current object. Waits while an area or act loads, also one that begins before it looks the area up.
+An [Area](#classArea) object for the current object. Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. False when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
 
 #### `public `[`Area`](#classArea)` `[`getArea`](#group__globalFunctions_1gae59e910620c20fb4fae45fc06d7cc351)`(int32_t nArea)` 
 
@@ -561,7 +561,7 @@ Get the [Area](#classArea) for area ID nArea.
 * `nArea` The area ID.
 
 #### Returns
-An [Area](#classArea) object. Waits while an area or act loads, also one that begins before it looks the area up.
+An [Area](#classArea) object. Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. False when the area is not in the act the player is in, or when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
 
 #### `public String `[`getBaseStat`](#group__globalFunctions_1gab4ebba6bce777cb9705e199af1d08bc8)`(String szTableName,int32_t nClassId,String szStatName)` 
 

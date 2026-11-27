@@ -50,9 +50,8 @@ public:
 	 * the call and unloaded again.
 	 *
 	 * Each value is the game's 16-bit collision mask for that subtile, a set of
-	 * flag bits. D2BS's own pathing treats 0x1 as blocking walking and 0x2 as
-	 * blocking line of sight; the names of the other bits are conventional
-	 * names, not verified behavior. See \ref reference_collision.
+	 * flag bits. See \ref reference_collision for what each bit means and
+	 * which ones getPath() treats as blocking.
 	 *
 	 * \return An array with the collision data. The first dimension is the y
 	 * coordinate, the second is the x coordinate. Returns undefined when the

@@ -59,8 +59,8 @@ public:
 	 */
 	double ysize;
 
-	/** The Control's display state: its flag word (see disabled) minus 2, read
-	 * as an unsigned number.
+	/** The Control's display state: its flag word (the value disabled reads)
+	 * minus 2, read as an unsigned number.
 	 *
 	 * Common reads: 3 = shown and enabled, 2 = shown but greyed, 11 or 10 = the
 	 * same on the popup layer. A hidden control reads 1 or 0 (7 or 6 on the
@@ -75,8 +75,9 @@ public:
 	 * enables the control, 2 shows it greyed, and 1 and 0 hide it. Setting it
 	 * also removes the popup-layer bit. States 0 and 1 also set a transient bit
 	 * the game uses while a button is being released, with effects that are not
-	 * fully known, so prefer 2 and 3. Any other integer throws "Invalid state
-	 * value", and a non-integer value is ignored.
+	 * fully known, so prefer 2 and 3. Any other 32-bit integer throws "Invalid
+	 * state value"; a non-integer value, or an integer outside the signed
+	 * 32-bit range, is ignored.
 	 *
 	 * Reads undefined once the control is gone.
 	 */
@@ -136,7 +137,10 @@ public:
 	 */
 	double selectend;
 
-	/** Whether the Control is disabled or not.
+	/** The Control's raw flag word; its bits are listed under state. Despite
+	 * its name it is not a boolean: a shown, enabled control reads 5 and a
+	 * shown, greyed one reads 4 (13 and 12 on the popup layer). Read-only.
+	 * Reads undefined once the control is gone.
 	 */
 	double disabled;
 };

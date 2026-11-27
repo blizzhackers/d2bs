@@ -247,7 +247,12 @@ int getCursorType(int nType);
  *
  * \param skillName The skill name.
  *
- * \return The skill ID (0 is Attack), or undefined when the name is not a known skill or the argument is not a string. The name is matched case-insensitively.
+ * \return The skill id (0 is Attack), or undefined when the name is not in
+ * D2BS's built-in English skill-name table or the argument is not a string. The
+ * name is matched case-insensitively against that table (ids 0-155 and
+ * 219-280), not against the Skills.txt names listed in \ref reference_skills
+ * (some of them differ, for example Werewolf, not Wearwolf) and not against
+ * the game's localized names.
  */
 int getSkillByName(String skillName);
 
@@ -257,7 +262,10 @@ int getSkillByName(String skillName);
  *
  * \param skillId The skill ID.
  *
- * \return The skill name.
+ * \return The skill's in-game name in the client's language (its skilldesc
+ * string), which is not always a name getSkillByName() and setSkill() accept.
+ * Returns "Unknown" for an id outside the game's skill table, and undefined
+ * when the argument is missing or is not an integer.
  */
 String getSkillById(int skillId);
 
@@ -277,7 +285,9 @@ String getLocaleString(uint16_t localeId);
  *
  * \param string The string to get the size of.
  *
- * \param font The font to use.
+ * \param font The game font, 0-13 (see \ref reference_fonts). D2BS does not
+ * check the value; 14 or more makes the game read past its font table and can
+ * crash it.
  *
  * \param asObject False to return as an array.
  *
@@ -291,7 +301,9 @@ int[] getTextSize(String string, int font, bool asObject = false);
  *
  * \param string The string to get the size of.
  *
- * \param font The font to use.
+ * \param font The game font, 0-13 (see \ref reference_fonts). D2BS does not
+ * check the value; 14 or more makes the game read past its font table and can
+ * crash it.
  *
  * \param asObject True to return as an object.
  *
@@ -366,9 +378,13 @@ String getTradeInfo(int nMode);
  *
  * \ingroup globalFunctions
  *
- * \param nWaypointId The area id of the waypoint in question.
+ * \param nWaypointId The waypoint's index in the game's waypoint list (the
+ * Waypoint column of Levels.txt: 0 for the Rogue Encampment, 1 for the Cold
+ * Plains), not an area id. An index above 40 is read as 0.
  *
- * \return Whether or not the controlled unit has the waypoint.
+ * \return Whether the controlled unit has that waypoint. Returns false when the
+ * argument is missing or is not an integer, and false (with a 'Game not ready'
+ * warning) outside a ready game.
  */
 bool getWaypoint(int nWaypointId);
 
@@ -1033,11 +1049,13 @@ double getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
  * not to be matched against.
  *
  * Any negative value, and any argument that is not an integer (such as the
- * string "6" or 6.5), also skips that field silently. Leaving out trailing
- * arguments skips them too, so with no arguments the call returns the first
- * control on the screen. Controls exist only at the out-of-game menus. Pass at
- * most five arguments: an integer in a sixth or later argument is written past
- * the end of D2BS's argument storage and can crash the game.
+ * string "6" or 6.5), also skips that field silently. With no arguments, or
+ * with every argument -1 or not an integer, the call returns the first control
+ * on the screen. When every field is skipped and at least one of them by a
+ * negative value other than -1, nothing matches and the call returns
+ * undefined. Controls exist only at the out-of-game menus. Pass at most five
+ * arguments: an integer in a sixth or later argument is written past the end
+ * of D2BS's argument storage and can crash the game.
  *
  * nType is the control's type, the same value Control.type returns:
  *
@@ -1955,20 +1973,22 @@ Unit copyUnit(Unit other);
  *
  * 5 - Right button up
  *
- * Any other value (a negative one wraps to a large value) does nothing.
+ * Any other value does nothing. The value is read as a 16-bit number first
+ * (wrapping modulo 65536), so 65536 counts as 0 and -65535 as 1.
  *
  * The click lands on the unit's position and targets that unit, for example to
- * attack it, talk to it or pick it up. The game ignores the click while UI flag
- * 0x09 (the Esc menu) is set.
+ * attack it, talk to it or pick it up. When toClick is your own character, the
+ * click is a plain map click at your position and targets no unit. The game
+ * ignores the click while UI flag 0x09 (the Esc menu) is set.
  *
  * \ingroup globalFunctions
  *
  * \param nClickType The click type to do (see above).
  *
- * \param nShift Whether or not to be holding down shift. 0 - Don't hold shift,
- * any other integer - hold shift. With shift held, D2BS also adds the flag that
- * the game's Always Run setting adds; the game applies it only while the
- * character has stamina.
+ * \param nShift Whether or not to hold down shift, read as a 16-bit number
+ * (wrapping modulo 65536): 0 - don't hold shift, any other value - hold shift.
+ * With shift held, D2BS also adds the flag that the game's Always Run setting
+ * adds; the game applies it only while the character has stamina.
  *
  * \param toClick The unit to click on.
  *
@@ -2017,10 +2037,10 @@ bool clickMap(uint16_t nClickType, bool nShift, Unit toClick);
  * \param nClickType The click type to do: 0 left down, 1 left held, 2 left up,
  * 3 right down, 4 right held, 5 right up.
  *
- * \param nShift Whether or not to be holding down shift. 0 - Don't hold shift,
- * any other integer - hold shift. With shift held, D2BS also adds the flag that
- * the game's Always Run setting adds; the game applies it only while the
- * character has stamina.
+ * \param nShift Whether or not to hold down shift, read as a 16-bit number
+ * (wrapping modulo 65536): 0 - don't hold shift, any other value - hold shift.
+ * With shift held, D2BS also adds the flag that the game's Always Run setting
+ * adds; the game applies it only while the character has stamina.
  *
  * \param nX The x coordinate to click at (map coordinates; negative values
  * wrap).
@@ -2064,10 +2084,11 @@ bool clickMap(uint16_t nClickType, bool nShift, uint16_t nX, uint16_t nY);
 
 /** Read the state of the player-trade Accept button, or press it.
  *
- * action is converted to a number first, so "2" counts as 2 and true as 1. A
- * value that converts to NaN (a non-numeric string, undefined), 0, or any
- * number other than 1, 2 and 3 presses the button exactly as acceptTrade()
- * does.
+ * action is converted to an integer the way action | 0 does: the fraction is
+ * dropped and the value wraps at 2^32, so "2" counts as 2, true and 1.5 count
+ * as 1, and 4294967297 counts as 1. When the result is anything other than 1,
+ * 2 or 3 (a non-numeric string, undefined and other NaN values become 0), the
+ * call presses the button exactly as acceptTrade() does.
  *
  * \ingroup globalFunctions
  *

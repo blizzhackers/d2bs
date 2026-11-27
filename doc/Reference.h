@@ -1,17 +1,20 @@
 /** \page reference Reference tables
  *
- * These tables list the ids and flag values that the script API takes and returns. The area, skill and
- * item-type tables come from the game's own 1.14d data tables.
+ * These tables list the ids and flag values that the script API takes and
+ * returns. The area, skill and item-type tables come from the game's own 1.14d
+ * data tables.
  *
  * \section reference_areas Area ids
  *
  * Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`,
- * `getPresetUnit()` and `getPath()` use them. An area id is the `Id` column of
+ * `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a
+ * waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index
+ * instead (the Levels.txt Waypoint column). An area id is the `Id` column of
  * the game's Levels.txt; the table lists every 1.14d area. The seven Tal
  * Rasha's Tomb areas share one name; the internal name tells them apart, and
  * `correcttomb` of any Act II room gives the id of the one that holds Tal
  * Rasha's chamber in the current game. Act is the act the area belongs to
- * (1-5).
+ * (1-5; - for id 0).
  *
  * Id | Name | Internal name (Levels.txt Name) | Act
  * ---|---|---|---
@@ -155,12 +158,15 @@
  *
  * \section reference_skills Skill ids
  *
- * Skill ids, as `getSkill()`, `setSkill()` and `useSkillPoint()` use them: the
- * `Id` column of the game's Skills.txt. Names are the Skills.txt names; the
- * in-game names can differ slightly. Class skills are Amazon 6-35, Sorceress
- * 36-65, Necromancer 66-95, Paladin 96-125, Barbarian 126-155, Druid 221-250
- * and Assassin 251-280; a character can spend skill points only on its own
- * class's skills. The other ids are shared, monster and item skills (for
+ * Skill ids, as `getSkill()`, `setSkill()`, `useSkillPoint()` and
+ * `getSkillById()` use them and `getSkillByName()` returns them: the `Id`
+ * column of the game's Skills.txt. Names are the Skills.txt names; the in-game
+ * names can differ. `getSkillByName()` and `setSkill()` with a name take
+ * D2BS's own English names instead, which differ from some of these (for
+ * example Werewolf, Fissure, Burst of Speed). Class skills are Amazon 6-35,
+ * Sorceress 36-65, Necromancer 66-95, Paladin 96-125, Barbarian 126-155, Druid
+ * 221-250 and Assassin 251-280; a character can spend skill points only on its
+ * own class's skills. The other ids are shared, monster and item skills (for
  * example 217-220, the identify and town portal scrolls and tomes).
  *
  * Id | Skill (Skills.txt skill) | Class
@@ -641,11 +647,14 @@
  * \section reference_uiflags UI flags
  *
  * Ids for `getUIFlag(id)`: the slots of the game's UI-state array. A slot
- * reads true while its panel or mode is open. Only 0-37 are valid: any other
- * id (38 or more, or negative) makes the game exit at once. The names are
- * D2BS's `Constants.h` names. "Seen" marks the ids observed in a 1.14d
- * single-player game by opening each panel; the meanings of the other ids
- * follow those names and kolbot and were not observed.
+ * reads true while the state in its "Set while" column holds: most slots are
+ * panels that read true while open, and 19 and 35 are on during normal play.
+ * Only 0-37 are valid: in a game, any other integer id (38 or more, or
+ * negative) makes the game exit at once, since D2BS does not check the range.
+ * The names are D2BS's C++ `Constants.h` names, which scripts do not have;
+ * pass the number. "Seen" marks the ids observed in a 1.14d single-player game
+ * (at rest, with each panel open, and with Alt held); the meanings of the
+ * other ids follow those names and kolbot and were not observed.
  *
  * Id | Name | Set while | Seen
  * ---|---|---|---
@@ -694,8 +703,10 @@
  * recognizes a screen by the buttons and text boxes it shows. `getLocation()`
  * returns null while the client is not on the out-of-game menus: in a game,
  * while a game loads, and between two screens. A popup that D2BS knows reports
- * the popup rather than the screen under it. The names are D2BS's
- * `Constants.h` names.
+ * the popup rather than the screen under it. The names are D2BS's C++
+ * `Constants.h` names, which scripts do not have; compare against the number.
+ * The character-select values (12, 13, 20, 23 and 42) need the expansion
+ * screen layout; the classic layout does not report them.
  *
  * Value | Name | Screen
  * ---|---|---
@@ -705,16 +716,16 @@
  * 3 | OOG_CHAT | Battle.net chat channel
  * 4 | OOG_CREATE | Create Game panel
  * 5 | OOG_JOIN | Join Game panel
- * 6 | OOG_LADDER | Ladder panel
+ * 6 | OOG_LADDER | Ladder panel, or any other lobby panel with its Cancel button in the same place
  * 7 | OOG_CHANNEL | Channel list panel
  * 8 | OOG_MAIN_MENU | Main menu
  * 9 | OOG_LOGIN | Battle.net account login
  * 10 | OOG_LOGIN_ERROR | Login error popup
  * 11 | OOG_UNABLE_TO_CONNECT | Unable to connect to Battle.net
- * 12 | OOG_CHAR_SELECT | Character select, with a character shown
+ * 12 | OOG_CHAR_SELECT | Character select (expansion screen layout), with a character shown
  * 13 | OOG_REALM_DOWN | Character select: the realm could not be reached, or the connection is temporarily restricted from it
  * 14 | OOG_DISCONNECTED | Disconnected from Battle.net popup
- * 15 | OOG_NEW_CHARACTER | Character create screen while its OK button is disabled
+ * 15 | OOG_NEW_CHARACTER | Character create screen after a class is picked (its OK button is shown); also the fallback for any other screen with the Exit button at the bottom left
  * 16 | OOG_CHARACTER_SELECT_PLEASE_WAIT | A "Please Wait" popup
  * 17 | OOG_LOST_CONNECTION | Lost connection to Battle.net popup
  * 18 | OOG_D2SPLASH | Splash screen
@@ -724,11 +735,11 @@
  * 22 | OOG_INVALID_CDKEY | Invalid CD key popup, or another popup with its OK button in the same place
  * 23 | OOG_CONNECTING | Character select: connecting to the realm
  * 24 | OOG_SERVER_DOWN | Server down popup
- * 25 | OOG_PLEASE_WAIT | "Please wait" popup with a Cancel button
+ * 25 | OOG_PLEASE_WAIT | A centered popup with a Cancel button and a message box, such as "Please wait" (16 is the same popup with its message higher up)
  * 26 | OOG_GAME_EXIST | A game with that name already exists
  * 27 | OOG_GATEWAY | Gateway (realm) list
  * 28 | OOG_GAME_DOES_NOT_EXIST | Game does not exist
- * 29 | OOG_CHARACTER_CREATE | Character create screen while its OK button is enabled
+ * 29 | OOG_CHARACTER_CREATE | Character create screen before a class is picked (its OK button is still hidden)
  * 30 | OOG_CHARACTER_CREATE_ALREADY_EXISTS | Any other centered popup with an OK button (for example a duplicate character name)
  * 31 | OOG_AGREE_TO_TERMS | Terms of use
  * 32 | OOG_NEW_ACCOUNT | Create a new Battle.net account
@@ -748,30 +759,39 @@
  * \section reference_collision Collision flags
  *
  * Bits of the 16-bit collision mask that `getCollision()` and
- * `Room.getCollision()` return for each map subtile. D2BS's own pathing treats
- * 0x1 as blocking walking and 0x2 as blocking line of sight, and also treats
- * 0x8, 0x400 and 0x1000 as not walkable. The names are the conventional names
- * used by D2BS and kolbot; the notes on where a bit was seen come from a 1.14d
- * single-player game in the Rogue Encampment.
+ * `Room.getCollision()` return for each map subtile. `getCollision()` also
+ * returns 65535 (every bit set) for a point it cannot read and for
+ * barricade-tower spots; that value does not mean the bits below are set.
+ * `getPath()` with reduction 0, 1 or 2 treats a subtile as blocked when it or
+ * one of the 4 subtiles next to it has 0x1 or 0x8 set. The walking path
+ * (reduction 0) also gives a higher cost to a subtile when it or a subtile 2
+ * away in a straight line has 0x1 or 0x8 set, and to subtiles with 0x400
+ * (objects) or 0x800 (closed doors), so it keeps clear of them where it can
+ * without treating them as blocked. `getPath()` reads no other bit. The names
+ * are D2BS's own, from its pathing code. Where kolbot's `sdk.collision` name
+ * differs by more than a plural, it is given in brackets; kolbot's
+ * `sdk.collision.BlockWalk` is the combination 0x1805, not 0x1. The notes on
+ * where a bit was seen come from a 1.14d single-player game in the Rogue
+ * Encampment.
  *
  * Bit | Name | Meaning
  * ---|---|---
- * 0x0001 | BlockWalk | Blocks walking (walls, cliffs, unwalkable space; also seen on a bonfire)
- * 0x0002 | BlockLineOfSight | Blocks line of sight
+ * 0x0001 | BlockWalk | Blocks walking (walls, cliffs, unwalkable space; also seen on a bonfire; kolbot: BlockWall)
+ * 0x0002 | BlockLineOfSight | Blocks line of sight (kolbot: LineOfSight)
  * 0x0004 | Wall | Wall (kolbot calls it Ranged); in the room checked it was always set together with 0x1
  * 0x0008 | BlockPlayer | Blocks players (kolbot: PlayerToWalk)
  * 0x0010 | AlternateTile | Alternate floor tile (kolbot: DarkArea)
  * 0x0020 | Blank | Blank subtile (kolbot: Casting)
- * 0x0040 | Missile | Missile
+ * 0x0040 | Missile | Missile (kolbot: Unknown)
  * 0x0080 | Player | A player's cell and the 4 cells next to it
- * 0x0100 | NPCLocation | A monster's or NPC's cell and the cells next to it
+ * 0x0100 | NPCLocation | A monster's or NPC's cell and the cells next to it (kolbot: Monsters)
  * 0x0200 | Item | An item's cell (seen for a gold pile)
  * 0x0400 | Object | An object's cell (seen for a torch and a standard)
  * 0x0800 | ClosedDoor | A closed door
  * 0x1000 | NPCCollision | The cell the player stands on, and that of some NPCs (seen for Akara, Kashya and Warriv) (kolbot: IsOnFloor)
  * 0x2000 | FriendlyNPC | The cell of some NPCs and animals, and for larger ones (the cows) the 4 cells next to it too (seen for the mercenary, the rogue guards and the cows)
- * 0x4000 | Unknown | Unknown
- * 0x8000 | DeadBody | A corpse (also set by portals)
+ * 0x4000 | Unknown | Unknown (kolbot: Unknown2)
+ * 0x8000 | DeadBody | A corpse, by its name (not seen in the game checked; a D2BS code comment says portals set it too)
  *
  * \section reference_textcolors Text colors
  *
@@ -781,8 +801,10 @@
  * to `\xFFc9` select 0-9, and `\xFFc:`, `\xFFc;` and `\xFFc<` select 10, 11
  * and 12. Other values are not defined. In a string, `\xFFc` followed by a
  * character after `<` selects 0, and one before `0` gives an undefined color.
- * The names are the conventional ones (kolbot's); the RGB values were measured
- * in a 1.14d game (glyphs also carry a dark shadow).
+ * A `\xFF` followed by anything other than `c` is not a color code and is
+ * drawn as an ordinary character. The names are the conventional ones
+ * (kolbot's); the RGB values were measured in a 1.14d game (glyphs also carry
+ * a dark shadow).
  *
  * Value | Code | Color | RGB
  * ---|---|---|---
@@ -802,10 +824,10 @@
  *
  * \section reference_fonts Fonts
  *
- * The game's fonts, as `Text.font` takes them. Only 0-13 are valid: a larger
- * value makes the game read past its font table and can crash it. The names
- * are the game's own font names. The height is that of the text "Ag" drawn in
- * a 1.14d game, in pixels, without the glyph shadow.
+ * The game's fonts, as `Text.font` and `getTextSize()` take them. Only 0-13
+ * are valid: a larger value makes the game read past its font table and can
+ * crash it. The names are the game's own font names. The height is that of
+ * the text "Ag" drawn in a 1.14d game, in pixels, without the glyph shadow.
  *
  * Value | Font | Height of "Ag"
  * ---|---|---

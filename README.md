@@ -335,7 +335,7 @@ Get skill ID by name.
 * `skillName` The skill name.
 
 #### Returns
-The skill ID (0 is Attack), or undefined when the name is not a known skill or the argument is not a string. The name is matched case-insensitively.
+The skill id (0 is Attack), or undefined when the name is not in D2BS's built-in English skill-name table or the argument is not a string. The name is matched case-insensitively against that table (ids 0-155 and 219-280), not against the Skills.txt names listed under [Skill ids](#skill-ids) in the reference tables (some of them differ, for example Werewolf, not Wearwolf) and not against the game's localized names.
 
 #### `public String `[`getSkillById`](#group__globalFunctions_1ga14cda78dea3cf554c8ebeeb0834039c9)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` skillId)` 
 
@@ -345,7 +345,7 @@ Get skill name by ID.
 * `skillId` The skill ID.
 
 #### Returns
-The skill name.
+The skill's in-game name in the client's language (its skilldesc string), which is not always a name getSkillByName() and setSkill() accept. Returns "Unknown" for an id outside the game's skill table, and undefined when the argument is missing or is not an integer.
 
 #### `public String `[`getLocaleString`](#group__globalFunctions_1gaf2065d798cd6a0337fb94f7bae718283)`(uint16_t localeId)` 
 
@@ -364,7 +364,7 @@ Get the width and height of the given text in the given font.
 #### Parameters
 * `string` The string to get the size of.
 
-* `font` The font to use.
+* `font` The game font, 0-13 (see [Fonts](#fonts) in the reference tables). D2BS does not check the value; 14 or more makes the game read past its font table and can crash it.
 
 * `asObject` False to return as an array.
 
@@ -374,7 +374,7 @@ The width and height of the text. 0 - width, 1 - height.
 #### Parameters
 * `string` The string to get the size of.
 
-* `font` The font to use.
+* `font` The game font, 0-13 (see [Fonts](#fonts) in the reference tables). D2BS does not check the value; 14 or more makes the game read past its font table and can crash it.
 
 * `asObject` True to return as an object.
 
@@ -438,10 +438,10 @@ null.
 Get whether the controlled unit has the given waypoint.
 
 #### Parameters
-* `nWaypointId` The area id of the waypoint in question.
+* `nWaypointId` The waypoint's index in the game's waypoint list (the Waypoint column of Levels.txt: 0 for the Rogue Encampment, 1 for the Cold Plains), not an area id. An index above 40 is read as 0.
 
 #### Returns
-Whether or not the controlled unit has the waypoint.
+Whether the controlled unit has that waypoint. Returns false when the argument is missing or is not an integer, and false (with a 'Game not ready' warning) outside a ready game.
 
 #### `public `[`D2BSScript`](#classD2BSScript)` `[`getScript`](#group__globalFunctions_1ga8340268c49de1e5f34588c01b0cf971d)`(bool currentScript)` 
 
@@ -819,7 +819,7 @@ Get the control specified by type, location and size.
 
 -1 indicates parameter not to be matched against.
 
-Any negative value, and any argument that is not an integer (such as the string "6" or 6.5), also skips that field silently. Leaving out trailing arguments skips them too, so with no arguments the call returns the first control on the screen. Controls exist only at the out-of-game menus. Pass at most five arguments: an integer in a sixth or later argument is written past the end of D2BS's argument storage and can crash the game.
+Any negative value, and any argument that is not an integer (such as the string "6" or 6.5), also skips that field silently. With no arguments, or with every argument -1 or not an integer, the call returns the first control on the screen. When every field is skipped and at least one of them by a negative value other than -1, nothing matches and the call returns undefined. Controls exist only at the out-of-game menus. Pass at most five arguments: an integer in a sixth or later argument is written past the end of D2BS's argument storage and can crash the game.
 
 nType is the control's type, the same value [Control](#classControl).type returns:
 
@@ -1534,14 +1534,14 @@ nClickType picks the mouse button and phase; a normal click is a down followed b
 
 5 - Right button up
 
-Any other value (a negative one wraps to a large value) does nothing.
+Any other value does nothing. The value is read as a 16-bit number first (wrapping modulo 65536), so 65536 counts as 0 and -65535 as 1.
 
-The click lands on the unit's position and targets that unit, for example to attack it, talk to it or pick it up. The game ignores the click while UI flag 0x09 (the Esc menu) is set.
+The click lands on the unit's position and targets that unit, for example to attack it, talk to it or pick it up. When toClick is your own character, the click is a plain map click at your position and targets no unit. The game ignores the click while UI flag 0x09 (the Esc menu) is set.
 
 #### Parameters
 * `nClickType` The click type to do (see above).
 
-* `nShift` Whether or not to be holding down shift. 0 - Don't hold shift, any other integer - hold shift. With shift held, D2BS also adds the flag that the game's Always Run setting adds; the game applies it only while the character has stamina.
+* `nShift` Whether or not to hold down shift, read as a 16-bit number (wrapping modulo 65536): 0 - don't hold shift, any other value - hold shift. With shift held, D2BS also adds the flag that the game's Always Run setting adds; the game applies it only while the character has stamina.
 
 * `toClick` The unit to click on.
 
@@ -1573,7 +1573,7 @@ nClickType works as in the first clickMap overload. nX and nY are game map coord
 #### Parameters
 * `nClickType` The click type to do: 0 left down, 1 left held, 2 left up, 3 right down, 4 right held, 5 right up.
 
-* `nShift` Whether or not to be holding down shift. 0 - Don't hold shift, any other integer - hold shift. With shift held, D2BS also adds the flag that the game's Always Run setting adds; the game applies it only while the character has stamina.
+* `nShift` Whether or not to hold down shift, read as a 16-bit number (wrapping modulo 65536): 0 - don't hold shift, any other value - hold shift. With shift held, D2BS also adds the flag that the game's Always Run setting adds; the game applies it only while the character has stamina.
 
 * `nX` The x coordinate to click at (map coordinates; negative values wrap).
 
@@ -1604,7 +1604,7 @@ true once the click is handed to the game, even when the game ignores it. false 
 
 Read the state of the player-trade Accept button, or press it.
 
-action is converted to a number first, so "2" counts as 2 and true as 1. A value that converts to NaN (a non-numeric string, undefined), 0, or any number other than 1, 2 and 3 presses the button exactly as acceptTrade() does.
+action is converted to an integer the way action | 0 does: the fraction is dropped and the value wraps at 2^32, so "2" counts as 2, true and 1.5 count as 1, and 4294967297 counts as 1. When the result is anything other than 1, 2 or 3 (a non-numeric string, undefined and other NaN values become 0), the call presses the button exactly as acceptTrade() does.
 
 #### Parameters
 * `action` What action to perform.
@@ -2356,13 +2356,13 @@ A Control whose control is gone (the screen changed, or the game left the menu) 
 `public double `[`y`](#classControl_1af0d0d577a0b49e54118be2dbb70857c9) | The y coordinate of the [Control](#classControl).
 `public double `[`xsize`](#classControl_1a0319dfc08d4f17914371dc93b55d28b1) | The xsize (width) of the [Control](#classControl).
 `public double `[`ysize`](#classControl_1afc787bd3d4d6b176b02333ccd662ceea) | The ysize (height) of the [Control](#classControl).
-`public double `[`state`](#classControl_1aeb22d5c21c492b4d08e64acc6181f4f7) | The [Control](#classControl)'s display state: its flag word (see disabled) minus 2, read as an unsigned number.
+`public double `[`state`](#classControl_1aeb22d5c21c492b4d08e64acc6181f4f7) | The [Control](#classControl)'s display state: its flag word (the value disabled reads) minus 2, read as an unsigned number.
 `public bool `[`password`](#classControl_1aebd2dddca40bfc123cb86b307368e134) | Return whether or not the [Control](#classControl) holds a password (starred out text).
 `public double `[`type`](#classControl_1acf59ef5830cbbf3da75babd82f47a93a) | The type of control.
 `public double `[`cursorpos`](#classControl_1a46fb8326d65d4a4aef170978e2ce1373) | The position of the text cursor in an edit box.
 `public double `[`selectstart`](#classControl_1acfa6b74b35e85f4b806bed082eade450) | On an edit box, the character index of the selection's moving end.
 `public double `[`selectend`](#classControl_1a435440d08525dcdf317a55d1b96b1086) | On an edit box, the character index where the current selection began (its fixed end).
-`public double `[`disabled`](#classControl_1a8b89abb5d91642620cc5ffe5173a6619) | Whether the [Control](#classControl) is disabled or not.
+`public double `[`disabled`](#classControl_1a8b89abb5d91642620cc5ffe5173a6619) | The [Control](#classControl)'s raw flag word; its bits are listed under state.
 `public `[`Control`](#classControl)` `[`getNext`](#classControl_1a4894f8dd6595425524cd468938ed327c)`()` | Gets the next [Control](#classControl) from the linked list.
 `public void `[`click`](#classControl_1a399dc8ad5e1e8fb6c4944e448a154c0e)`()` | Click [Control](#classControl) in the center of the [Control](#classControl).
 `public void `[`click`](#classControl_1aa6025f9c6027722b94351e24f98c4fa4)`(uint32_t x,uint32_t y)` | Click [Control](#classControl) at the given location.
@@ -2393,13 +2393,13 @@ The ysize (height) of the [Control](#classControl).
 
 #### `public double `[`state`](#classControl_1aeb22d5c21c492b4d08e64acc6181f4f7) 
 
-The [Control](#classControl)'s display state: its flag word (see disabled) minus 2, read as an unsigned number.
+The [Control](#classControl)'s display state: its flag word (the value disabled reads) minus 2, read as an unsigned number.
 
 Common reads: 3 = shown and enabled, 2 = shown but greyed, 11 or 10 = the same on the popup layer. A hidden control reads 1 or 0 (7 or 6 on the popup layer), or 4294967295 or 4294967294 when its flag word is below 2.
 
 The flag word is a set of bits: 0x01 enabled (takes clicks; a button without it is drawn greyed), 0x04 shown (drawn and clickable), 0x08 popup layer (drawn after every other control; popups have it), and 0x02, a transient bit the game sets while a button is being released.
 
-Setting 0-3 replaces the whole flag word with state + 2: 3 shows and enables the control, 2 shows it greyed, and 1 and 0 hide it. Setting it also removes the popup-layer bit. States 0 and 1 also set a transient bit the game uses while a button is being released, with effects that are not fully known, so prefer 2 and 3. Any other integer throws "Invalid state value", and a non-integer value is ignored.
+Setting 0-3 replaces the whole flag word with state + 2: 3 shows and enables the control, 2 shows it greyed, and 1 and 0 hide it. Setting it also removes the popup-layer bit. States 0 and 1 also set a transient bit the game uses while a button is being released, with effects that are not fully known, so prefer 2 and 3. Any other 32-bit integer throws "Invalid state value"; a non-integer value, or an integer outside the signed 32-bit range, is ignored.
 
 Reads undefined once the control is gone.
 
@@ -2448,7 +2448,7 @@ Read-only. On other control types the value has no selection meaning. Reads unde
 
 #### `public double `[`disabled`](#classControl_1a8b89abb5d91642620cc5ffe5173a6619) 
 
-Whether the [Control](#classControl) is disabled or not.
+The [Control](#classControl)'s raw flag word; its bits are listed under state. Despite its name it is not a boolean: a shown, enabled control reads 5 and a shown, greyed one reads 4 (13 and 12 on the popup layer). Read-only. Reads undefined once the control is gone.
 
 #### `public `[`Control`](#classControl)` `[`getNext`](#classControl_1a4894f8dd6595425524cd468938ed327c)`()` 
 
@@ -2573,7 +2573,7 @@ A prepared SQL statement on an SQLite database.
 
 SQLite.query(sql, ...) creates one, binding any extra arguments to its parameters in order, and SQLite.statements lists the ones still open; a [DBStatement](#classDBStatement) cannot be constructed directly (`new DBStatement()` throws "Invalid Operation"). query() prepares only the first SQL statement in the string, and throws "Statement has no effect" for an empty one.
 
-Step through the result rows with [next()](#classDBStatement_1a571c59f80ee8940aaedd2b6f6abc9bd4), which returns true while a row is ready and false at the end, and read the current row with [getObject()](#classDBStatement_1ad4f6860effd1caa57653e8c1fd3dd4c4), getColumnValue() or [getColumnName()](#classDBStatement_1a849c6076cb4e5e4a7436aebb3ca7dee7). Use [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be) instead to run a statement such as an INSERT or UPDATE once: it returns true when the statement ran to completion, and false when its step produced a row (a SELECT run with go() returns false and is closed after that first row). bind() sets a parameter (1-based index, or a name including its prefix such as ":id"), [skip()](#classDBStatement_1a52b6771be336a56bbc8f02bcb99e55c7) steps over rows and [reset()](#classDBStatement_1a7c08cde3f29a7e5158e4ff290f9c6e25) rewinds the statement so it can run again.
+Step through the result rows with [next()](#classDBStatement_1a571c59f80ee8940aaedd2b6f6abc9bd4), which returns true while a row is ready and false at the end, and read the current row with [getObject()](#classDBStatement_1ad4f6860effd1caa57653e8c1fd3dd4c4), getColumnValue() or [getColumnName()](#classDBStatement_1a849c6076cb4e5e4a7436aebb3ca7dee7). Calling next() again after it returned false runs the statement again from its first row. Use [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be) instead to run a statement such as an INSERT or UPDATE once: it returns true when the statement ran to completion, and false when its step produced a row (a SELECT run with go() returns false when it finds a row and true when it finds none; either way the statement is closed after that one step). bind() sets a parameter (1-based index, or a name including its prefix such as ":id"), [skip()](#classDBStatement_1a52b6771be336a56bbc8f02bcb99e55c7) steps over rows and [reset()](#classDBStatement_1a7c08cde3f29a7e5158e4ff290f9c6e25) rewinds the statement so it can run again.
 
 The statement is closed after [close()](#classDBStatement_1a1d8293b4debace6e99c0dbede2677ee7), after a [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be) that returns, and after the database's close(): every method except close() throws "The statement is closed", `sql` reads undefined and `ready` reads false. When go()'s step reports an error, go() throws and the statement stays open, not ready.
 
@@ -2674,7 +2674,7 @@ Call sqlite3_step on the statement.
 Moves to the next row of the results; ready tells whether there is one.
 
 #### Returns
-true when a row is ready; false at the end of the results.
+true when a row is ready; false at the end of the results. A further call after false runs the statement again from its first row.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`skip`](#classDBStatement_1a52b6771be336a56bbc8f02bcb99e55c7)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` rows)` 
 
@@ -3749,7 +3749,7 @@ The direction the unit is facing, from 0 to 63.
 
 A player or monster turns a step at a time, so while it turns this value can trail the direction it is moving in.
 
-Undefined when the unit has no path. For objects and items the value is currently not their facing: it can be undefined or an arbitrary number.
+Undefined when the unit has no path or its path is not in a room. For objects and items the value is currently not their facing: it can be undefined or an arbitrary number.
 
 #### `public String `[`code`](#classMe_1aa90bcab94a360d2e8380323d8b4640cf) 
 
@@ -4198,7 +4198,7 @@ Get a player's merc.
 The unit being operated on should be a player.
 
 #### Returns
-The merc if there is one, null otherwise.
+The merc unit, or null when none is found (the merc must be in a room the client has loaded) or the unit is not a player. Any argument is ignored: getMerc(true) returns the same unit or null, so test the result for truthiness. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMercHP`](#classMe_1a8b9d83bd2cc1d39c89c47c2f3d97f398)`()` 
 
@@ -4221,7 +4221,7 @@ Get skill name from hand.
 1 - Left hand
 
 #### Returns
-Skill name.
+The skill's in-game name in the client's language. It is not always a name setSkill() accepts; getSkill(2) and getSkill(3) give the ids. Returns false when the unit has left the game.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classMe_1a482e347e3d2131af87a6aca7019bf4fd)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` 
 
@@ -4342,7 +4342,7 @@ Source: [http://subversion.assembla.com/svn/d2bs/scripts/YAMB/libs/YAMB/common/Y
 
 Get a stat by stat id and sub index.
 
-Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. Stat 92 returns the item's level requirement for your character and ignores nSubIndex. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
+Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. On an item, stat 92 returns the item's level requirement for your character (the same value as the itemlevelreq property) and ignores nSubIndex. On any other unit, your own character included, stat 92 does not read a stat, and its result is not a level requirement. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
 
 #### Parameters
 * `nStat` The stat id (the ID column of ItemStatCost.txt).
@@ -4372,7 +4372,7 @@ Get the unit's stats as an array indexed by stat id.
 
 Each element is an array indexed by subindex that holds the value, with life, mana and stamina (stats 6-11) in whole points. Other values are raw, so values of 2^31 and above (such as high experience) come back negative. The values come from the unit's base stats, its stat totals (the values the single-stat form reads) and the stat list that getStat(-1) reads, in that order; where more than one holds the same stat and subindex, the last one wins, so a value here is not always the one the single-stat form returns.
 
-A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, with charges and maxcharges added for charged skills. When the same stat id occurs more than once, the element is an array of such objects. Each skill-carrying entry is returned twice, so such an element is always an array in which every object appears twice (a single skill gives an array of two identical objects). Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
+A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, for skill ids 8 and up; lower skill ids come back as ordinary entries. A charged skill also gets charges and maxcharges, except on an item with a maximum of 1 charge, or of 2 charges with none left. When the same stat id occurs more than once, the element is an array of such objects. On an item, each skill-carrying entry is returned twice, so such an element is an array in which every object appears twice (a single skill gives an array of two identical objects). Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
 
 #### Parameters
 * `nStat` Set to -2.
@@ -4420,7 +4420,7 @@ Whether or not the shop went through.
 
 Set the skill on the given hand to be skill with name skillName.
 
-Waits about one second for the game to confirm the skill. The call always acts on your own character, whichever unit it is called on.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 The name is matched case-insensitively against D2BS's built-in English skill-name table, not the game's localized strings. "Shadow Master" and "Phoenix Strike" are not recognized by name; pass their ids (279 and 280) instead.
 
@@ -4430,13 +4430,13 @@ The name is matched case-insensitively against D2BS's built-in English skill-nam
 * `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
 #### Returns
-true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the game does not confirm in time.
+true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classMe_1aa8850569751822ba3088f40bfd94584a)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand)` 
 
 Set the skill on the given hand to be skill with id nSkillId.
 
-Waits about one second for the game to confirm the skill. The call always acts on your own character, whichever unit it is called on.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 #### Parameters
 * `nSkillId` Id of the skill to put up. See [Skill ids](#skill-ids) in the reference tables.
@@ -4444,13 +4444,13 @@ Waits about one second for the game to confirm the skill. The call always acts o
 * `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
 #### Returns
-true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the game does not confirm in time.
+true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classMe_1af20eafc6d55f4dabcba4fdcf7f8bae40)`(String skillName,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` 
 
 Set the skill on the given hand to be skill with name skillName.
 
-Waits about one second for the game to confirm the skill. The call always acts on your own character, whichever unit it is called on.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 The name is matched case-insensitively against D2BS's built-in English skill-name table, not the game's localized strings. "Shadow Master" and "Phoenix Strike" are not recognized by name; pass their ids (279 and 280) instead.
 
@@ -4462,13 +4462,13 @@ The name is matched case-insensitively against D2BS's built-in English skill-nam
 * `item` An item unit: the hand gets that item's charged skill. A third argument that is not an item unit is ignored, and the skill is set as a normal skill. The item is not checked to be yours.
 
 #### Returns
-true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the game does not confirm in time.
+true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classMe_1a10a595cd98b1bb7fcc54bfebdd61ac6c)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` 
 
 Set the skill on the given hand to be skill with id nSkillId.
 
-Waits about one second for the game to confirm the skill. The call always acts on your own character, whichever unit it is called on.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 #### Parameters
 * `nSkillId` Id of the skill to put up. See [Skill ids](#skill-ids) in the reference tables.
@@ -4478,7 +4478,7 @@ Waits about one second for the game to confirm the skill. The call always acts o
 * `item` An item unit: the hand gets that item's charged skill. A third argument that is not an item unit is ignored, and the skill is set as a normal skill. The item is not checked to be yours.
 
 #### Returns
-true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the game does not confirm in time.
+true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public void `[`move`](#classMe_1a497c1507b060c2fcbdf79fcb7263ebdd)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y)` 
 
@@ -4938,7 +4938,7 @@ Get the collision data for the [Room](#classRoom).
 
 The array holds one entry per map row, each an array with one value per map column: result[dy][dx] is the subtile at map offset dx in x and dy in y from the room's corner (the corner with the smallest x and y). That is the subtile at map coordinates (x * 5 + dx, y * 5 + dy), where x and y are this Room's x and y. A room whose data is not loaded is loaded for the call and unloaded again.
 
-Each value is the game's 16-bit collision mask for that subtile, a set of flag bits. D2BS's own pathing treats 0x1 as blocking walking and 0x2 as blocking line of sight; the names of the other bits are conventional names, not verified behavior. See [Collision flags](#collision-flags) in the reference tables.
+Each value is the game's 16-bit collision mask for that subtile, a set of flag bits. See [Collision flags](#collision-flags) in the reference tables for what each bit means and which ones getPath() treats as blocking.
 
 #### Returns
 An array with the collision data. The first dimension is the y coordinate, the second is the x coordinate. Returns undefined when the game is not ready, when the room is no longer in your current act or game, or when it has no collision data.
@@ -5312,7 +5312,7 @@ When the unit or item has left the game, getFlag(), getEnchant() and getSkill() 
 `public `[`Unit`](#classUnit)` `[`getItem`](#classUnit_1a4ef77dc37b10ba1fa7254935549f66fc)`(String name,uint32_t mode,uint32_t nUnitId)` | Get an item from inventory by name, mode and nUnitId.
 `public `[`Unit`](#classUnit)` `[`getItem`](#classUnit_1ad5dbc6824bff1d1847be8052ab36d381)`(uint32_t classId,uint32_t mode,uint32_t nUnitId)` | Get an item from inventory by classId, mode and nUnitId.
 `public `[`Unit`](#classUnit)` `[`getItems`](#classUnit_1af421c40cb966dd2bef028c3ae2660e78)`()` | Get all items from inventory.
-`public bool `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` | Get whether this player has a merc.
+`public `[`Unit`](#classUnit)` `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` | Get a player's merc; the argument is ignored.
 `public `[`Unit`](#classUnit)` `[`getMerc`](#classUnit_1a765ff16754426875b9975e71c776a6ac)`()` | Get a player's merc.
 `public String `[`getSkill`](#classUnit_1a85219a0b1d3856c432b6db80249ecc63)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` | Get skill name from hand.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classUnit_1a94823fedd1fb16eece0fe7fd729bb4e8)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` | Get skill id from hand.
@@ -5481,7 +5481,7 @@ The direction the unit is facing, from 0 to 63.
 
 A player or monster turns a step at a time, so while it turns this value can trail the direction it is moving in.
 
-Undefined when the unit has no path. For objects and items the value is currently not their facing: it can be undefined or an arbitrary number.
+Undefined when the unit has no path or its path is not in a room. For objects and items the value is currently not their facing: it can be undefined or an arbitrary number.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`uniqueid`](#classUnit_1aeda7422b700e357cdda91fb24312e58e) 
 
@@ -5815,17 +5815,17 @@ Get all items from inventory.
 #### Returns
 An array of all the items from inventory; empty when the unit has no items, has left the game, or the method is called on something that is not a unit.
 
-#### `public bool `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` 
+#### `public `[`Unit`](#classUnit)` `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` 
 
-Get whether this player has a merc.
+Get a player's merc; the argument is ignored.
 
 The unit being operated on should be a player.
 
 #### Parameters
-* `dummy` Used to signify boolean result instead of object. Should be true.
+* `dummy` Ignored.
 
 #### Returns
-true if the player has a live merc.
+The merc unit, or null when none is found (the merc must be in a room the client has loaded) or the unit is not a player. Any argument is ignored: getMerc(true) returns the same unit or null, so test the result for truthiness. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public `[`Unit`](#classUnit)` `[`getMerc`](#classUnit_1a765ff16754426875b9975e71c776a6ac)`()` 
 
@@ -5834,7 +5834,7 @@ Get a player's merc.
 The unit being operated on should be a player.
 
 #### Returns
-The merc if there is one.
+The merc unit, or null when none is found (the merc must be in a room the client has loaded) or the unit is not a player. Any argument is ignored: getMerc(true) returns the same unit or null, so test the result for truthiness. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public String `[`getSkill`](#classUnit_1a85219a0b1d3856c432b6db80249ecc63)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` 
 
@@ -5848,7 +5848,7 @@ Get skill name from hand.
 1 - Left hand
 
 #### Returns
-Skill name.
+The skill's in-game name in the client's language. It is not always a name setSkill() accepts; getSkill(2) and getSkill(3) give the ids. Returns false when the unit has left the game.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classUnit_1a94823fedd1fb16eece0fe7fd729bb4e8)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` 
 
@@ -5977,7 +5977,7 @@ true if any of the flags are set in the item flags.
 
 Get a stat by stat id and sub index.
 
-Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. Stat 92 returns the item's level requirement for your character and ignores nSubIndex. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
+Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. On an item, stat 92 returns the item's level requirement for your character (the same value as the itemlevelreq property) and ignores nSubIndex. On any other unit, your own character included, stat 92 does not read a stat, and its result is not a level requirement. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
 
 #### Parameters
 * `nStat` The stat id (the ID column of ItemStatCost.txt).
@@ -6007,7 +6007,7 @@ Get the unit's stats as an array indexed by stat id.
 
 Each element is an array indexed by subindex that holds the value, with life, mana and stamina (stats 6-11) in whole points. Other values are raw, so values of 2^31 and above (such as high experience) come back negative. The values come from the unit's base stats, its stat totals (the values the single-stat form reads) and the stat list that getStat(-1) reads, in that order; where more than one holds the same stat and subindex, the last one wins, so a value here is not always the one the single-stat form returns.
 
-A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, with charges and maxcharges added for charged skills. When the same stat id occurs more than once, the element is an array of such objects. Each skill-carrying entry is returned twice, so such an element is always an array in which every object appears twice (a single skill gives an array of two identical objects). Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
+A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, for skill ids 8 and up; lower skill ids come back as ordinary entries. A charged skill also gets charges and maxcharges, except on an item with a maximum of 1 charge, or of 2 charges with none left. When the same stat id occurs more than once, the element is an array of such objects. On an item, each skill-carrying entry is returned twice, so such an element is an array in which every object appears twice (a single skill gives an array of two identical objects). Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
 
 #### Parameters
 * `nStat` Set to -2.
@@ -6055,7 +6055,7 @@ Whether or not the shop went through.
 
 Set the skill on the given hand to be skill with name skillName.
 
-Waits about one second for the game to confirm the skill. The call always acts on your own character, whichever unit it is called on.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 The name is matched case-insensitively against D2BS's built-in English skill-name table, not the game's localized strings. "Shadow Master" and "Phoenix Strike" are not recognized by name; pass their ids (279 and 280) instead.
 
@@ -6065,13 +6065,13 @@ The name is matched case-insensitively against D2BS's built-in English skill-nam
 * `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
 #### Returns
-true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the game does not confirm in time.
+true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classUnit_1a3f88599825b6b93e1bf52f9c13df0a95)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand)` 
 
 Set the skill on the given hand to be skill with id nSkillId.
 
-Waits about one second for the game to confirm the skill. The call always acts on your own character, whichever unit it is called on.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 #### Parameters
 * `nSkillId` Id of the skill to put up. See [Skill ids](#skill-ids) in the reference tables.
@@ -6079,13 +6079,13 @@ Waits about one second for the game to confirm the skill. The call always acts o
 * `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
 #### Returns
-true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the game does not confirm in time.
+true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classUnit_1setSkill_name_item)`(String skillName,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` 
 
 Set the skill on the given hand to be skill with name skillName.
 
-Waits about one second for the game to confirm the skill. The call always acts on your own character, whichever unit it is called on.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 The name is matched case-insensitively against D2BS's built-in English skill-name table, not the game's localized strings. "Shadow Master" and "Phoenix Strike" are not recognized by name; pass their ids (279 and 280) instead.
 
@@ -6097,13 +6097,13 @@ The name is matched case-insensitively against D2BS's built-in English skill-nam
 * `item` An item unit: the hand gets that item's charged skill. A third argument that is not an item unit is ignored, and the skill is set as a normal skill. The item is not checked to be yours.
 
 #### Returns
-true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the game does not confirm in time.
+true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classUnit_1setSkill_id_item)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` 
 
 Set the skill on the given hand to be skill with id nSkillId.
 
-Waits about one second for the game to confirm the skill. The call always acts on your own character, whichever unit it is called on.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 #### Parameters
 * `nSkillId` Id of the skill to put up. See [Skill ids](#skill-ids) in the reference tables.
@@ -6113,7 +6113,7 @@ Waits about one second for the game to confirm the skill. The call always acts o
 * `item` An item unit: the hand gets that item's charged skill. A third argument that is not an item unit is ignored, and the skill is set as a normal skill. The item is not checked to be yours.
 
 #### Returns
-true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the game does not confirm in time.
+true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public void `[`move`](#classUnit_1a0b13c1bcd85e4a2fda08548feef07d0b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y)` 
 
@@ -6218,7 +6218,7 @@ These tables list the ids and flag values that the script API takes and returns.
 
 ## Area ids
 
-Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()` and `getPath()` use them. An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one that holds Tal Rasha's chamber in the current game. Act is the act the area belongs to (1-5).
+Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index instead (the Levels.txt Waypoint column). An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one that holds Tal Rasha's chamber in the current game. Act is the act the area belongs to (1-5; - for id 0).
 
 Id | Name | Internal name (Levels.txt Name) | Act
 ---|---|---|---
@@ -6362,7 +6362,7 @@ Id | Name | Internal name (Levels.txt Name) | Act
 
 ## Skill ids
 
-Skill ids, as `getSkill()`, `setSkill()` and `useSkillPoint()` use them: the `Id` column of the game's Skills.txt. Names are the Skills.txt names; the in-game names can differ slightly. Class skills are Amazon 6-35, Sorceress 36-65, Necromancer 66-95, Paladin 96-125, Barbarian 126-155, Druid 221-250 and Assassin 251-280; a character can spend skill points only on its own class's skills. The other ids are shared, monster and item skills (for example 217-220, the identify and town portal scrolls and tomes).
+Skill ids, as `getSkill()`, `setSkill()`, `useSkillPoint()` and `getSkillById()` use them and `getSkillByName()` returns them: the `Id` column of the game's Skills.txt. Names are the Skills.txt names; the in-game names can differ. `getSkillByName()` and `setSkill()` with a name take D2BS's own English names instead, which differ from some of these (for example Werewolf, Fissure, Burst of Speed). Class skills are Amazon 6-35, Sorceress 36-65, Necromancer 66-95, Paladin 96-125, Barbarian 126-155, Druid 221-250 and Assassin 251-280; a character can spend skill points only on its own class's skills. The other ids are shared, monster and item skills (for example 217-220, the identify and town portal scrolls and tomes).
 
 Id | Skill (Skills.txt skill) | Class
 ---|---|---
@@ -6836,7 +6836,7 @@ Index | Item type (ItemTypes.txt ItemType) | Code
 
 ## UI flags
 
-Ids for `getUIFlag(id)`: the slots of the game's UI-state array. A slot reads true while its panel or mode is open. Only 0-37 are valid: any other id (38 or more, or negative) makes the game exit at once. The names are D2BS's `Constants.h` names. "Seen" marks the ids observed in a 1.14d single-player game by opening each panel; the meanings of the other ids follow those names and kolbot and were not observed.
+Ids for `getUIFlag(id)`: the slots of the game's UI-state array. A slot reads true while the state in its "Set while" column holds: most slots are panels that read true while open, and 19 and 35 are on during normal play. Only 0-37 are valid: in a game, any other integer id (38 or more, or negative) makes the game exit at once, since D2BS does not check the range. The names are D2BS's C++ `Constants.h` names, which scripts do not have; pass the number. "Seen" marks the ids observed in a 1.14d single-player game (at rest, with each panel open, and with Alt held); the meanings of the other ids follow those names and kolbot and were not observed.
 
 Id | Name | Set while | Seen
 ---|---|---|---
@@ -6881,7 +6881,7 @@ Id | Name | Set while | Seen
 
 ## Out-of-game locations
 
-Values of `getLocation()`: the out-of-game screen the client is on. D2BS recognizes a screen by the buttons and text boxes it shows. `getLocation()` returns null while the client is not on the out-of-game menus: in a game, while a game loads, and between two screens. A popup that D2BS knows reports the popup rather than the screen under it. The names are D2BS's `Constants.h` names.
+Values of `getLocation()`: the out-of-game screen the client is on. D2BS recognizes a screen by the buttons and text boxes it shows. `getLocation()` returns null while the client is not on the out-of-game menus: in a game, while a game loads, and between two screens. A popup that D2BS knows reports the popup rather than the screen under it. The names are D2BS's C++ `Constants.h` names, which scripts do not have; compare against the number. The character-select values (12, 13, 20, 23 and 42) need the expansion screen layout; the classic layout does not report them.
 
 Value | Name | Screen
 ---|---|---
@@ -6891,16 +6891,16 @@ Value | Name | Screen
 3 | OOG_CHAT | Battle.net chat channel
 4 | OOG_CREATE | Create Game panel
 5 | OOG_JOIN | Join Game panel
-6 | OOG_LADDER | Ladder panel
+6 | OOG_LADDER | Ladder panel, or any other lobby panel with its Cancel button in the same place
 7 | OOG_CHANNEL | Channel list panel
 8 | OOG_MAIN_MENU | Main menu
 9 | OOG_LOGIN | Battle.net account login
 10 | OOG_LOGIN_ERROR | Login error popup
 11 | OOG_UNABLE_TO_CONNECT | Unable to connect to Battle.net
-12 | OOG_CHAR_SELECT | Character select, with a character shown
+12 | OOG_CHAR_SELECT | Character select (expansion screen layout), with a character shown
 13 | OOG_REALM_DOWN | Character select: the realm could not be reached, or the connection is temporarily restricted from it
 14 | OOG_DISCONNECTED | Disconnected from Battle.net popup
-15 | OOG_NEW_CHARACTER | Character create screen while its OK button is disabled
+15 | OOG_NEW_CHARACTER | Character create screen after a class is picked (its OK button is shown); also the fallback for any other screen with the Exit button at the bottom left
 16 | OOG_CHARACTER_SELECT_PLEASE_WAIT | A "Please Wait" popup
 17 | OOG_LOST_CONNECTION | Lost connection to Battle.net popup
 18 | OOG_D2SPLASH | Splash screen
@@ -6910,11 +6910,11 @@ Value | Name | Screen
 22 | OOG_INVALID_CDKEY | Invalid CD key popup, or another popup with its OK button in the same place
 23 | OOG_CONNECTING | Character select: connecting to the realm
 24 | OOG_SERVER_DOWN | Server down popup
-25 | OOG_PLEASE_WAIT | "Please wait" popup with a Cancel button
+25 | OOG_PLEASE_WAIT | A centered popup with a Cancel button and a message box, such as "Please wait" (16 is the same popup with its message higher up)
 26 | OOG_GAME_EXIST | A game with that name already exists
 27 | OOG_GATEWAY | Gateway (realm) list
 28 | OOG_GAME_DOES_NOT_EXIST | Game does not exist
-29 | OOG_CHARACTER_CREATE | Character create screen while its OK button is enabled
+29 | OOG_CHARACTER_CREATE | Character create screen before a class is picked (its OK button is still hidden)
 30 | OOG_CHARACTER_CREATE_ALREADY_EXISTS | Any other centered popup with an OK button (for example a duplicate character name)
 31 | OOG_AGREE_TO_TERMS | Terms of use
 32 | OOG_NEW_ACCOUNT | Create a new Battle.net account
@@ -6933,26 +6933,26 @@ Value | Name | Screen
 
 ## Collision flags
 
-Bits of the 16-bit collision mask that `getCollision()` and `Room.getCollision()` return for each map subtile. D2BS's own pathing treats 0x1 as blocking walking and 0x2 as blocking line of sight, and also treats 0x8, 0x400 and 0x1000 as not walkable. The names are the conventional names used by D2BS and kolbot; the notes on where a bit was seen come from a 1.14d single-player game in the Rogue Encampment.
+Bits of the 16-bit collision mask that `getCollision()` and `Room.getCollision()` return for each map subtile. `getCollision()` also returns 65535 (every bit set) for a point it cannot read and for barricade-tower spots; that value does not mean the bits below are set. `getPath()` with reduction 0, 1 or 2 treats a subtile as blocked when it or one of the 4 subtiles next to it has 0x1 or 0x8 set. The walking path (reduction 0) also gives a higher cost to a subtile when it or a subtile 2 away in a straight line has 0x1 or 0x8 set, and to subtiles with 0x400 (objects) or 0x800 (closed doors), so it keeps clear of them where it can without treating them as blocked. `getPath()` reads no other bit. The names are D2BS's own, from its pathing code. Where kolbot's `sdk.collision` name differs by more than a plural, it is given in brackets; kolbot's `sdk.collision.BlockWalk` is the combination 0x1805, not 0x1. The notes on where a bit was seen come from a 1.14d single-player game in the Rogue Encampment.
 
 Bit | Name | Meaning
 ---|---|---
-0x0001 | BlockWalk | Blocks walking (walls, cliffs, unwalkable space; also seen on a bonfire)
-0x0002 | BlockLineOfSight | Blocks line of sight
+0x0001 | BlockWalk | Blocks walking (walls, cliffs, unwalkable space; also seen on a bonfire; kolbot: BlockWall)
+0x0002 | BlockLineOfSight | Blocks line of sight (kolbot: LineOfSight)
 0x0004 | Wall | Wall (kolbot calls it Ranged); in the room checked it was always set together with 0x1
 0x0008 | BlockPlayer | Blocks players (kolbot: PlayerToWalk)
 0x0010 | AlternateTile | Alternate floor tile (kolbot: DarkArea)
 0x0020 | Blank | Blank subtile (kolbot: Casting)
-0x0040 | Missile | Missile
+0x0040 | Missile | Missile (kolbot: Unknown)
 0x0080 | Player | A player's cell and the 4 cells next to it
-0x0100 | NPCLocation | A monster's or NPC's cell and the cells next to it
+0x0100 | NPCLocation | A monster's or NPC's cell and the cells next to it (kolbot: Monsters)
 0x0200 | Item | An item's cell (seen for a gold pile)
 0x0400 | Object | An object's cell (seen for a torch and a standard)
 0x0800 | ClosedDoor | A closed door
 0x1000 | NPCCollision | The cell the player stands on, and that of some NPCs (seen for Akara, Kashya and Warriv) (kolbot: IsOnFloor)
 0x2000 | FriendlyNPC | The cell of some NPCs and animals, and for larger ones (the cows) the 4 cells next to it too (seen for the mercenary, the rogue guards and the cows)
-0x4000 | Unknown | Unknown
-0x8000 | DeadBody | A corpse (also set by portals)
+0x4000 | Unknown | Unknown (kolbot: Unknown2)
+0x8000 | DeadBody | A corpse, by its name (not seen in the game checked; a D2BS code comment says portals set it too)
 
 ## Box opacity
 
@@ -6971,7 +6971,7 @@ Mode | Effect
 
 ## Text colors
 
-The game's 13 text colors, as `Text.color` takes them. Inside a Text hook's string, the character 0xFF (written `\xFF` in a script string) followed by `c` and one more character switches the color from that point on: `\xFFc0` to `\xFFc9` select 0-9, and `\xFFc:`, `\xFFc;` and `\xFFc<` select 10, 11 and 12. Other values are not defined. In a string, `\xFFc` followed by a character after `<` selects 0, and one before `0` gives an undefined color. The names are the conventional ones (kolbot's); the RGB values were measured in a 1.14d game (glyphs also carry a dark shadow).
+The game's 13 text colors, as `Text.color` takes them. Inside a Text hook's string, the character 0xFF (written `\xFF` in a script string) followed by `c` and one more character switches the color from that point on: `\xFFc0` to `\xFFc9` select 0-9, and `\xFFc:`, `\xFFc;` and `\xFFc<` select 10, 11 and 12. Other values are not defined. In a string, `\xFFc` followed by a character after `<` selects 0, and one before `0` gives an undefined color. A `\xFF` followed by anything other than `c` is not a color code and is drawn as an ordinary character. The names are the conventional ones (kolbot's); the RGB values were measured in a 1.14d game (glyphs also carry a dark shadow).
 
 Value | Code | Color | RGB
 ---|---|---|---
@@ -6991,7 +6991,7 @@ Value | Code | Color | RGB
 
 ## Fonts
 
-The game's fonts, as `Text.font` takes them. Only 0-13 are valid: a larger value makes the game read past its font table and can crash it. The names are the game's own font names. The height is that of the text "Ag" drawn in a 1.14d game, in pixels, without the glyph shadow.
+The game's fonts, as `Text.font` and `getTextSize()` take them. Only 0-13 are valid: a larger value makes the game read past its font table and can crash it. The names are the game's own font names. The height is that of the text "Ag" drawn in a 1.14d game, in pixels, without the glyph shadow.
 
 Value | Font | Height of "Ag"
 ---|---|---

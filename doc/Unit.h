@@ -135,22 +135,29 @@ public:
 	 */
 	Unit[] getItems();
 
-	/** Get whether this player has a merc.
+	/** Get a player's merc; the argument is ignored.
 	 *
 	 * The unit being operated on should be a player.
 	 *
-	 * \param dummy Used to signify boolean result instead of object. Should
-	 * be true.
+	 * \param dummy Ignored.
 	 *
-	 * \return true if the player has a live merc.
+	 * \return The merc unit, or null when none is found (the merc must be in a
+	 * room the client has loaded) or the unit is not a player. Any argument is
+	 * ignored: getMerc(true) returns the same unit or null, so test the result
+	 * for truthiness. Outside a ready game it returns false (with a 'Game not
+	 * ready' warning).
 	 */
-	bool getMerc(bool dummy);
+	Unit getMerc(bool dummy);
 
 	/** Get a player's merc.
 	 *
 	 * The unit being operated on should be a player.
 	 *
-	 * \return The merc if there is one.
+	 * \return The merc unit, or null when none is found (the merc must be in a
+	 * room the client has loaded) or the unit is not a player. Any argument is
+	 * ignored: getMerc(true) returns the same unit or null, so test the result
+	 * for truthiness. Outside a ready game it returns false (with a 'Game not
+	 * ready' warning).
 	 */
 	Unit getMerc();
 
@@ -162,7 +169,9 @@ public:
 	 *
 	 * 1 - Left hand
 	 *
-	 * \return Skill name.
+	 * \return The skill's in-game name in the client's language. It is not
+	 * always a name setSkill() accepts; getSkill(2) and getSkill(3) give the
+	 * ids. Returns false when the unit has left the game.
 	 */
 	String getSkill(int hand);
 
@@ -299,12 +308,15 @@ public:
 	 *
 	 * Life, mana and stamina (stats 6-11) come back in whole points.
 	 * Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and
-	 * above stay positive. Stat 92 returns the item's level requirement for
-	 * your character and ignores nSubIndex. Any other stat returns the game's
-	 * total for that stat and subindex; when that total is 0, the value of
-	 * that stat and subindex in the stat list that getStat(-1) reads (not the
-	 * base stats getStat(-1) adds) is returned instead (0 if it is not there).
-	 * Arguments that are not integers are converted to integers.
+	 * above stay positive. On an item, stat 92 returns the item's level
+	 * requirement for your character (the same value as the itemlevelreq
+	 * property) and ignores nSubIndex. On any other unit, your own character
+	 * included, stat 92 does not read a stat, and its result is not a level
+	 * requirement. Any other stat returns the game's total for that stat and
+	 * subindex; when that total is 0, the value of that stat and subindex in
+	 * the stat list that getStat(-1) reads (not the base stats getStat(-1)
+	 * adds) is returned instead (0 if it is not there). Arguments that are not
+	 * integers are converted to integers.
 	 *
 	 * \param nStat The stat id (the ID column of ItemStatCost.txt).
 	 *
@@ -348,13 +360,15 @@ public:
 	 *
 	 * A stat that carries a skill (for example a charged skill or a
 	 * chance-to-cast skill such as one cast on striking) holds an object
-	 * {skill, level} instead, with charges and maxcharges added for charged
-	 * skills. When the same stat id occurs more than once, the element is an
-	 * array of such objects. Each skill-carrying entry is returned twice, so
-	 * such an element is always an array in which every object appears twice
-	 * (a single skill gives an array of two identical objects). Oskill mods
-	 * (stat 97) are ordinary entries: element 97 is indexed by skill id and
-	 * holds the bonus level.
+	 * {skill, level} instead, for skill ids 8 and up; lower skill ids come
+	 * back as ordinary entries. A charged skill also gets charges and
+	 * maxcharges, except on an item with a maximum of 1 charge, or of 2
+	 * charges with none left. When the same stat id occurs more than once,
+	 * the element is an array of such objects. On an item, each
+	 * skill-carrying entry is returned twice, so such an element is an array
+	 * in which every object appears twice (a single skill gives an array of
+	 * two identical objects). Oskill mods (stat 97) are ordinary entries:
+	 * element 97 is indexed by skill id and holds the bonus level.
 	 *
 	 * \param nStat Set to -2.
 	 *
@@ -401,8 +415,10 @@ public:
 
 	/** Set the skill on the given hand to be skill with name skillName.
 	 *
-	 * Waits about one second for the game to confirm the skill. The call
-	 * always acts on your own character, whichever unit it is called on.
+	 * Asks the game to put the skill on the hand, then waits up to about one
+	 * second for the hand to show it. When the hand already shows the skill,
+	 * the call returns true at once. The call always acts on your own
+	 * character, whichever unit it is called on.
 	 *
 	 * The name is matched case-insensitively against D2BS's built-in English
 	 * skill-name table, not the game's localized strings. "Shadow Master" and
@@ -417,14 +433,16 @@ public:
 	 * \return true once the hand shows the skill. Returns false when the
 	 * skill name is unknown, nHand is missing or not an integer, your
 	 * character does not have the skill (total level 0), you are not in a
-	 * game, or the game does not confirm in time.
+	 * game, or the hand does not show the skill in time.
 	 */
 	bool setSkill(String skillName, int nHand);
 
 	/** Set the skill on the given hand to be skill with id nSkillId.
 	 *
-	 * Waits about one second for the game to confirm the skill. The call
-	 * always acts on your own character, whichever unit it is called on.
+	 * Asks the game to put the skill on the hand, then waits up to about one
+	 * second for the hand to show it. When the hand already shows the skill,
+	 * the call returns true at once. The call always acts on your own
+	 * character, whichever unit it is called on.
 	 *
 	 * \param nSkillId Id of the skill to put up. See \ref reference_skills.
 	 *
@@ -434,14 +452,16 @@ public:
 	 * \return true once the hand shows the skill. Returns false when the
 	 * first argument is neither a string nor an integer, nHand is missing or
 	 * not an integer, your character does not have the skill (total level
-	 * 0), you are not in a game, or the game does not confirm in time.
+	 * 0), you are not in a game, or the hand does not show the skill in time.
 	 */
 	bool setSkill(int nSkillId, int nHand);
 
 	/** Set the skill on the given hand to be skill with name skillName.
 	 *
-	 * Waits about one second for the game to confirm the skill. The call
-	 * always acts on your own character, whichever unit it is called on.
+	 * Asks the game to put the skill on the hand, then waits up to about one
+	 * second for the hand to show it. When the hand already shows the skill,
+	 * the call returns true at once. The call always acts on your own
+	 * character, whichever unit it is called on.
 	 *
 	 * The name is matched case-insensitively against D2BS's built-in English
 	 * skill-name table, not the game's localized strings. "Shadow Master" and
@@ -460,14 +480,16 @@ public:
 	 * \return true once the hand shows the skill. Returns false when the
 	 * skill name is unknown, nHand is missing or not an integer, your
 	 * character does not have the skill (total level 0), you are not in a
-	 * game, or the game does not confirm in time.
+	 * game, or the hand does not show the skill in time.
 	 */
 	bool setSkill(String skillName, int nHand, Unit item);
 
 	/** Set the skill on the given hand to be skill with id nSkillId.
 	 *
-	 * Waits about one second for the game to confirm the skill. The call
-	 * always acts on your own character, whichever unit it is called on.
+	 * Asks the game to put the skill on the hand, then waits up to about one
+	 * second for the hand to show it. When the hand already shows the skill,
+	 * the call returns true at once. The call always acts on your own
+	 * character, whichever unit it is called on.
 	 *
 	 * \param nSkillId Id of the skill to put up. See \ref reference_skills.
 	 *
@@ -481,7 +503,7 @@ public:
 	 * \return true once the hand shows the skill. Returns false when the
 	 * first argument is neither a string nor an integer, nHand is missing or
 	 * not an integer, your character does not have the skill (total level
-	 * 0), you are not in a game, or the game does not confirm in time.
+	 * 0), you are not in a game, or the hand does not show the skill in time.
 	 */
 	bool setSkill(int nSkillId, int nHand, Unit item);
 
@@ -709,8 +731,9 @@ public:
 	 * A player or monster turns a step at a time, so while it turns this
 	 * value can trail the direction it is moving in.
 	 *
-	 * Undefined when the unit has no path. For objects and items the value is
-	 * currently not their facing: it can be undefined or an arbitrary number.
+	 * Undefined when the unit has no path or its path is not in a room. For
+	 * objects and items the value is currently not their facing: it can be
+	 * undefined or an arbitrary number.
 	 */
 	int direction;
 

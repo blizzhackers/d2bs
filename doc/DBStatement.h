@@ -6,11 +6,12 @@
  * an empty one.
  *
  * Step through the result rows with next(), which returns true while a row is ready and false at the end, and read
- * the current row with getObject(), getColumnValue() or getColumnName(). Use go() instead to run a statement such as
- * an INSERT or UPDATE once: it returns true when the statement ran to completion, and false when its step produced a
- * row (a SELECT run with go() returns false and is closed after that first row). bind() sets a parameter (1-based
- * index, or a name including its prefix such as ":id"), skip() steps over rows and reset() rewinds the statement so
- * it can run again.
+ * the current row with getObject(), getColumnValue() or getColumnName(). Calling next() again after it returned
+ * false runs the statement again from its first row. Use go() instead to run a statement such as an INSERT or UPDATE
+ * once: it returns true when the statement ran to completion, and false when its step produced a row (a SELECT run
+ * with go() returns false when it finds a row and true when it finds none; either way the statement is closed after
+ * that one step). bind() sets a parameter (1-based index, or a name including its prefix such as ":id"), skip()
+ * steps over rows and reset() rewinds the statement so it can run again.
  *
  * The statement is closed after close(), after a go() that returns, and after the database's close(): every method
  * except close() throws "The statement is closed", sql reads undefined and ready reads false. When go()'s step
@@ -76,7 +77,8 @@ public:
 	 *
 	 * Moves to the next row of the results; ready tells whether there is one.
 	 *
-	 * \return true when a row is ready; false at the end of the results.
+	 * \return true when a row is ready; false at the end of the results. A further call after false runs the
+	 * statement again from its first row.
 	 */
 	bool next();
 

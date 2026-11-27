@@ -275,7 +275,8 @@ JSAPI_FUNC(my_clickDialog) {
 }
 
 JSAPI_FUNC(my_getPath) {
-    if (!WaitForGameReady())
+    GameWait wait;
+    if (!wait.Ready())
         THROW_WARNING(cx, vp, "Game not ready");
 
     if (argc < 5)
@@ -306,7 +307,7 @@ JSAPI_FUNC(my_getPath) {
     if (reductionType > 3)
         THROW_ERROR(cx, "Invalid path reducer value!");
 
-    ScopedActMap map(lvl);
+    ScopedActMap map(lvl, wait);
     // A level outside the loaded act throws like getCollision: a bare JS_FALSE would end the script with no message.
     if (!map.ok())
         THROW_ERROR(cx, "Level Not loaded");
@@ -395,7 +396,8 @@ JSAPI_FUNC(my_getPath) {
 }
 
 JSAPI_FUNC(my_getCollision) {
-    if (!WaitForGameReady()) {
+    GameWait wait;
+    if (!wait.Ready()) {
         THROW_WARNING(cx, vp, "Game not ready");
     }
 
@@ -408,7 +410,7 @@ JSAPI_FUNC(my_getCollision) {
     JS_EndRequest(cx);
 
     Point point(nX, nY);
-    ScopedActMap map(nLevelId);
+    ScopedActMap map(nLevelId, wait);
     if (!map.ok())
         THROW_ERROR(cx, "Level Not loaded");
     // if(!map->IsValidPoint(point))  //return avoid instead and make it not lvl depenant

@@ -72,7 +72,8 @@ JSAPI_PROP(presetunit_getProperty) {
 }
 
 JSAPI_FUNC(my_getPresetUnits) {
-    if (!WaitForGameReady())
+    GameWait wait;
+    if (!wait.Ready())
         THROW_WARNING(cx, vp, "Game not ready");
 
     if (argc < 1) {
@@ -92,15 +93,13 @@ JSAPI_FUNC(my_getPresetUnits) {
     if (argc >= 3 && !PresetArg(cx, JS_ARGV(cx, vp)[2], &nClassId))
         return JS_FALSE;
 
-    // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
+    // The lock comes with the level, so the level stays live for the whole lookup: the game thread frees levels and acts
     // only while it holds this lock.
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    Level* pLevel = GetLevel(levelId);
+    AutoCriticalRoom* cRoom = NULL;
+    Level* pLevel = WaitForLevel(levelId, wait, cRoom);
 
-    if (!pLevel) {
-        delete cRoom;
+    if (!pLevel)
         THROW_ERROR(cx, "getPresetUnits failed, couldn't access the level!");
-    }
 
     bool bAddedRoom = FALSE;
     DWORD dwArrayCount = NULL;
@@ -168,7 +167,8 @@ JSAPI_FUNC(my_getPresetUnits) {
 }
 
 JSAPI_FUNC(my_getPresetUnit) {
-    if (!WaitForGameReady())
+    GameWait wait;
+    if (!wait.Ready())
         THROW_WARNING(cx, vp, "Game not ready");
 
     if (argc < 1) {
@@ -188,15 +188,12 @@ JSAPI_FUNC(my_getPresetUnit) {
     if (argc >= 3 && !PresetArg(cx, JS_ARGV(cx, vp)[2], &nClassId))
         return JS_FALSE;
 
-    // Taken before GetLevel, so the level it returns stays live for the whole lookup: the game thread frees levels and acts
-    // only while it holds this lock.
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    Level* pLevel = GetLevel(levelId);
+    // The lock comes with the level: see my_getPresetUnits.
+    AutoCriticalRoom* cRoom = NULL;
+    Level* pLevel = WaitForLevel(levelId, wait, cRoom);
 
-    if (!pLevel) {
-        delete cRoom;
+    if (!pLevel)
         THROW_ERROR(cx, "getPresetUnit failed, couldn't access the level!");
-    }
 
     bool bAddedRoom = FALSE;
 

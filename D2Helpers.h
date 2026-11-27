@@ -17,16 +17,30 @@ void LogNoFormat(const wchar_t* szString);
 ClientGameState ClientState(void);
 bool GameReady(void);
 bool WaitForGameReady(void);
-// WaitForGameReady with GameReadyTimeout counted from start, for a native that waits again after it found the game busy
-// under the game lock: the wait reads readiness without that lock, so the game can turn busy before the lock is taken.
-bool WaitForGameReadySince(DWORD start);
-// True once GameReadyTimeout has passed since start; never while it is 0, which waits without a limit.
-bool GameReadyTimedOut(DWORD start);
-// False on a thread running blocking listeners or holding the game lock: on a busy game it fails at once instead of
-// waiting. A native that takes the game lock samples this first, since under the lock every thread holds it.
-bool MayWaitForGame(void);
-DWORD GetPlayerArea(void);
-// GetPlayerArea for a caller that already holds the game lock, such as the path search, which asks on every node.
+
+// The wait of one native call that reads the game under the game lock. Ready() waits like WaitForGameReady, with one
+// GameReadyTimeout deadline for the whole call. It reads readiness without the lock, so the game can turn busy before
+// the lock is taken: a lookup that finds nothing asks RetryIfBusy() while it still holds the lock, and on true releases
+// it and calls Ready() again. Construct it before taking the lock: it records whether this thread may wait, which reads
+// false for every thread under the lock.
+class GameWait {
+  public:
+    GameWait();
+    // False out of game, when the deadline passes, or at once on a busy game for a thread running blocking listeners
+    // or holding the game lock. Once it has returned true it returns true at once until RetryIfBusy() does, so a
+    // native's first lookup runs on the state it finds, as a WaitForGameReady caller's does.
+    bool Ready(void);
+    // Under the game lock, after a lookup found nothing: true when the game is busy there and this call may wait.
+    bool RetryIfBusy(void);
+
+  private:
+    bool mayWait;
+    bool ready;
+    bool retry;
+    DWORD start;
+};
+
+// The player's area, 0 when the game is not ready; the caller holds the game lock, which keeps the room links live.
 DWORD GetPlayerAreaLocked(void);
 bool PlayerActLoaded(void);
 
@@ -35,7 +49,7 @@ bool AllocBlockingListenerSlot(void);
 void FreeBlockingListenerSlot(void);
 
 // An active scope (a blocker event) marks the current thread, while it lives, as running that event's listeners, so
-// WaitForGameReady fails at once on a busy game (MayWaitForGame), also after the event's sender stopped waiting; the
+// WaitForGameReady and GameWait fail at once on a busy game, also after the event's sender stopped waiting; the
 // scope restores the previous mark when it ends.
 class BlockingListenerScope {
   public:
@@ -60,6 +74,10 @@ void AutomapToScreen(POINT* pPos);
 // ready, or its rooms could not be built. The pointer is live only while the caller holds the game lock from before
 // the call until its last use, since the game thread frees an act's levels under that lock.
 Level* GetLevel(DWORD dwLevelNo);
+class AutoCriticalRoom;
+// GetLevel after wait.Ready(), again after each miss while the game is busy under the lock. A level found comes with
+// the game lock, taken before the lookup, held in cRoom until the caller deletes it; NULL comes with cRoom NULL.
+Level* WaitForLevel(DWORD dwLevelNo, GameWait& wait, AutoCriticalRoom*& cRoom);
 void D2CLIENT_Interact(UnitAny* pUnit, DWORD dwMoveType);
 void myDrawText(const wchar_t* szwText, int x, int y, int color, int font);
 void myDrawCenterText(const wchar_t* szwText, int x, int y, int color, int font, int div);

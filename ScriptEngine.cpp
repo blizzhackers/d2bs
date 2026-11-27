@@ -503,6 +503,9 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
         script->hasActiveCX = false;
         // First, so no other thread can queue a timer event behind the drain below.
         ScriptEngine::DestroyTimers(script);
+        // Also before the drain: a click passes its owner check and queues its event in one globalSection hold, so once
+        // the hooks are unlisted every click event for this script is already queued.
+        Genhook::Clean(script);
         while (script->EventList.size() > 0) {
             EnterCriticalSection(&Vars.cEventSection);
             Event* evt = script->EventList.back();
@@ -512,7 +515,6 @@ JSBool contextCallback(JSContext* cx, uint contextOp) {
         }
 
         script->ClearAllEvents();
-        Genhook::Clean(script);
     }
     return JS_TRUE;
 }
@@ -626,19 +628,6 @@ static bool CallListeners(JSContext* cx, Script* owner, const char* evtName, uin
     return CallListenerValues(cx, owner, evtName, true, fns, argc, argv, block);
 }
 
-// A hook's handlers come with its event (copies the hook made), not from the script's listener list, so none is
-// skipped. The event keeps owning the roots; only their values are copied.
-static bool CallHookListeners(JSContext* cx, Script* owner, FunctionList& functions, uint argc, jsval* argv, bool* block) {
-    JS::AutoValueVector fns(cx);
-    for (FunctionList::iterator it = functions.begin(); it != functions.end(); it++) {
-        if (!fns.append(*(*it)->value())) {
-            JS_ReportPendingException(cx); // the failed append has already reported its out-of-memory error
-            return true;
-        }
-    }
-    return CallListenerValues(cx, owner, "", false, fns, argc, argv, block);
-}
-
 bool ExecScriptEvent(Event* evt, bool clearList) {
     JSContext* cx;
 
@@ -750,25 +739,17 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         }
         return true;
     }
-    if (strcmp(evtName, "mousemove") == 0 || strcmp(evtName, "ScreenHookHover") == 0) {
+    if (strcmp(evtName, "mousemove") == 0) {
         if (!clearList) {
             JS_BeginRequest(cx);
             JS::AutoValueVector argv(cx);
             if (argv.resize(2)) {
                 argv[0] = JS_NumberValue(*(DWORD*)evt->arg1);
                 argv[1] = JS_NumberValue(*(DWORD*)evt->arg2);
-
-                if (strcmp(evtName, "ScreenHookHover") == 0) {
-                    CallHookListeners(cx, evt->owner, evt->functions, 2, argv.begin(), NULL);
-                } else {
-                    CallListeners(cx, evt->owner, evtName, 2, argv.begin(), NULL);
-                }
+                CallListeners(cx, evt->owner, evtName, 2, argv.begin(), NULL);
             }
             JS_EndRequest(cx);
         }
-        // A hover hook's function root belongs to this script's context, so it goes here, on its thread.
-        for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++)
-            delete *it;
         delete evt->arg1;
         delete evt->arg2;
         delete evt;
@@ -821,22 +802,24 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
         bool block = false;
         if (!clearList) {
             JS_BeginRequest(cx);
+            // The handler is the hook's at this moment: a hook removed since the click, or whose handler was cleared,
+            // calls nothing and does not block.
+            JS::AutoValueVector fns(cx);
             JS::AutoValueVector argv(cx);
-            if (argv.resize(3)) {
-                argv[0] = JS_NumberValue(*(DWORD*)evt->arg1);
-                argv[1] = JS_NumberValue(*(DWORD*)evt->arg2);
-                argv[2] = JS_NumberValue(*(DWORD*)evt->arg3);
+            if (fns.resize(1) && argv.resize(3)) {
+                fns[0] = Genhook::GetClickHandler(evt->owner, *(DWORD*)evt->arg5);
+                if (JSVAL_IS_FUNCTION(cx, fns[0])) {
+                    argv[0] = JS_NumberValue(*(DWORD*)evt->arg1);
+                    argv[1] = JS_NumberValue(*(DWORD*)evt->arg2);
+                    argv[2] = JS_NumberValue(*(DWORD*)evt->arg3);
 
-                BlockingListenerScope blocking(evt->done != NULL);
-                CallHookListeners(cx, evt->owner, evt->functions, 3, argv.begin(), &block);
+                    BlockingListenerScope blocking(evt->done != NULL);
+                    CallListenerValues(cx, evt->owner, "", false, fns, 3, argv.begin(), &block);
+                }
             }
 
             JS_EndRequest(cx);
         }
-        // The hook's function roots belong to this script's context, so they go here, on its thread.
-        for (FunctionList::iterator it = evt->functions.begin(); it != evt->functions.end(); it++)
-            delete *it;
-        evt->functions.clear();
         CompleteBlocker(evt, block);
 
         return true;

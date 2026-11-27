@@ -12,6 +12,7 @@ bool Genhook::init = false;
 HookList Genhook::visible = HookList();
 HookList Genhook::invisible = HookList();
 CRITICAL_SECTION Genhook::globalSection = {0};
+volatile LONG Genhook::lastId = 0;
 
 void DrawLogo(void) {
     static wchar_t version[] = L"D2BS " D2BS_SHORT_VERSION;
@@ -139,7 +140,8 @@ void Genhook::Clean(Script* owner) {
 
 Genhook::Genhook(Script* nowner, JSObject* nself, uint x, uint y, ushort nopacity, bool nisAutomap, Align nalign, ScreenhookState ngameState)
     : owner(nowner), isAutomap(nisAutomap), isVisible(true), alignment(nalign), opacity(nopacity), gameState(ngameState), zorder(1) {
-    clicked = JSVAL_VOID;
+    hasClick = false;
+    id = (DWORD)InterlockedIncrement(&lastId);
     self = nself;
     SetX(x);
     SetY(y);
@@ -176,11 +178,14 @@ static void FreeClickArgs(Event* evt) {
     delete (DWORD*)evt->arg2;
     delete (DWORD*)evt->arg3;
     delete (DWORD*)evt->arg4;
+    delete (DWORD*)evt->arg5;
 }
 
+// Runs on the game thread under globalSection, so it touches nothing of the owner's JS runtime: the owner's thread
+// may be collecting garbage or adding roots at the same moment. The handler is looked up when the owner runs the event.
 Event* Genhook::ClickEvent(int button, POINT* loc) {
     // A paused or ending owner runs no events, so the click would only wait out the time limit.
-    if (!IsInRange(loc) || !owner || !owner->IsRunning() || !JSVAL_IS_FUNCTION(owner->GetContext(), clicked))
+    if (!hasClick || !IsInRange(loc) || !owner || !owner->IsRunning())
         return NULL;
 
     Event* evt = new Event;
@@ -191,9 +196,28 @@ Event* Genhook::ClickEvent(int button, POINT* loc) {
     evt->arg2 = new DWORD((DWORD)loc->x);
     evt->arg3 = new DWORD((DWORD)loc->y);
     evt->arg4 = new DWORD(false);
-    evt->functions.push_back(new AutoRoot(evt->owner->GetContext(), clicked));
+    evt->arg5 = new DWORD(id);
     evt->freeArgs = FreeClickArgs;
     return evt;
+}
+
+// The lists hold hook objects weakly. A listed hook's object is still alive here because each collection of the owner's
+// runtime runs to the end on this thread (no slice budget is set, so no GC is incremental) and its hook_finalize
+// unlists every hook it collects; a sliced GC would need a weak-read check here.
+jsval Genhook::GetClickHandler(Script* hookOwner, DWORD hookId) {
+    jsval handler = JSVAL_VOID;
+    EnterCriticalSection(&globalSection);
+    Genhook* hook = NULL;
+    for (HookIterator it = visible.begin(); !hook && it != visible.end(); it++)
+        if ((*it)->id == hookId && (*it)->owner == hookOwner)
+            hook = *it;
+    for (HookIterator it = invisible.begin(); !hook && it != invisible.end(); it++)
+        if ((*it)->id == hookId && (*it)->owner == hookOwner)
+            hook = *it;
+    if (hook)
+        handler = JS_GetReservedSlot(hook->self, HOOK_SLOT_CLICK);
+    LeaveCriticalSection(&globalSection);
+    return handler;
 }
 
 // The events are fired under globalSection, which keeps each hook and its owner alive, and waited on after leaving
@@ -230,11 +254,10 @@ bool IsHandlerValue(JSContext* cx, jsval v) {
 void Genhook::SetClickHandler(JSContext* cx, jsval handler) {
     if (!IsHandlerValue(cx, handler))
         return;
-    // Slot first, so the function is reachable before the game thread can see it in the copy.
+    bool isFunction = JSVAL_IS_FUNCTION(cx, handler);
     JS_SetReservedSlot(self, HOOK_SLOT_CLICK, handler);
-    // ClickEvent reads the 64-bit copy under globalSection on the game input thread; an unlocked store can tear.
     EnterGlobalSection();
-    clicked = handler;
+    hasClick = isFunction;
     LeaveGlobalSection();
 }
 

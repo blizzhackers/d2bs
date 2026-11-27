@@ -32,13 +32,18 @@ class Genhook {
     static bool init;
     static HookList visible, invisible;
     static CRITICAL_SECTION globalSection;
+    static volatile LONG lastId;
 
   protected:
     Script* owner;
     ScreenhookState gameState;
     Align alignment;
-    // Game-thread copy of HOOK_SLOT_CLICK for ClickEvent; the slot, not this copy, keeps the function alive.
-    jsval clicked;
+    // Whether HOOK_SLOT_CLICK holds a function, so the game thread can decide on a click without the JS engine;
+    // written and read under globalSection.
+    bool hasClick;
+    // Names the hook in its click events: by the time the owner runs one, the hook may be gone, and a later hook may
+    // sit at the same address.
+    DWORD id;
     JSObject* self;
     bool isAutomap, isVisible;
     ushort opacity, zorder;
@@ -62,6 +67,9 @@ class Genhook {
     static bool ForEachInvisibleHook(HookCallback proc, void* argv, uint argc);
     // Runs the click handlers of the visible hooks under loc; true when one of them blocks the click.
     static bool ClickVisibleHooks(int button, POINT* loc);
+    // Owner script thread only, inside a request: the click handler of owner's hook with this id, or JSVAL_VOID when
+    // the hook is gone. The caller roots the result before anything can run the GC.
+    static jsval GetClickHandler(Script* hookOwner, DWORD hookId);
     static void Clean(Script* owner);
     static void Initialize(void) {
         InitializeCriticalSection(&globalSection);
@@ -143,7 +151,7 @@ class Genhook {
         LeaveCriticalSection(&globalSection);
     }
     // Owner script thread only (ctors and setters): stores into the hook object's reserved slot; SetClickHandler also
-    // refreshes ClickEvent's copy under globalSection.
+    // updates hasClick.
     void SetClickHandler(JSContext* cx, jsval handler);
     void SetHoverHandler(JSContext* cx, jsval handler);
 

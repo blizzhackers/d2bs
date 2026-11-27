@@ -1,0 +1,1 @@
+- **Steady hook clicks.** Clicking a `Box`, `Frame`, `Text` or `Image` that has a click handler is safe while its script collects garbage or is being unloaded. The handler that runs is the one the hook has when its script takes the click, so a hook removed or a handler cleared in the meantime runs nothing and does not block the click.

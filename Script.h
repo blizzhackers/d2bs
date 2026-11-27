@@ -23,7 +23,6 @@ struct Event {
     Event() : done(NULL), refs(1), freeArgs(NULL){};
     Script* owner;
     JSObject* object;
-    FunctionList functions;
     JSAutoStructuredCloneBuffer** argv;
     uint argc;
     const char* name; // a string literal: never copied or freed

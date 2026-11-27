@@ -178,7 +178,8 @@ public:
 	 *
 	 * Modes 0-2 blend the color with what is underneath; 3, 4 and 6 ignore the
 	 * color (3 draws nothing, 4 draws black, 6 darkens what is underneath); 5
-	 * and 7 draw the color solid. Only 0-7 are supported. See \ref opacity.
+	 * and 7 draw the color solid. Only 0-7 are supported; D2BS does not check
+	 * the value, so use nothing else. See \ref opacity.
 	 */
 	int opacity;
 };

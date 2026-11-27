@@ -2301,7 +2301,7 @@ An index (0-255) into the game's 256-color palette (0 is black). Only the low 8 
 
 The draw mode of the [Box](#classBox) (default 0).
 
-Modes 0-2 blend the color with what is underneath; 3, 4 and 6 ignore the color (3 draws nothing, 4 draws black, 6 darkens what is underneath); 5 and 7 draw the color solid. Only 0-7 are supported. See [Box opacity](#box-opacity) in the reference tables.
+Modes 0-2 blend the color with what is underneath; 3, 4 and 6 ignore the color (3 draws nothing, 4 draws black, 6 darkens what is underneath); 5 and 7 draw the color solid. Only 0-7 are supported; D2BS does not check the value, so use nothing else. See [Box opacity](#box-opacity) in the reference tables.
 
 #### `public  `[`Box`](#classBox_1af8e43dea86c924a91316bd0f61099cc3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` opacity,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` 
 
@@ -6956,7 +6956,7 @@ Bit | Name | Meaning
 
 ## Box opacity
 
-The `opacity` of a Box selects the game's draw mode for the rectangle. Only 0-7 are supported. The effects below were measured in a 1.14d single-player game running windowed (-w), where the game draws through its GDI renderer; other video modes were not checked. Blended results are snapped to the game's 256-color palette.
+A Box's `opacity` is the game's draw mode for the rectangle (default 0). Only 0-7 are supported; the value is not range-checked, so use nothing else. The effects below were measured in a 1.14d single-player game running windowed (-w), where the game draws through its GDI renderer; other video modes were not checked. Blended results are snapped to the game's 256-color palette.
 
 Mode | Effect
 ---|---

@@ -1,5 +1,7 @@
 # Summary
 
+The ids and flag values the API uses (areas, skills, item types, UI flags, out-of-game locations, collision flags, Box opacity, text colors and fonts) are listed in the [Reference tables](#reference-tables) at the end.
+
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
 `public `[`Unit`](#classUnit)` `[`getUnit`](#group__globalFunctions_1ga6073f506327123ebf40219400e4d3f70)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` type,String name,uint32_t mode,uint32_t nUnitId)`            | Get a unit by type, name, mode and nUnitId.
@@ -8,15 +10,15 @@
 `public object[] `[`getPath`](#group__globalFunctions_1ga051897c1e76c0ceeccd946dbedc6ea54)`(uint32_t Area,uint32_t srcX,uint32_t srcY,uint32_t dstX,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dstY,uint32_t reductionType,uint32_t Radius,bool(*)(int32_t x, int32_t y) reject,bool(*)(object curPt, `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac) i, object[] pts)` reduce,int32_t[](*)(int32_t x, int32_t y) mutate)`            | Creates a path (walking or teleporting) from the source to the destination.
 `public unsigned short `[`getCollision`](#group__globalFunctions_1gac3a89f2d8c4940ae49dce43fbe2f626b)`(uint32_t nLevelId,int32_t nX,int32_t nY)`            | Get the collision flags at a given point in a given area.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMercHP`](#group__globalFunctions_1gac4217ed30da8eb07d8addca4cdb51a9d)`()`            | Get the health of the controlled unit's merc, as a percentage.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getCursorType`](#group__globalFunctions_1gaa0bc4f7877d6992600202b8dce442787)`()`            | Get the cursor type from p_D2CLIENT_RegularCursorType.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getCursorType`](#group__globalFunctions_1ga9b3530843295a8ee8fa59a3130ae7409)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nType)`            | Get the cursor type from p_D2CLIENT_RegularCursorType if nType != 1, from p_D2CLIENT_ShopCursorType if nType == 1.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getCursorType`](#group__globalFunctions_1gaa0bc4f7877d6992600202b8dce442787)`()`            | Get the state of the in-game hand cursor.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getCursorType`](#group__globalFunctions_1ga9b3530843295a8ee8fa59a3130ae7409)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nType)`            | Get the hand-cursor state, or the item-panel mode when nType is 1.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkillByName`](#group__globalFunctions_1gaee860cd7482aff8e89519314a0f86955)`(String skillName)`            | Get skill ID by name.
 `public String `[`getSkillById`](#group__globalFunctions_1ga14cda78dea3cf554c8ebeeb0834039c9)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` skillId)`            | Get skill name by ID.
 `public String `[`getLocaleString`](#group__globalFunctions_1gaf2065d798cd6a0337fb94f7bae718283)`(uint16_t localeId)`            | Get the String in the current locale that corresponds to the given id.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getTextSize`](#group__globalFunctions_1ga19d918388535584b388c00c57d76ab47)`(String string,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` font,bool asObject)`            | Get the width and height of the given text in the given font.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getThreadPriority`](#group__globalFunctions_1ga6ab5869695c97ce6e4fbc6899e16a75d)`()`            | Get the priority of the current thread.
 `public bool `[`getUIFlag`](#group__globalFunctions_1gac259c30bc648650e021f45f1c020e412)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nUIId)`            | Get whether or not a UI flag is set.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getTradeInfo`](#group__globalFunctions_1gaedebe009d3f6c0afeab5cb544f430767)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nMode)`            | Get the TradeFlag or RecentTradeId.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getTradeInfo`](#group__globalFunctions_1gaedebe009d3f6c0afeab5cb544f430767)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nMode)`            | Get the current player-trade state.
 `public bool `[`getWaypoint`](#group__globalFunctions_1ga4561d06e77835b04e0794758844bd987)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nWaypointId)`            | Get whether the controlled unit has the given waypoint.
 `public `[`D2BSScript`](#classD2BSScript)` `[`getScript`](#group__globalFunctions_1ga8340268c49de1e5f34588c01b0cf971d)`(bool currentScript)`            | Get the current or first context.
 `public `[`D2BSScript`](#classD2BSScript)` `[`getScript`](#group__globalFunctions_1ga02ad0d69faff60c7061a98a3e8a2b53b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` threadId)`            | Get a script by thread id.
@@ -90,12 +92,12 @@
 `public bool `[`submitItem`](#group__globalFunctions_1gaaf6e11417ccd95f45faea57945684689)`()`            | Submit the item on the cursor to the open screen (like the add sockets screen).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMouseCoords`](#group__globalFunctions_1gadf9310ea4d054d7013f93e4e8e840af4)`(bool nFlag,bool nReturn)`            | Get the mouse coordinates (in screen or map space) and return as an array.
 `public `[`Unit`](#classUnit)` `[`copyUnit`](#group__globalFunctions_1ga8db0ed764b74081b12b217918f5f2f94)`(`[`Unit`](#classUnit)` other)`            | Copy the cached data associated with given unit.
-`public bool `[`clickMap`](#group__globalFunctions_1gaa5bf89869bc19b084e30faf73fd9b5b3)`(uint16_t nClickType,uint16_t nShift,`[`Unit`](#classUnit)` toClick)`            | Click on the map with the given click type and possibly shift at the given unit.
-`public bool `[`clickMap`](#group__globalFunctions_1ga751d442b1f8e8a2a0f02c3d484d4e43c)`(uint16_t nClickType,bool nShift,`[`Unit`](#classUnit)` toClick)`            | Click on the map with the given click type and possibly shift at the given unit.
-`public bool `[`clickMap`](#group__globalFunctions_1ga192a8f3a562aa9801ccc9e90e48b132d)`(uint16_t nClickType,uint16_t nShift,uint16_t nX,uint16_t nY)`            | Click on the map with the given click type and possibly shift at the given point.
-`public bool `[`clickMap`](#group__globalFunctions_1gaf77b0ae23278cf2e0d3ab86c53a38f2d)`(uint16_t nClickType,bool nShift,uint16_t nX,uint16_t nY)`            | Click on the map with the given click type and possibly shift at the given point.
-`public bool `[`acceptTrade`](#group__globalFunctions_1ga1d54436fac5efdab779706bb6cce5144)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` action)`            | Get or do something to do with accepting trade.
-`public bool `[`acceptTrade`](#group__globalFunctions_1ga2a996039f7583fccf5900a6d6d12dee7)`()`            | Accept a trade if not already accepted, cancel a trade if already accepted.
+`public bool `[`clickMap`](#group__globalFunctions_1gaa5bf89869bc19b084e30faf73fd9b5b3)`(uint16_t nClickType,uint16_t nShift,`[`Unit`](#classUnit)` toClick)`            | Click on the map with the given click type, with or without Shift held, at the given unit.
+`public bool `[`clickMap`](#group__globalFunctions_1ga751d442b1f8e8a2a0f02c3d484d4e43c)`(uint16_t nClickType,bool nShift,`[`Unit`](#classUnit)` toClick)`            | Click on the map with the given click type, with or without Shift held, at the given unit.
+`public bool `[`clickMap`](#group__globalFunctions_1ga192a8f3a562aa9801ccc9e90e48b132d)`(uint16_t nClickType,uint16_t nShift,uint16_t nX,uint16_t nY)`            | Click on the map with the given click type, with or without Shift held, at the given point.
+`public bool `[`clickMap`](#group__globalFunctions_1gaf77b0ae23278cf2e0d3ab86c53a38f2d)`(uint16_t nClickType,bool nShift,uint16_t nX,uint16_t nY)`            | Click on the map with the given click type, with or without Shift held, at the given point.
+`public bool `[`acceptTrade`](#group__globalFunctions_1ga1d54436fac5efdab779706bb6cce5144)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` action)`            | Read the state of the player-trade Accept button, or press it.
+`public bool `[`acceptTrade`](#group__globalFunctions_1ga2a996039f7583fccf5900a6d6d12dee7)`()`            | Press your Accept button in a player trade: accept the trade, or withdraw your acceptance if you have already accepted.
 `public void `[`tradeOk`](#group__globalFunctions_1ga1d2f580b3ec43e5e2d09e0ea3b417154)`()`            | Hit the OK button to open the trade window.
 `public object[] `[`getDialogLines`](#group__globalFunctions_1ga337232421eadff983fd70603bc5211c9)`()`            | Get the lines of dialog of whatever you're talking to.
 `public void `[`beep`](#group__globalFunctions_1gaa673a64fed7b36fcbbfaa63d92249019)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nBeepId)`            | Beep with beep ID nBeepId.
@@ -109,7 +111,7 @@
 `public double `[`getDistance`](#group__globalFunctions_1ga099a9099c3a32df0346fa40c496964b9)`(int32_t ax,int32_t ay)`            | Get the euclidean distance from me to a.
 `public double `[`getDistance`](#group__globalFunctions_1gaf62a14b80beae3219199c0f05c1ea44b)`(int32_t ax,int32_t ay,`[`Unit`](#classUnit)` b)`            | Get the euclidean distance from a to b.
 `public double `[`getDistance`](#group__globalFunctions_1ga5b44bdbe481beae0bd0a5fb322820864)`(int32_t ax,int32_t ay,int32_t bx,int32_t by)`            | Get the euclidean distance from a to b.
-`public void `[`gold`](#group__globalFunctions_1ga43cd766ec6751004726dd28e5f5714d7)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nGold,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nMode)`            | Do something with some gold.
+`public void `[`gold`](#group__globalFunctions_1ga43cd766ec6751004726dd28e5f5714d7)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nGold,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nMode)`            | Drop, offer in a trade, deposit or withdraw gold.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`checkCollision`](#group__globalFunctions_1gacbe9f546980a44ff675f8c5b77d617d3)`(`[`Unit`](#classUnit)` a,`[`Unit`](#classUnit)` b,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nBitMask)`            | Check if two units collide.
 `public bool `[`playSound`](#group__globalFunctions_1gaa759ea651473dc19c7af1bde87f126c9)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSoundId)`            | Play d2 sound by id.
 `public void `[`quit`](#group__globalFunctions_1ga2463a3acef2df4c951ce942a3229e44e)`()`            | Quit the game.
@@ -144,13 +146,13 @@
 `class `[`Box`](#classBox) | A [Box](#classBox) screen hook.
 `class `[`Control`](#classControl) | This class represents out of game (OOG) [Control](#classControl) s.
 `class `[`D2BSScript`](#classD2BSScript) | Represents a script (a thread), created by either loading a file, or typing something in the console.
-`class `[`DBStatement`](#classDBStatement) | A class describing ...
+`class `[`DBStatement`](#classDBStatement) | A prepared SQL statement on an SQLite database.
 `class `[`Exit`](#classExit) | Represents a method of getting from one [Area](#classArea) to another.
 `class `[`File`](#classFile) | This class handles the opening, reading and writing of files.
 `class `[`FileTools`](#classFileTools) | A collection of tools to do things like move files and determine whether files exist.
 `class `[`Folder`](#classFolder) | Represents a folder.
 `class `[`Frame`](#classFrame) | This class represents a screen hook for a [Frame](#classFrame).
-`class `[`Image`](#classImage) | This class represents a screen hook for a [Image](#classImage).
+`class `[`Image`](#classImage) | This class represents a screen hook for an [Image](#classImage).
 `class `[`Line`](#classLine) | A 2d line.
 `class `[`Me`](#classMe) | The class that represents the controlled unit.
 `class `[`Party`](#classParty) | Represents the items in the list in the [Party](#classParty) screen.
@@ -264,7 +266,7 @@ Get the collision flags at a given point in a given area.
 * `nY` The y coordinate of the point in question.
 
 #### Returns
-The collision flags. For details see: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1212](http://forums.d2botnet.org/viewtopic.php?f=18&t=1212) . Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. Throws an error when the area is not in the act the player is in, or when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
+The collision flags. See [Collision flags](#collision-flags) in the reference tables. The area only picks the act: a point in another area of that act returns that area's flags. A room that is not loaded is loaded for the call and unloaded again. Returns 65535 (all bits set) for a point that lies in no room of the act's areas or in a room whose collision data can't be loaded, and for barricade-tower spots in areas 74, 111, 112 and 117. Waits while an area or act loads, also one that begins before it looks the area up, except in a blocking listener or while your script holds the game lock. Throws an error when the area is not in the act the player is in, or when a load that begins as the call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the game lock).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMercHP`](#group__globalFunctions_1gac4217ed30da8eb07d8addca4cdb51a9d)`()` 
 
@@ -275,24 +277,55 @@ The merc's HP percentage, 0 while the merc is dead, undefined when there is no m
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getCursorType`](#group__globalFunctions_1gaa0bc4f7877d6992600202b8dce442787)`()` 
 
-Get the cursor type from p_D2CLIENT_RegularCursorType.
+Get the state of the in-game hand cursor.
 
-> Todo: Determine what the return value means.
+The value is the cursor's animation state, not a cursor image id:
+
+| Value | Meaning |
+|---|---|
+| 1 | Normal pointer. |
+| 2 | The hand opening after 5 seconds without a mouse move or click. |
+| 3 | The hand closing again. While an item is held, a mouse move gives 3, and a click can then give 5 and then 1. |
+| 4 | The open hand idling. Also set when an item is put on the cursor, until the mouse moves. |
+| 5 | The click animation while the mouse button is down (hand cursor only, not in states 6 and 7). |
+| 6 | Item-target cursor, for example after using an identify scroll or tome. |
+| 7 | Shop action cursor, after the NPC shop's Buy, Sell or Repair button is clicked. |
+
+The value does not reliably tell whether an item is held: use me.itemoncursor for that. There is no game-ready check, so outside a game the call returns whatever value the game last held.
 
 #### Returns
-The regular cursor type.
+The hand-cursor state.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getCursorType`](#group__globalFunctions_1ga9b3530843295a8ee8fa59a3130ae7409)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nType)` 
 
-Get the cursor type from p_D2CLIENT_RegularCursorType if nType != 1, from p_D2CLIENT_ShopCursorType if nType == 1.
+Get the hand-cursor state, or the item-panel mode when nType is 1.
+
+With nType 1 the call returns the mode shared by the NPC shop, player trade, stash, Horadric Cube and submit-item panels. With any other value it returns the hand-cursor state described for getCursorType(). The argument is converted to an integer first, so "1" and 1.9 count as 1; a conversion that throws ends the call with that exception. There is no game-ready check, so outside a game the call returns whatever value the game last held.
+
+Item-panel modes (nType 1). Values 0, 1, 12 and 14 were seen in a live game; the meanings of 5, 6, 7 and 19 are less certain than the others:
+
+| Value | Meaning |
+|---|---|
+| 0 | No item panel mode (cleared when a panel closes). |
+| 1 | NPC shop open, no action selected. |
+| 2 | Buy button active. |
+| 3 | Sell button active. |
+| 4 | Repair button active. |
+| 5 | A buy, sell or repair of an item has been requested. |
+| 6 | The transaction was sent; waiting for the server. |
+| 7 | The NPC answered with a transaction result message; the mode then returns to 1. |
+| 10 | Player trade: the trade request prompt is open. |
+| 11 | Player trade: the trade window is open. |
+| 12 | Stash open. |
+| 13 | A stash sub-state; meaning unknown. It turns back to 12 when a gold-amount dialog opens. |
+| 14 | Horadric Cube open. |
+| 19 | Submit-item panel open for the Horadric Staff orifice (other uses of the submit-item panel were not checked). |
 
 #### Parameters
-* `nType` What type of cursor to get. 1 - ShopCursorType, other - RegularCursorType.
-
-> Todo: Determine what the return value means.
+* `nType` 1 - the item-panel mode, any other value - the hand-cursor state.
 
 #### Returns
-The cursor type.
+The item-panel mode or the hand-cursor state.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkillByName`](#group__globalFunctions_1gaee860cd7482aff8e89519314a0f86955)`(String skillName)` 
 
@@ -302,7 +335,7 @@ Get skill ID by name.
 * `skillName` The skill name.
 
 #### Returns
-The skill ID (0 is Attack), or undefined when the name is not a known skill or the argument is not a string. The name is matched case-insensitively.
+The skill id (0 is Attack), or undefined when the name is not in D2BS's built-in English skill-name table or the argument is not a string. The name is matched case-insensitively against that table (ids 0-155 and 219-280), not against the Skills.txt names listed under [Skill ids](#skill-ids) in the reference tables (some of them differ, for example Werewolf, not Wearwolf) and not against the game's localized names.
 
 #### `public String `[`getSkillById`](#group__globalFunctions_1ga14cda78dea3cf554c8ebeeb0834039c9)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` skillId)` 
 
@@ -312,7 +345,7 @@ Get skill name by ID.
 * `skillId` The skill ID.
 
 #### Returns
-The skill name.
+The skill's in-game name in the client's language (its skilldesc string), which is not always a name getSkillByName() and setSkill() accept. Returns "Unknown" for an id outside the game's skill table and for a skill that has no skill description (for example 156), and undefined when the argument is missing or is not an integer.
 
 #### `public String `[`getLocaleString`](#group__globalFunctions_1gaf2065d798cd6a0337fb94f7bae718283)`(uint16_t localeId)` 
 
@@ -331,7 +364,7 @@ Get the width and height of the given text in the given font.
 #### Parameters
 * `string` The string to get the size of.
 
-* `font` The font to use.
+* `font` The game font, 0-13 (see [Fonts](#fonts) in the reference tables). D2BS does not check the value; 14 or more makes the game read past its font table and can crash it.
 
 * `asObject` False to return as an array.
 
@@ -341,7 +374,7 @@ The width and height of the text. 0 - width, 1 - height.
 #### Parameters
 * `string` The string to get the size of.
 
-* `font` The font to use.
+* `font` The game font, 0-13 (see [Fonts](#fonts) in the reference tables). D2BS does not check the value; 14 or more makes the game read past its font table and can crash it.
 
 * `asObject` True to return as an object.
 
@@ -359,47 +392,56 @@ The priority.
 
 Get whether or not a UI flag is set.
 
-> Todo: Get a reference for the UI IDs.
+Valid ids are 0 to 37. See [UI flags](#ui-flags) in the reference tables for what each id tracks.
+
+Any other id (38 or more, or a negative id) makes the game exit immediately. D2BS does not check the range.
 
 #### Parameters
-* `nUIId` The ID of the UI in question.
+* `nUIId` The ID of the UI in question, 0 to 37.
 
 #### Returns
-Whether or not the flag is set.
+true when the panel or state is open or active, false when it is not. Returns undefined when the argument is missing or is not an integer (1.5 or a string), and false (with a 'Game not ready' warning) outside a ready game. While a game is loading the call can first wait for it to become ready.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getTradeInfo`](#group__globalFunctions_1gaedebe009d3f6c0afeab5cb544f430767)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nMode)` 
 
-Get the TradeFlag or RecentTradeId.
+Get the current player-trade state.
 
-Get the RecentTradeName.
+With nMode 1, meant to get the name of the player you are trading with; it always returns null.
 
-> Todo: Determine what this means.
+Modes 0 and 2 return the same number:
+
+| Value | Meaning |
+|---|---|
+| 0 | No trade. |
+| 1 | You asked another player to trade and are waiting for the answer (a box with only a Cancel button shows). |
+| 2 | Another player asked to trade with you and the accept/decline prompt is showing. |
+| 3 | The trade window is open, or about to open, and you have not accepted. |
+| 5 | The trade window is open and the other player has accepted; you have not. |
+| 7 | You have accepted. Also used for 30 seconds after a trade request was declined or cancelled (by you, or automatically by the game), with no trade window open; the state then returns to 0. |
+
+The game declines new trade requests on its own whenever the state is not 0.
 
 #### Parameters
-* `nMode` What to return. 0 - TradeFlag, 2 - RecentTradeId.
+* `nMode` 0 or 2 - the trade state. Both return the same value.
 
 #### Returns
-The TradeFlag or RecentTradeId.
-
-Currently broken, returns null.
-
-> Todo: Determine what these are.
+The trade state. An integer mode other than 0, 1 and 2 returns false. With no argument the call returns false at once; with a non-integer argument it waits for the game, then returns false. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### Parameters
-* `nMode` What to return. 1 - RecentTradeName.
+* `nMode` 1.
 
 #### Returns
-The RecentTradeName.
+null.
 
 #### `public bool `[`getWaypoint`](#group__globalFunctions_1ga4561d06e77835b04e0794758844bd987)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nWaypointId)` 
 
 Get whether the controlled unit has the given waypoint.
 
 #### Parameters
-* `nWaypointId` The area id of the waypoint in question.
+* `nWaypointId` The waypoint's index in the game's waypoint list (the Waypoint column of Levels.txt: 0 for the Rogue Encampment, 1 for the Cold Plains), not an area id. An index above 40 is read as 0.
 
 #### Returns
-Whether or not the controlled unit has the waypoint.
+Whether the controlled unit has that waypoint. Returns false when the argument is missing or is not an integer, and false (with a 'Game not ready' warning) outside a ready game.
 
 #### `public `[`D2BSScript`](#classD2BSScript)` `[`getScript`](#group__globalFunctions_1ga8340268c49de1e5f34588c01b0cf971d)`(bool currentScript)` 
 
@@ -777,37 +819,63 @@ Get the control specified by type, location and size.
 
 -1 indicates parameter not to be matched against.
 
+Any negative value, and any argument that is not an integer (such as the string "6" or 6.5), also skips that field silently. With no arguments, or with every argument -1 or not an integer, the call returns the first control on the screen. When every field is skipped and at least one of them by a negative value other than -1, nothing matches and the call returns undefined. Controls exist only at the out-of-game menus. Pass at most five arguments: an integer in a sixth or later argument is written past the end of D2BS's argument storage and can crash the game.
+
+nType is the control's type, the same value [Control](#classControl).type returns:
+
+| Type | Name (D2BS source) | Control |
+|---|---|---|
+| 1 | CONTROL_EDITBOX | Single-line text input (account, password, game name). |
+| 2 | CONTROL_IMAGE | Image. |
+| 3 | CONTROL_UNUSED | Never constructed in 1.14d; matches nothing. |
+| 4 | CONTROL_TEXTBOX | Multi-line text box or label (read with getText). |
+| 5 | CONTROL_SCROLLBAR | Scroll bar. |
+| 6 | CONTROL_BUTTON | Button. |
+| 7 | CONTROL_LIST | List box. |
+| 8 | CONTROL_TIMER | Timer (invisible). |
+| 9 | CONTROL_SMACK | Video player. |
+| 10 | CONTROL_PROGRESSBAR | Progress bar. |
+| 11 | CONTROL_POPUP | Popup. |
+| 12 | CONTROL_ACCOUNTLIST | Account list. |
+
 #### Parameters
-* `nType` The type of control (button, text box, etc.)
+* `nType` The type of control (see the table above).
 
-* `nX` The x coordinate of the control of the control to find.
+* `nX` The x coordinate of the control to find.
 
-* `nY` The y coordinate of the control of the control to find.
+* `nY` The y coordinate of the control to find.
 
 * `nXSize` The width of the control.
 
 * `nYSize` The height of the control.
 
-> Todo: Get a reference for nType
-
 #### Returns
-A [Control](#classControl) object representing the [Control](#classControl) found.
+A [Control](#classControl) object for the first control that matches every given field, or undefined when none matches or when the client is not at the out-of-game menus. Throws 'Failed to build control!' only when the [Control](#classControl) object cannot be created.
 
 #### `public bool `[`getPlayerFlag`](#group__globalFunctions_1gaa18d78f3e5bb312f53b602247ec66fd3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFirstUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSecondUnitId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nFlag)` 
 
 Get the relation between two players. It reads the party roster, so it answers for any player in the game, near this one or not.
 
+nFlag is a bit mask; combine bits with | to test several at once. The bits are the party screen's per-player buttons, set by clicking them (or with clickParty) and also by the server's relation updates:
+
+| Bit | Name | Meaning |
+|---|---|---|
+| 1 | loot | The loot button (allow corpse looting); available only in hardcore games (clickParty mode 0). |
+| 2 | ignore | The ignore toggle next to squelch, as kolbot names it (clickParty mode 4). |
+| 4 | squelch | The squelch toggle (clickParty mode 5). |
+| 8 | hostile | Hostile (clickParty mode 1). The game lets you declare hostility only toward a player of level 9 or more. |
+
+The flags read are the ones the first player holds toward the second. Do not rely on getPlayerFlag(me.gid, other.gid, 8) to tell whether the other player has declared hostility toward you.
+
 #### Parameters
-* `nFirstUnitId` The unit id for the unit making the relationship.
+* `nFirstUnitId` The party-roster id (me.gid or a [Party](#classParty)'s gid) of the player holding the relation.
 
-* `nSecondUnitId` The unit id for the unit receiving the relationship.
+* `nSecondUnitId` The party-roster id of the player the relation is toward.
 
-* `nFlag` The relationship.
-
-> Todo: Determine what the flags are.
+* `nFlag` The relation bits to test (see the table above).
 
 #### Returns
-true when the relationship is of the type specified, otherwise false (also when the game closes meanwhile).
+true when any bit of nFlag is set, otherwise false: also when both ids are the same, when the first player is not in the party roster, when not exactly three numbers are passed, and when the game closes meanwhile. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public double `[`getTickCount`](#group__globalFunctions_1gad6eff12ded45cc505954f4763a71eae3)`()` 
 
@@ -1063,7 +1131,7 @@ mode:
 
 0x0a - "%Name1 has items in his box." if Name1 = 0x00, "You have items in your box."
 
-0x0b - <Unknown> 0x0c - <Unknown> 0x0d - "%Name1 is not listening to you." 0x0e - Received on 'Not enough mana' speech. 0x0f - "Realm going down in %Param1 minutes." 0x10 - "You must wait a short time to declare hostility with that player." 0x11 - "%Param1 Stones of Jordan Sold to Merchants" 0x12 - "Diablo Walks the Earth"
+0x0b - Guild master kicked, from an unused guild feature (the English text is blank). No known server sends it. 0x0c - Not handled by the game client; meaning unknown. No known server sends it. 0x0d - "%Name1 is not listening to you." 0x0e - Received on 'Not enough mana' speech. 0x0f - "Realm going down in %Param1 minutes." 0x10 - "You must wait a short time to declare hostility with that player." 0x11 - "%Param1 Stones of Jordan Sold to Merchants" 0x12 - "Diablo Walks the Earth"
 
 A listener whose result can block its event (`keyupblocker`, `keydownblocker`, `chatmsgblocker`, `chatinputblocker`, `whispermsgblocker`, `gamepacket`, `gamepacketsent`, `realmpacket`, and a hook's click handler) runs while the game, or the script that sent the packet, may be waiting for its answer. A call in it that needs a ready game returns its "Game not ready" result at once while the game is busy (an area or act loading, or the moment the player moves between rooms), rather than waiting. In the same way, `getPath()`, `getCollision()`, `getRoom()`, `getArea()`, `getPresetUnit()` and `getPresetUnits()` give their not-found result at once when their lookup comes up empty because the game turned busy after the call started. A `gamepacketsent` listener for a packet its own script sent runs inside that send instead; its calls wait as usual unless the send was made while the script holds the game lock or from inside a listener whose result can block its event, when they get "Game not ready" at once.
 
@@ -1389,10 +1457,10 @@ Create a profile with the given profile name, mode, gateway, username, password,
 
 Get the current OOG location.
 
-> Todo: Create a reference for the return values.
+D2BS detects the out-of-game screen by the buttons and text boxes it shows. The values (0 to 44) are listed in [Out-of-game locations](#out-of-game-locations) in the reference tables. A popup the detection knows reports the popup; an unknown popup can report the screen under it, or 0.
 
 #### Returns
-The current OOG location.
+The current OOG location, 0 when on the menus but no known screen matched, or null while not on the out-of-game menus: in a game, while a game loads, and in the moments between screens when no controls exist.
 
 #### `public void `[`loadMpq`](#group__globalFunctions_1ga9add41a51f249d6a0d6fd3ed51fd7825)`(String path)` 
 
@@ -1438,103 +1506,128 @@ Copy the cached data associated with given unit.
 
 This is things like type and unit id.
 
-> Todo: Figure out why anyone would want to copy a unit.
+The copy is a new [Unit](#classUnit) object for the same game unit. It holds other's unit id, type and getUnit/getNext search filters (and, for an item reached through getItem, its owner). It is not a snapshot: like the original, it reads live game data on every access and returns false or undefined once the unit has left the game. The difference is that getNext() moves only the object it is called on, so a copy stays on its unit while the original keeps iterating.
+
+Use it to keep the units found in a getUnit/getNext loop, for example list.push(copyUnit(unit)). Pushing unit itself stores the same object every time, so every entry ends up on the unit the loop finished on.
+
+#### Parameters
+* `other` The [Unit](#classUnit) to copy.
 
 #### Returns
-The new copy of the unit.
+The new copy of the unit, or undefined when other is missing or is not a [Unit](#classUnit). Throws 'Couldn't copy unit' only when the new object cannot be created.
 
 #### `public bool `[`clickMap`](#group__globalFunctions_1gaa5bf89869bc19b084e30faf73fd9b5b3)`(uint16_t nClickType,uint16_t nShift,`[`Unit`](#classUnit)` toClick)` 
 
-Click on the map with the given click type and possibly shift at the given unit.
+Click on the map with the given click type, with or without Shift held, at the given unit.
+
+nClickType picks the mouse button and phase; a normal click is a down followed by an up:
+
+0 - Left button down
+
+1 - Left button held
+
+2 - Left button up
+
+3 - Right button down
+
+4 - Right button held
+
+5 - Right button up
+
+Any other value does nothing. The value is read as a 16-bit number first (wrapping modulo 65536), so 65536 counts as 0 and -65535 as 1.
+
+The click lands on the unit's position and targets that unit, for example to attack it, talk to it or pick it up. When toClick is your own character, the click is a plain map click at your position and targets no unit. The game ignores the click while UI flag 0x09 (the Esc menu) is set.
 
 #### Parameters
-* `nClickType` The click type to do.
+* `nClickType` The click type to do (see above).
 
-* `nShift` Whether or not to be holding down shift. 0 - Don't hold shift, 1 - hold shift.
+* `nShift` Whether or not to hold down shift, read as a 16-bit number (wrapping modulo 65536): 0 - don't hold shift, any other value - hold shift. With shift held, D2BS also adds the flag that the game's Always Run setting adds; the game applies it only while the character has stamina.
 
 * `toClick` The unit to click on.
 
-> Todo: Get a reference for nClickType.
-
 #### Returns
-Whether or not the click was successful.
+true once the click is handed to the game, even when the game ignores it (a click type above 5, the Esc menu open, or a click the game is still handling). false when fewer than three arguments are given, the arguments match neither form (a non-integer number such as 1.5 included), toClick is not a [Unit](#classUnit) or no longer exists, or the player is not in a game or the game does not become ready in time (with a 'Game not ready' warning). It does not throw.
 
 #### `public bool `[`clickMap`](#group__globalFunctions_1ga751d442b1f8e8a2a0f02c3d484d4e43c)`(uint16_t nClickType,bool nShift,`[`Unit`](#classUnit)` toClick)` 
 
-Click on the map with the given click type and possibly shift at the given unit.
+Click on the map with the given click type, with or without Shift held, at the given unit.
+
+nClickType and the click itself work as in the first clickMap overload.
 
 #### Parameters
-* `nClickType` The click type to do.
+* `nClickType` The click type to do: 0 left down, 1 left held, 2 left up, 3 right down, 4 right held, 5 right up.
 
-* `nShift` Whether or not to be holding down shift.
+* `nShift` Whether or not to be holding down shift. With shift held, D2BS also adds the flag that the game's Always Run setting adds; the game applies it only while the character has stamina.
 
 * `toClick` The unit to click on.
 
-> Todo: Get a reference for nClickType.
-
 #### Returns
-Whether or not the click was successful.
+true once the click is handed to the game, even when the game ignores it. false when the arguments are invalid, toClick is not a [Unit](#classUnit) or no longer exists, or the player is not in a game (with a 'Game not ready' warning). It does not throw.
 
 #### `public bool `[`clickMap`](#group__globalFunctions_1ga192a8f3a562aa9801ccc9e90e48b132d)`(uint16_t nClickType,uint16_t nShift,uint16_t nX,uint16_t nY)` 
 
-Click on the map with the given click type and possibly shift at the given point.
+Click on the map with the given click type, with or without Shift held, at the given point.
+
+nClickType works as in the first clickMap overload. nX and nY are game map coordinates (the same as unit.x and unit.y), not screen pixels, and the point does not need to be on screen. Use the [Unit](#classUnit) form to interact with a unit.
 
 #### Parameters
-* `nClickType` The click type to do.
+* `nClickType` The click type to do: 0 left down, 1 left held, 2 left up, 3 right down, 4 right held, 5 right up.
 
-* `nShift` Whether or not to be holding down shift. 0 - Don't hold shift, 1 - hold shift.
+* `nShift` Whether or not to hold down shift, read as a 16-bit number (wrapping modulo 65536): 0 - don't hold shift, any other value - hold shift. With shift held, D2BS also adds the flag that the game's Always Run setting adds; the game applies it only while the character has stamina.
 
-* `nX` The x coordinate to click at.
+* `nX` The x coordinate to click at (map coordinates; negative values wrap).
 
-* `nY` The y coordinate to click at.
-
-> Todo: Get a reference for nClickType.
+* `nY` The y coordinate to click at (map coordinates; negative values wrap).
 
 #### Returns
-Whether or not the click was successful.
+true once the click is handed to the game, even when the game ignores it (a click type above 5, the Esc menu open, or a click the game is still handling). false when fewer than three arguments are given, the arguments match neither form (a non-integer number such as 1.5 included), or the player is not in a game or the game does not become ready in time (with a 'Game not ready' warning). It does not throw.
 
 #### `public bool `[`clickMap`](#group__globalFunctions_1gaf77b0ae23278cf2e0d3ab86c53a38f2d)`(uint16_t nClickType,bool nShift,uint16_t nX,uint16_t nY)` 
 
-Click on the map with the given click type and possibly shift at the given point.
+Click on the map with the given click type, with or without Shift held, at the given point.
+
+nClickType works as in the first clickMap overload, and nX and nY as in the third.
 
 #### Parameters
-* `nClickType` The click type to do.
+* `nClickType` The click type to do: 0 left down, 1 left held, 2 left up, 3 right down, 4 right held, 5 right up.
 
-* `nShift` Whether or not to be holding down shift.
+* `nShift` Whether or not to be holding down shift. With shift held, D2BS also adds the flag that the game's Always Run setting adds; the game applies it only while the character has stamina.
 
-* `nX` The x coordinate to click at.
+* `nX` The x coordinate to click at (map coordinates).
 
-* `nY` The y coordinate to click at.
-
-> Todo: Get a reference for nClickType.
+* `nY` The y coordinate to click at (map coordinates).
 
 #### Returns
-Whether or not the click was successful.
+true once the click is handed to the game, even when the game ignores it. false when the arguments are invalid or the player is not in a game (with a 'Game not ready' warning). It does not throw.
 
 #### `public bool `[`acceptTrade`](#group__globalFunctions_1ga1d54436fac5efdab779706bb6cce5144)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` action)` 
 
-Get or do something to do with accepting trade.
+Read the state of the player-trade Accept button, or press it.
+
+action is converted to an integer the way action | 0 does: the fraction is dropped and the value wraps at 2^32, so "2" counts as 2, true and 1.5 count as 1, and 4294967297 counts as 1. When the result is anything other than 1, 2 or 3 (a non-numeric string, undefined and other NaN values become 0), the call presses the button exactly as acceptTrade() does.
 
 #### Parameters
 * `action` What action to perform.
 
-1 - Get whether trade we've accepted trade already or not.
+1 - Get whether you have pressed Accept (the trade screen's own Accept flag).
 
-2 - Get the trade flag ...
+2 - Get the trade state number (the same value as getTradeInfo(0)).
 
-3 - Get whether the check is red or not.
+3 - Get whether the accept check is red (the server has disabled the Accept button).
 
 #### Returns
-The flag specified by action.
+The value specified by action: true or false for 1 and 3, a number for 2. Outside a ready game it returns false (with a 'Game not ready' warning). A value whose conversion throws ends the call with that exception.
 
 #### `public bool `[`acceptTrade`](#group__globalFunctions_1ga2a996039f7583fccf5900a6d6d12dee7)`()` 
 
-Accept a trade if not already accepted, cancel a trade if already accepted.
+Press your Accept button in a player trade: accept the trade, or withdraw your acceptance if you have already accepted.
 
-> Todo: Verify that I understand this correctly.
+It acts like a click on the trade screen's Accept button. When acceptTrade(1) is false it accepts (getTradeInfo(0) becomes 7). Otherwise it withdraws your acceptance: the state returns to 3 and the trade window stays open; it does not cancel the trade.
+
+It acts only when getTradeInfo(0) is 3, 5 or 7. State 7 is also the 30-second pause after a trade request was declined or cancelled, with no trade window open. A call in that pause sends an accept (or an un-accept, if acceptTrade(1) is still true) with no trade open; the state then stays at 7 (or 3) instead of returning to 0, so the game keeps declining new trade requests until the server ends the trade. Check that the trade window is open before calling it.
 
 #### Returns
-Whether or not trade was accepted.
+true when the button was pressed or released; false, with nothing done, while the accept check is red (acceptTrade(3) is true). Throws "Invalid parameter passed to acceptTrade!" when getTradeInfo(0) is not 3, 5 or 7, although the call has no parameter at fault. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public void `[`tradeOk`](#group__globalFunctions_1ga1d2f580b3ec43e5e2d09e0ea3b417154)`()` 
 
@@ -1714,14 +1807,25 @@ The euclidean distance from a to b.
 
 #### `public void `[`gold`](#group__globalFunctions_1ga43cd766ec6751004726dd28e5f5714d7)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nGold,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nMode)` 
 
-Do something with some gold.
+Drop, offer in a trade, deposit or withdraw gold.
 
-> Todo: Determine what the values for nMode are.
+nMode picks what happens to nGold:
+
+| Mode | Action |
+|---|---|
+| 0, 1 | Drop nGold gold on the ground (1 is the default). |
+| 2 | Set the gold you offer in the trade window, capped at the gold you carry; a negative nGold offers all of it. If the other player has already accepted, the offer is not changed: the call sends the same request as un-pressing Accept instead, and the trade state returns to 3. |
+| 3 | Move nGold from your inventory into the stash (with the stash open). |
+| 4 | Move nGold from the stash into your inventory (with the stash open). |
+
+Any other mode does nothing, and an amount of 0 does nothing except in mode 2. The call checks neither that a trade or the stash is open nor the amount in modes 0, 3 and 4. It first closes the game's own gold dialog; if one was open, the amount typed in it is used instead of nGold.
+
+It returns undefined; outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### Parameters
-* `nGold` The amount of gold to move around.
+* `nGold` The amount of gold to move around. Must be an integer in the 32-bit range; any other value (1.5, 1e10, the string "100") is replaced by 0.
 
-* `nMode` What to do with the gold.
+* `nMode` What to do with the gold (see the table above). Must be an integer; any other value is replaced by 1.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`checkCollision`](#group__globalFunctions_1gacbe9f546980a44ff675f8c5b77d617d3)`(`[`Unit`](#classUnit)` a,`[`Unit`](#classUnit)` b,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nBitMask)` 
 
@@ -1807,12 +1911,14 @@ Hit the transmute button.
 
 Use a stat point.
 
-BE CAREFUL! This function directly sends packets without checks. If you call this function and do not have the points, or specify an invalid stat, you might get flagged/banned.
+The points are spent one at a time, half a second apart, and the script waits meanwhile. If you have fewer unspent stat points than count, nothing is spent; count 0 (or a negative count) spends nothing.
 
-> Todo: Come up with a reference for the statType values
+BE CAREFUL! The call does not check that statType is valid. statType is converted to a 16-bit number, so a non-numeric value such as "dexterity" becomes 0 (strength) and -1 becomes 65535. The game's own stat button uses the high byte of this value to spend extra points in one packet, so a value above 255 asks for more points than count. Use only 0 to 3; an invalid stat might get you flagged/banned.
+
+It returns undefined; outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### Parameters
-* `statType` The type of stat to add the points to
+* `statType` The type of stat to add the points to: 0 - strength, 1 - energy, 2 - dexterity, 3 - vitality (the same ids getStat uses).
 
 * `count` The number of points to add
 
@@ -1820,12 +1926,14 @@ BE CAREFUL! This function directly sends packets without checks. If you call thi
 
 Use a skill point.
 
-BE CAREFUL! This function directly sends packets without checks. If you call this function and do not have the points, or specify an invalid skill, you might get flagged/banned.
+The points are spent one at a time, half a second apart, and the script waits meanwhile. If you have fewer unspent skill points than count, nothing is spent; count 0 (or a negative count) spends nothing.
 
-> Todo: Come up with a reference for the skill values
+BE CAREFUL! The call does not check that your character can learn the skill. The game's own skill tree checks the required level and the prerequisite skills before it spends a point; this call skips those checks. skill is converted to a 16-bit number, so a non-numeric value becomes 0 (Attack). An invalid skill might get you flagged/banned.
+
+It returns undefined; outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### Parameters
-* `skill` The skill to add the points to
+* `skill` The skill to add the points to: a skill id, the same number getSkill uses. See [Skill ids](#skill-ids) in the reference tables. Only class skills can be learned: Amazon 6-35, Sorceress 36-65, Necromancer 66-95, Paladin 96-125, Barbarian 126-155, Druid 221-250, Assassin 251-280, each only by its own class.
 
 * `count` The number points to spend
 
@@ -2071,6 +2179,8 @@ This includes arrays where you can walk between two areas and warp [Unit](#class
 
 The name of the [Area](#classArea).
 
+Its Levels.txt LevelName, which for 25 areas is not the name the game shows ("Rocky Summit" for the in-game Arreat Summit, area 120). See [Area ids](#area-ids) in the reference tables.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classArea_1a7b57ea354fbe94f9480d28e07857e4c3) 
 
 The x coordinate of the left side of the map.
@@ -2097,17 +2207,17 @@ See [Unit::area](#classUnit_1af5f2e11d4f116084ffd807b578078d7d).
 
 A [Box](#classBox) screen hook.
 
-Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color`, `opacity` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
+A [Box](#classBox) is a filled rectangle in one palette color, drawn with the draw mode set by `opacity` (see [Box opacity](#box-opacity) in the reference tables). Create one with `new Box(x, y, xsize, ysize, color, opacity, align, automap, click, hover)`; every argument is optional (defaults 0, 0, 0, 0, 0, 0, 0, false, none, none). Coordinates are game-window pixels, x to the right and y down. A [Box](#classBox) made by an out-of-game script draws only at the menus; one made in game (or from the console) draws only in game. With `automap` true, (x, y) and (x + xsize, y + ysize) are game map coordinates (the units of unit.x and unit.y), and the [Box](#classBox) is the screen-aligned rectangle between those two points on the automap: it shows only while the automap is open, and only while xsize is greater than ysize and xsize + ysize is greater than 0 (otherwise nothing is drawn). `automap` is a constructor argument only; there is no automap property.
 
-> Todo: Explain (and understand) this better. 
+Hooks of every script and every hook class are drawn in ascending `zorder` (default 1), so a higher value draws on top. Set `visible` to hide or show the [Box](#classBox), and call remove() to delete it. Keep a reference to every hook: one whose object is garbage-collected is removed. When the script that made a hook ends, its hooks leave the screen (with the default `DisableCache=true` in d2bs.ini; with `DisableCache=false` a script that ended normally keeps its hooks drawn, but not clickable, until the script cache is flushed).
 
-Verify all the documentation in this class.
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color`, `opacity` and `zorder` keep only the low 16 bits, so -1 reads back 65535. `automap` and `visible` take only true or false; any other value (1 included) is ignored.
 
 ## Summary
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classBox_1a180c7a450afc2e8cfe4dddb50eeaa4f2) | The x coordinate (left) of the [Box](#classBox).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classBox_1a180c7a450afc2e8cfe4dddb50eeaa4f2) | The x coordinate of the [Box](#classBox).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classBox_1a1b13c5067471d1052c6f3191f260c785) | The y coordinate (top) of the [Box](#classBox).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`xsize`](#classBox_1a26d7213ca75ae43589b05354efe153d6) | The xsize (width) of the [Box](#classBox).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`ysize`](#classBox_1a81988ee738d5c278c72bb1016addd712) | The ysize (height) of the [Box](#classBox).
@@ -2117,49 +2227,67 @@ Verify all the documentation in this class.
 `public ClickHandler `[`click`](#classBox_1a660b86951ae4edaa3b4f4e93dc682b62) | The click handler that gets called when the [Box](#classBox) is clicked; null or undefined removes it.
 `public HoverHandler `[`hover`](#classBox_1aa6504cde7640e62a2a4853677bfe0d5e) | A hover handler for the [Box](#classBox); kept but never called.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`color`](#classBox_1aa9c08a5f737f77a0d4a6d61192dadeb6) | The color of the [Box](#classBox).
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`opacity`](#classBox_1af39fa1fbcc7398a6334531934f85a878) | How much of the controls underneath the [Box](#classBox) should show through.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`opacity`](#classBox_1af39fa1fbcc7398a6334531934f85a878) | The draw mode of the [Box](#classBox) (default 0).
 `public  `[`Box`](#classBox_1af8e43dea86c924a91316bd0f61099cc3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` opacity,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` | Create a [Box](#classBox) hook with the given parameters.
-`public void `[`remove`](#classBox_1a6257b65ed22242f4660d3fa357a5ec5b)`()` | Remove the [Box](#classBox) from the screen and destroy the corresponding object.
+`public void `[`remove`](#classBox_1a6257b65ed22242f4660d3fa357a5ec5b)`()` | Remove the [Box](#classBox) from the screen for good.
 
 ## Members
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classBox_1a180c7a450afc2e8cfe4dddb50eeaa4f2) 
 
-The x coordinate (left) of the [Box](#classBox).
+The x coordinate of the [Box](#classBox).
+
+It is the left edge with align 0 and the centre with align 2; with align 1 the [Box](#classBox) starts xsize/2 to the right of it. A map coordinate when the [Box](#classBox) was made with automap true. While x or y is -1 the [Box](#classBox) is not drawn.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classBox_1a1b13c5067471d1052c6f3191f260c785) 
 
 The y coordinate (top) of the [Box](#classBox).
 
+A map coordinate when the [Box](#classBox) was made with automap true. While x or y is -1 the [Box](#classBox) is not drawn.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`xsize`](#classBox_1a26d7213ca75ae43589b05354efe153d6) 
 
 The xsize (width) of the [Box](#classBox).
+
+In screen pixels a zero or negative width draws nothing. With automap true it is a map-unit offset (see the class text for when an automap [Box](#classBox) draws).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`ysize`](#classBox_1a81988ee738d5c278c72bb1016addd712) 
 
 The ysize (height) of the [Box](#classBox).
 
+In screen pixels a zero or negative height draws nothing. With automap true it is a map-unit offset (see the class text for when an automap [Box](#classBox) draws).
+
 #### `public bool `[`visible`](#classBox_1ae2d7733c544cc0ededa905045062a37d) 
 
 Whether or not the [Box](#classBox) is visible.
+
+Defaults to true. A hidden [Box](#classBox) is not drawn and gets no clicks. Only true or false is accepted.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classBox_1a1703dbd7e3fdce5b0fd8f9250cc99ade) 
 
 The horizontal alignment.
 
-0 - Left
+0 - Left: the [Box](#classBox) starts at x
 
-1 - Right
+1 - the [Box](#classBox) is shifted right by half its width (not right-aligned)
 
-2 - Center
+2 - Center: the [Box](#classBox) is centred on x
+
+Other values are stored as given and draw as 0. The click area always starts at x, whatever the alignment.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classBox_1a3f51df7eadec72ac84ca1bede15ea008) 
 
 The z-order of the [Box](#classBox) (what it covers up and is covered by).
 
+Defaults to 1. Hooks are drawn from the lowest zorder to the highest, so a higher value covers a lower one; hooks with equal values draw in no set order. A click reaches every hook under it, whatever its zorder.
+
 #### `public ClickHandler `[`click`](#classBox_1a660b86951ae4edaa3b4f4e93dc682b62) 
 
 The click handler that gets called when the [Box](#classBox) is clicked. Assign null or undefined to remove it; a value that is not a function is ignored.
+
+It is called as click(button, x, y) when a mouse button is pressed over the [Box](#classBox): button 0 left, 1 right, 2 middle; x and y are window pixels. Only a boolean `true` return keeps the press from the game; the release always reaches the game. The handler runs when the owning script next processes events, and the game gets the press anyway if the handler has not answered within 3 seconds. A paused or ended script's hooks get no clicks.
+
+The [Box](#classBox) gets clicks while its `visible` property is true, even when it is not drawn at the moment (other game state, automap closed, x or y of -1). The click area runs from x to x + xsize and y to y + ysize (edges excluded) on the raw values: alignment and the automap conversion are not applied.
 
 #### `public HoverHandler `[`hover`](#classBox_1aa6504cde7640e62a2a4853677bfe0d5e) 
 
@@ -2169,42 +2297,41 @@ A hover handler for the [Box](#classBox). D2BS keeps it and returns it from `hov
 
 The color of the [Box](#classBox).
 
-See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botnet.org/viewtopic.php?f=18&t=1000)
+An index (0-255) into the game's 256-color palette (0 is black). Only the low 8 bits are drawn, so 256 draws as 0, though the property reads back the low 16 bits.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`opacity`](#classBox_1af39fa1fbcc7398a6334531934f85a878) 
 
-How much of the controls underneath the [Box](#classBox) should show through.
+The draw mode of the [Box](#classBox) (default 0).
+
+Modes 0-2 blend the color with what is underneath; 3, 4 and 6 ignore the color (3 draws nothing, 4 draws black, 6 darkens what is underneath); 5 and 7 draw the color solid. Only 0-7 are supported; D2BS does not check the value, so use nothing else. See [Box opacity](#box-opacity) in the reference tables.
 
 #### `public  `[`Box`](#classBox_1af8e43dea86c924a91316bd0f61099cc3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` opacity,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` 
 
 Create a [Box](#classBox) hook with the given parameters.
 
 #### Parameters
-* `x` The x coordinate (left) of the [Box](#classBox).
+* `x` The x coordinate of the [Box](#classBox): its left edge with align 0, its centre with align 2; with align 1 the [Box](#classBox) starts xsize/2 to the right of x. A map coordinate when automap is true.
 
-* `y` The y coordinate (top) of the [Box](#classBox).
+* `y` The y coordinate (top) of the [Box](#classBox); a map coordinate when automap is true.
 
-* `x2` The xsize (width) of the [Box](#classBox).
+* `x2` The xsize (width) of the [Box](#classBox). In screen pixels a zero or negative width draws nothing. With automap true it is a map-unit offset to the far corner, and the [Box](#classBox) draws only when x2 is greater than y2 and x2 + y2 is greater than 0.
 
-* `y2` The ysize (height) of the [Box](#classBox).
+* `y2` The ysize (height) of the [Box](#classBox). In screen pixels a zero or negative height draws nothing. With automap true it is a map-unit offset to the far corner.
 
-* `color` The color of the [Box](#classBox).
+* `color` The color of the [Box](#classBox): an index into the game's 256-color palette; only the low 8 bits are drawn.
 
-See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botnet.org/viewtopic.php?f=18&t=1000)
-
-#### Parameters
-* `opacity` See [Explanation of opacity parameter.](#shook_1opacity)
+* `opacity` The draw mode, 0-7 (default 0). See [Box opacity](#box-opacity) in the reference tables.
 
 * `align` The horizontal alignment.
 
 0 - Left
 
-1 - Right
+1 - shifted right by half the width (not right-aligned)
 
 2 - Center
 
 #### Parameters
-* `automap` Whether the [Box](#classBox) is in automap coordinate space (true) or screen coordinate space (false).
+* `automap` true to place the [Box](#classBox) at map coordinates on the automap, where it shows only while the automap is open (see the class text). Only true or false is accepted.
 
 * `click` A function to call when the [Box](#classBox) is clicked; any other value sets no handler.
 
@@ -2212,7 +2339,9 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 
 #### `public void `[`remove`](#classBox_1a6257b65ed22242f4660d3fa357a5ec5b)`()` 
 
-Remove the [Box](#classBox) from the screen and destroy the corresponding object.
+Remove the [Box](#classBox) from the screen for good.
+
+The object stays and its click and hover handlers are released. Its properties then read undefined, writes to them are ignored, and calling remove() again does nothing. Returns undefined.
 
 # class `Control` 
 
@@ -2229,13 +2358,13 @@ A Control whose control is gone (the screen changed, or the game left the menu) 
 `public double `[`y`](#classControl_1af0d0d577a0b49e54118be2dbb70857c9) | The y coordinate of the [Control](#classControl).
 `public double `[`xsize`](#classControl_1a0319dfc08d4f17914371dc93b55d28b1) | The xsize (width) of the [Control](#classControl).
 `public double `[`ysize`](#classControl_1afc787bd3d4d6b176b02333ccd662ceea) | The ysize (height) of the [Control](#classControl).
-`public double `[`state`](#classControl_1aeb22d5c21c492b4d08e64acc6181f4f7) | The state (?) of the [Control](#classControl).
+`public double `[`state`](#classControl_1aeb22d5c21c492b4d08e64acc6181f4f7) | The [Control](#classControl)'s display state: its flag word (the value disabled reads) minus 2, read as an unsigned number.
 `public bool `[`password`](#classControl_1aebd2dddca40bfc123cb86b307368e134) | Return whether or not the [Control](#classControl) holds a password (starred out text).
 `public double `[`type`](#classControl_1acf59ef5830cbbf3da75babd82f47a93a) | The type of control.
 `public double `[`cursorpos`](#classControl_1a46fb8326d65d4a4aef170978e2ce1373) | The position of the text cursor in an edit box.
-`public double `[`selectstart`](#classControl_1acfa6b74b35e85f4b806bed082eade450) | Someting...
-`public double `[`selectend`](#classControl_1a435440d08525dcdf317a55d1b96b1086) | Something...
-`public double `[`disabled`](#classControl_1a8b89abb5d91642620cc5ffe5173a6619) | Whether the [Control](#classControl) is disabled or not.
+`public double `[`selectstart`](#classControl_1acfa6b74b35e85f4b806bed082eade450) | On an edit box, the character index of the selection's moving end.
+`public double `[`selectend`](#classControl_1a435440d08525dcdf317a55d1b96b1086) | On an edit box, the character index where the current selection began (its fixed end).
+`public double `[`disabled`](#classControl_1a8b89abb5d91642620cc5ffe5173a6619) | The [Control](#classControl)'s raw flag word; its bits are listed under state.
 `public `[`Control`](#classControl)` `[`getNext`](#classControl_1a4894f8dd6595425524cd468938ed327c)`()` | Gets the next [Control](#classControl) from the linked list.
 `public void `[`click`](#classControl_1a399dc8ad5e1e8fb6c4944e448a154c0e)`()` | Click [Control](#classControl) in the center of the [Control](#classControl).
 `public void `[`click`](#classControl_1aa6025f9c6027722b94351e24f98c4fa4)`(uint32_t x,uint32_t y)` | Click [Control](#classControl) at the given location.
@@ -2266,9 +2395,15 @@ The ysize (height) of the [Control](#classControl).
 
 #### `public double `[`state`](#classControl_1aeb22d5c21c492b4d08e64acc6181f4f7) 
 
-The state (?) of the [Control](#classControl).
+The [Control](#classControl)'s display state: its flag word (the value disabled reads) minus 2, read as an unsigned number.
 
-> Todo: Find a reference for these values.
+Common reads: 3 = shown and enabled, 2 = shown but greyed, 11 or 10 = the same on the popup layer. A hidden control reads 1 or 0 (7 or 6 on the popup layer), or 4294967295 or 4294967294 when its flag word is below 2.
+
+The flag word is a set of bits: 0x01 enabled (takes clicks; a button without it is drawn greyed), 0x04 shown (drawn and clickable), 0x08 popup layer (drawn after every other control; popups have it), and 0x02, a transient bit the game sets while a button is being released.
+
+Setting 0-3 replaces the whole flag word with state + 2: 3 shows and enables the control, 2 shows it greyed, and 1 and 0 hide it. Setting it also removes the popup-layer bit. States 0 and 1 also set a transient bit the game uses while a button is being released, with effects that are not fully known, so prefer 2 and 3. Any other 32-bit integer throws "Invalid state value"; a non-integer value, or an integer outside the signed 32-bit range, is ignored.
+
+Reads undefined once the control is gone.
 
 #### `public bool `[`password`](#classControl_1aebd2dddca40bfc123cb86b307368e134) 
 
@@ -2278,29 +2413,20 @@ Return whether or not the [Control](#classControl) holds a password (starred out
 
 The type of control.
 
-1 - TextBox
-
-2 - [Image](#classImage)
-
-3 - Image2
-
-4 - LabelBox
-
-5 - ScrollBar
-
-6 - Button
-
-7 - List
-
-8 - Timer
-
-9 - Smack
-
-10 - ProgressBar
-
-11 - Popup
-
-12 - AccountList
+| Value | Type | Notes |
+|---|---|---|
+| 1 | Edit box | Single-line text input (account, password, game name); its text is writable |
+| 2 | Image | Image or picture |
+| 3 | (unused) | Never constructed in 1.14d |
+| 4 | Text box | Multi-line text or label box; read it with getText() |
+| 5 | Scroll bar | |
+| 6 | Button | |
+| 7 | List | List box |
+| 8 | Timer | Invisible timer control |
+| 9 | Video | Smacker video player |
+| 10 | Progress bar | |
+| 11 | Popup | |
+| 12 | Account list | |
 
 #### `public double `[`cursorpos`](#classControl_1a46fb8326d65d4a4aef170978e2ce1373) 
 
@@ -2308,19 +2434,23 @@ The position of the text cursor in an edit box. Reading it returns the current p
 
 #### `public double `[`selectstart`](#classControl_1acfa6b74b35e85f4b806bed082eade450) 
 
-Someting...
+On an edit box, the character index of the selection's moving end.
 
-> Todo: Determine what this is.
+It follows the cursor while the selection is extended with Shift or the mouse. Despite its name it is not where the selection began; that is selectend. The selection is the text between selectstart and selectend, in whichever order they fall; nothing is selected when selectend is 4294967295 or equals selectstart. It reads 0 once the selection is cleared (moving the cursor with the keyboard without Shift clears it), so it is meaningful only while a selection exists.
+
+Read-only. On other control types the value has no selection meaning. Reads undefined once the control is gone.
 
 #### `public double `[`selectend`](#classControl_1a435440d08525dcdf317a55d1b96b1086) 
 
-Something...
+On an edit box, the character index where the current selection began (its fixed end).
 
-> Todo: Determine what this is.
+Reads 4294967295 when no selection has been started. Nothing is selected either when selectend equals selectstart. The selection is the text between selectend and selectstart, in whichever order they fall. Select all gives selectend 0 and selectstart equal to the text length.
+
+Read-only. On other control types the value has no selection meaning. Reads undefined once the control is gone.
 
 #### `public double `[`disabled`](#classControl_1a8b89abb5d91642620cc5ffe5173a6619) 
 
-Whether the [Control](#classControl) is disabled or not.
+The [Control](#classControl)'s raw flag word; its bits are listed under state. Despite its name it is not a boolean: a shown, enabled control reads 5 and a shown, greyed one reads 4 (13 and 12 on the popup layer). Read-only: an assignment is ignored, and throws a TypeError in strict code. Reads undefined once the control is gone.
 
 #### `public `[`Control`](#classControl)` `[`getNext`](#classControl_1a4894f8dd6595425524cd468938ed327c)`()` 
 
@@ -2441,9 +2571,11 @@ Has the effect of calling any listeners to scriptmsg with the parameters provide
 
 # class `DBStatement` 
 
-A class describing ...
+A prepared SQL statement on an SQLite database.
 
-> Todo: Get a better description (and understanding).
+SQLite.query(sql, ...) creates one, binding any extra arguments to its parameters in order, and SQLite.statements lists the ones still open; a [DBStatement](#classDBStatement) cannot be constructed directly (`new DBStatement()` throws "Invalid Operation"). query() prepares only the first SQL statement in the string, and throws "Statement has no effect" for an empty one.
+
+Step through the result rows with [next()](#classDBStatement_1a571c59f80ee8940aaedd2b6f6abc9bd4), which returns true while a row is ready and false at the end, and read the current row with [getObject()](#classDBStatement_1ad4f6860effd1caa57653e8c1fd3dd4c4), getColumnValue() or [getColumnName()](#classDBStatement_1a849c6076cb4e5e4a7436aebb3ca7dee7). Calling next() again after it returned false runs the statement again from its first row. Use [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be) instead to run a statement such as an INSERT or UPDATE once: it returns true when the statement ran to completion, and false when its step produced a row (a SELECT run with go() returns false when it finds a row and true when it finds none; either way the statement is closed after that one step). bind() sets a parameter (1-based index, or a name including its prefix such as ":id"), [skip()](#classDBStatement_1a52b6771be336a56bbc8f02bcb99e55c7) steps over rows and [reset()](#classDBStatement_1a7c08cde3f29a7e5158e4ff290f9c6e25) rewinds the statement so it can run again.
 
 The statement is closed after [close()](#classDBStatement_1a1d8293b4debace6e99c0dbede2677ee7), after a [go()](#classDBStatement_1a0d92705f6226d3bfea6a1d99d797e7be) that returns, and after the database's close(): every method except close() throws "The statement is closed", `sql` reads undefined and `ready` reads false. When go()'s step reports an error, go() throws and the statement stays open, not ready.
 
@@ -2463,10 +2595,10 @@ The statement is closed after [close()](#classDBStatement_1a1d8293b4debace6e99c0
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`skip`](#classDBStatement_1a52b6771be336a56bbc8f02bcb99e55c7)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` rows)` | Skip a certain number of rows in the results.
 `public bool `[`reset`](#classDBStatement_1a7c08cde3f29a7e5158e4ff290f9c6e25)`()` | Call sqlite3_reset.
 `public bool `[`close`](#classDBStatement_1a1d8293b4debace6e99c0dbede2677ee7)`()` | Close the statement.
-`public bool `[`bind`](#classDBStatement_1aa7f4478203eaa27a68d33fa18a1ab9b4)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,double val)` | Bind the given data to the given column.
-`public bool `[`bind`](#classDBStatement_1a289bdcf455c3d15c1defc949fed8ff8b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` val)` | Bind the given data to the given column.
-`public bool `[`bind`](#classDBStatement_1ab817aa527c6c877e4bcc0410080b9b82)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,String val)` | Bind the given data to the given column.
-`public bool `[`bind`](#classDBStatement_1a42ddfab63e2f5438e6a971bf96e6cdab)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,bool val)` | Bind the given boolean to the given column as the integer 1 (true) or 0 (false).
+`public bool `[`bind`](#classDBStatement_1aa7f4478203eaa27a68d33fa18a1ab9b4)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,double val)` | Bind the given data to the given parameter.
+`public bool `[`bind`](#classDBStatement_1a289bdcf455c3d15c1defc949fed8ff8b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` val)` | Bind the given data to the given parameter.
+`public bool `[`bind`](#classDBStatement_1ab817aa527c6c877e4bcc0410080b9b82)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,String val)` | Bind the given data to the given parameter.
+`public bool `[`bind`](#classDBStatement_1a42ddfab63e2f5438e6a971bf96e6cdab)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,bool val)` | Bind the given boolean to the given parameter as the integer 1 (true) or 0 (false).
 
 ## Members
 
@@ -2535,7 +2667,7 @@ Call sqlite3_step and close_db_stmt on the statement.
 Runs the statement once and closes it: ready is false afterwards and the statement can't be stepped again. When the step reports an error, go() throws and the statement stays open, not ready.
 
 #### Returns
-Whether the result is SQLITE_DONE.
+true when the statement ran to completion; false when its step produced a row.
 
 #### `public bool `[`next`](#classDBStatement_1a571c59f80ee8940aaedd2b6f6abc9bd4)`()` 
 
@@ -2544,7 +2676,7 @@ Call sqlite3_step on the statement.
 Moves to the next row of the results; ready tells whether there is one.
 
 #### Returns
-Whether the result is SQLITE_ROW.
+true when a row is ready; false at the end of the results. A further call after false runs the statement again from its first row.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`skip`](#classDBStatement_1a52b6771be336a56bbc8f02bcb99e55c7)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` rows)` 
 
@@ -2574,10 +2706,10 @@ true, also when the statement was already closed.
 
 #### `public bool `[`bind`](#classDBStatement_1aa7f4478203eaa27a68d33fa18a1ab9b4)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,double val)` 
 
-Bind the given data to the given column.
+Bind the given data to the given parameter.
 
 #### Parameters
-* `colnum` The column number to bind to.
+* `colnum` The parameter to bind to: its 1-based number, or its name including the prefix (for example ":id"). An unknown name or 0 throws "Invalid parameter number, parameters start at 1".
 
 * `val` The data to bind.
 
@@ -2586,10 +2718,10 @@ true when the value was bound. Throws when colnum is out of range, when val is a
 
 #### `public bool `[`bind`](#classDBStatement_1a289bdcf455c3d15c1defc949fed8ff8b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` val)` 
 
-Bind the given data to the given column.
+Bind the given data to the given parameter.
 
 #### Parameters
-* `colnum` The column number to bind to.
+* `colnum` The parameter to bind to: its 1-based number, or its name including the prefix (for example ":id"). An unknown name or 0 throws "Invalid parameter number, parameters start at 1".
 
 * `val` The data to bind.
 
@@ -2598,10 +2730,10 @@ true when the value was bound. Throws when colnum is out of range, when val is a
 
 #### `public bool `[`bind`](#classDBStatement_1ab817aa527c6c877e4bcc0410080b9b82)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,String val)` 
 
-Bind the given data to the given column.
+Bind the given data to the given parameter.
 
 #### Parameters
-* `colnum` The column number to bind to.
+* `colnum` The parameter to bind to: its 1-based number, or its name including the prefix (for example ":id"). An unknown name or 0 throws "Invalid parameter number, parameters start at 1".
 
 * `val` The data to bind.
 
@@ -2610,10 +2742,10 @@ true when the value was bound. Throws when colnum is out of range, when val is a
 
 #### `public bool `[`bind`](#classDBStatement_1a42ddfab63e2f5438e6a971bf96e6cdab)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` colnum,bool val)` 
 
-Bind the given boolean to the given column as the integer 1 (true) or 0 (false). A bind() of null or undefined binds NULL.
+Bind the given boolean to the given parameter as the integer 1 (true) or 0 (false). A bind() of null or undefined binds NULL.
 
 #### Parameters
-* `colnum` The column number to bind to.
+* `colnum` The parameter to bind to: its 1-based number, or its name including the prefix (for example ":id"). An unknown name or 0 throws "Invalid parameter number, parameters start at 1".
 
 * `val` The data to bind.
 
@@ -3013,17 +3145,17 @@ An array of all the folder names.
 
 This class represents a screen hook for a [Frame](#classFrame).
 
-Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `zorder` keeps only the low 16 bits, so -1 reads back 65535.
+A [Frame](#classFrame) is the game's decorative border (edge and corner pieces) drawn around a rectangle. It has no color or opacity and does not fill its inside; put a [Box](#classBox) under it for a background. Create one with `new Frame(x, y, xsize, ysize, align, automap, click, hover)`; every argument is optional (defaults 0, 0, 0, 0, 0, false, none, none). Coordinates are game-window pixels, x to the right and y down. A [Frame](#classFrame) draws only in game, never at the menus. With `automap` true the [Frame](#classFrame) still uses screen pixels, but shows only while the automap is open; `automap` is a constructor argument only. The four corner pieces are always drawn, so a [Frame](#classFrame) too small for its border (even `new Frame()` with its default size of 0), or with a negative size, still draws its corners.
 
-> Todo: Explain (and understand) this better. 
+Hooks of every script and every hook class are drawn in ascending `zorder` (default 1), so a higher value draws on top. Set `visible` to hide or show the [Frame](#classFrame), and call remove() to delete it. Keep a reference to every hook: one whose object is garbage-collected is removed. When the script that made a hook ends, its hooks leave the screen (with the default `DisableCache=true` in d2bs.ini; with `DisableCache=false` a script that ended normally keeps its hooks drawn, but not clickable, until the script cache is flushed).
 
-Verify all the documentation in this class.
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `zorder` keeps only the low 16 bits, so -1 reads back 65535. `automap` and `visible` take only true or false; any other value is ignored.
 
 ## Summary
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classFrame_1a0e43afae34b6d1fb613a42fa5e027d01) | The x coordinate (left) of the [Frame](#classFrame).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classFrame_1a0e43afae34b6d1fb613a42fa5e027d01) | The x coordinate of the [Frame](#classFrame).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classFrame_1a465bb636563d27695e1505e778e08c57) | The y coordinate (top) of the [Frame](#classFrame).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`xsize`](#classFrame_1a3217f35f7ca8516a5f636edc928badbf) | The xsize (width) of the [Frame](#classFrame).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`ysize`](#classFrame_1adb6e9d30c3b3452aae2b3744701b4b89) | The ysize (height) of the [Frame](#classFrame).
@@ -3033,47 +3165,65 @@ Verify all the documentation in this class.
 `public ClickHandler `[`click`](#classFrame_1a2e9a32aed91d5f9c7ffb77d93f39a047) | The click handler that gets called when the [Frame](#classFrame) is clicked; null or undefined removes it.
 `public HoverHandler `[`hover`](#classFrame_1a62ee67d27035fd2178031b0eee2116f4) | A hover handler for the [Frame](#classFrame); kept but never called.
 `public  `[`Frame`](#classFrame_1a659ccea661a5f12de6baefb5bfa9b732)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` | Create a [Frame](#classFrame) hook with the given parameters.
-`public void `[`remove`](#classFrame_1ab6188f670788ea98d8a9d3fd65211d8f)`()` | Remove the [Frame](#classFrame) from the screen and destroy the corresponding object.
+`public void `[`remove`](#classFrame_1ab6188f670788ea98d8a9d3fd65211d8f)`()` | Remove the [Frame](#classFrame) from the screen for good.
 
 ## Members
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classFrame_1a0e43afae34b6d1fb613a42fa5e027d01) 
 
-The x coordinate (left) of the [Frame](#classFrame).
+The x coordinate of the [Frame](#classFrame).
+
+In window pixels, even when the [Frame](#classFrame) was made with automap true. It is the left edge with align 0 and the centre with align 2; with align 1 the [Frame](#classFrame) starts xsize/2 to the right of it. While x or y is -1 the [Frame](#classFrame) is not drawn.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classFrame_1a465bb636563d27695e1505e778e08c57) 
 
 The y coordinate (top) of the [Frame](#classFrame).
 
+In window pixels. While x or y is -1 the [Frame](#classFrame) is not drawn.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`xsize`](#classFrame_1a3217f35f7ca8516a5f636edc928badbf) 
 
 The xsize (width) of the [Frame](#classFrame).
+
+In pixels. A width too small for the border, or a negative one, draws only the four corner pieces.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`ysize`](#classFrame_1adb6e9d30c3b3452aae2b3744701b4b89) 
 
 The ysize (height) of the [Frame](#classFrame).
 
+In pixels. A height too small for the border, or a negative one, draws only the four corner pieces.
+
 #### `public bool `[`visible`](#classFrame_1a863ec6abf9fd37fa6a33e63d1d58718f) 
 
 Whether or not the [Frame](#classFrame) is visible.
+
+Defaults to true. A hidden [Frame](#classFrame) is not drawn and gets no clicks. Only true or false is accepted.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classFrame_1a7344aa54a7eeaa68fdf7fa42b0fa0a29) 
 
 The horizontal alignment.
 
-0 - Left
+0 - Left: the [Frame](#classFrame) starts at x
 
-1 - Right
+1 - the [Frame](#classFrame) is shifted right by half its width (not right-aligned)
 
-2 - Center
+2 - Center: the [Frame](#classFrame) is centred on x
+
+Other values are stored as given and draw as 0. The click area always starts at x, whatever the alignment.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classFrame_1a7b6c33df644c92758f289fd76e905b89) 
 
 The z-order of the [Frame](#classFrame) (what it covers up and is covered by).
 
+Defaults to 1. Hooks are drawn from the lowest zorder to the highest, so a higher value covers a lower one; hooks with equal values draw in no set order. A click reaches every hook under it, whatever its zorder.
+
 #### `public ClickHandler `[`click`](#classFrame_1a2e9a32aed91d5f9c7ffb77d93f39a047) 
 
 The click handler that gets called when the [Frame](#classFrame) is clicked. Assign null or undefined to remove it; a value that is not a function is ignored.
+
+It is called as click(button, x, y) when a mouse button is pressed over the [Frame](#classFrame): button 0 left, 1 right, 2 middle; x and y are window pixels. Only a boolean `true` return keeps the press from the game; the release always reaches the game. The handler runs when the owning script next processes events, and the game gets the press anyway if the handler has not answered within 3 seconds. A paused or ended script's hooks get no clicks.
+
+The [Frame](#classFrame) gets clicks while its `visible` property is true, even when it is not drawn at the moment (at the menus, automap closed, x or y of -1). The click area runs from x to x + xsize and y to y + ysize (edges excluded) on the raw values: alignment is not applied.
 
 #### `public HoverHandler `[`hover`](#classFrame_1a62ee67d27035fd2178031b0eee2116f4) 
 
@@ -3084,24 +3234,24 @@ A hover handler for the [Frame](#classFrame). D2BS keeps it and returns it from 
 Create a [Frame](#classFrame) hook with the given parameters.
 
 #### Parameters
-* `x` The x coordinate (left) of the [Frame](#classFrame).
+* `x` The x coordinate of the [Frame](#classFrame) in window pixels: its left edge with align 0, its centre with align 2; with align 1 the [Frame](#classFrame) starts xsize/2 to the right of x.
 
-* `y` The y coordinate (top) of the [Frame](#classFrame).
+* `y` The y coordinate (top) of the [Frame](#classFrame), in window pixels.
 
-* `x2` The xsize (width) of the [Frame](#classFrame).
+* `x2` The xsize (width) of the [Frame](#classFrame). A width too small for the border, or a negative one, draws only the four corner pieces.
 
-* `y2` The ysize (height) of the [Frame](#classFrame).
+* `y2` The ysize (height) of the [Frame](#classFrame). A height too small for the border, or a negative one, draws only the four corner pieces.
 
 * `align` The horizontal alignment.
 
 0 - Left
 
-1 - Right
+1 - shifted right by half the width (not right-aligned)
 
 2 - Center
 
 #### Parameters
-* `automap` Whether the [Frame](#classFrame) is in automap coordinate space (true) or screen coordinate space (false).
+* `automap` When true, the [Frame](#classFrame) shows only while the automap is open; its coordinates stay screen pixels. Only true or false is accepted.
 
 * `click` A function to call when the [Frame](#classFrame) is clicked; any other value sets no handler.
 
@@ -3109,24 +3259,26 @@ Create a [Frame](#classFrame) hook with the given parameters.
 
 #### `public void `[`remove`](#classFrame_1ab6188f670788ea98d8a9d3fd65211d8f)`()` 
 
-Remove the [Frame](#classFrame) from the screen and destroy the corresponding object.
+Remove the [Frame](#classFrame) from the screen for good.
+
+The object stays and its click and hover handlers are released. Its properties then read undefined, writes to them are ignored, and calling remove() again does nothing. Returns undefined.
 
 # class `Image` 
 
-This class represents a screen hook for a [Image](#classImage).
+This class represents a screen hook for an [Image](#classImage).
 
-Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. The `zorder` property and the `color` argument keep only the low 16 bits, so a `zorder` of -1 reads back 65535.
+An [Image](#classImage) draws a picture from an 8-bit BMP file on the game screen or the automap. Create one with `new Image(file, x, y, color, align, automap, click, hover)`; every argument is optional (defaults: no file, 0, 0, 0, 0, false, none, none; without a file the [Image](#classImage) stays blank). The BMP's own palette is ignored: each pixel is drawn as that entry of the game's current palette, pixels of index 0 are transparent, and pixels of index 255 take the palette index given by `color`. The picture is centred vertically on y; `align` puts x at its left edge (0), right edge (1) or centre (2). An [Image](#classImage) made by an out-of-game script draws only at the menus; one made in game (or from the console) draws only in game. With `automap` true (a constructor argument only), x and y are game map coordinates (the units of unit.x and unit.y) and the [Image](#classImage) is drawn only while the automap is open; only align 2 then puts the picture on its map point, while 0 and 1 shift it sideways.
 
-> Todo: Explain (and understand) this better. 
+Hooks of every script and every hook class are drawn in ascending `zorder` (default 1), so a higher value draws on top. Set `visible` to hide or show the [Image](#classImage), and call remove() to delete it. Keep a reference to every hook: one whose object is garbage-collected is removed. When the script that made a hook ends, its hooks leave the screen (with the default `DisableCache=true` in d2bs.ini; with `DisableCache=false` a script that ended normally keeps its hooks drawn, but not clickable, until the script cache is flushed).
 
-Verify all the documentation in this class.
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `zorder` keeps only the low 16 bits, so a `zorder` of -1 reads back 65535; `color` is a palette index and only its low 8 bits are used. `automap` and `visible` take only true or false; any other value is ignored.
 
 ## Summary
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classImage_1a7f8f4530212c93856e611030e46c82af) | The x coordinate (left) of the [Image](#classImage).
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classImage_1a9b03b7d8dd6f69cb5a444bdd0edd786e) | The y coordinate (top) of the [Image](#classImage).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classImage_1a7f8f4530212c93856e611030e46c82af) | The x coordinate of the [Image](#classImage).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classImage_1a9b03b7d8dd6f69cb5a444bdd0edd786e) | The y coordinate of the [Image](#classImage)'s vertical centre.
 `public bool `[`visible`](#classImage_1addd9aead76cc50bf9891d4096195c18d) | Whether or not the [Image](#classImage) is visible.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classImage_1a943ad156731bd86b94d77e4f617e0fe8) | The horizontal alignment.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classImage_1a8f7cef488ff6a72dde9dea8a5c14e39b) | The z-order of the [Image](#classImage) (what it covers up and is covered by).
@@ -3134,39 +3286,53 @@ Verify all the documentation in this class.
 `public HoverHandler `[`hover`](#classImage_1ad60232f651bec42eab0f73f2344e4bf0) | A hover handler for the [Image](#classImage); kept but never called.
 `public String `[`location`](#classImage_1af4f3e489b1fb5cfa4ffdbe52ea4aee51) | Location of the file to load for display.
 `public  `[`Image`](#classImage_1ae6297ffbf18a41caa7971e58571250db)`(String szText,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` | Create an [Image](#classImage) hook with the given parameters.
-`public void `[`remove`](#classImage_1a777c1f1bf88cf556aa256c6559bd3401)`()` | Remove the [Image](#classImage) from the screen and destroy the corresponding object.
+`public void `[`remove`](#classImage_1a777c1f1bf88cf556aa256c6559bd3401)`()` | Remove the [Image](#classImage) from the screen for good.
 
 ## Members
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classImage_1a7f8f4530212c93856e611030e46c82af) 
 
-The x coordinate (left) of the [Image](#classImage).
+The x coordinate of the [Image](#classImage).
+
+It is the picture's left edge with align 0, its right edge with align 1 and its centre with align 2. A map coordinate when the [Image](#classImage) was made with automap true. While x or y is -1 the [Image](#classImage) is not drawn.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classImage_1a9b03b7d8dd6f69cb5a444bdd0edd786e) 
 
-The y coordinate (top) of the [Image](#classImage).
+The y coordinate of the [Image](#classImage)'s vertical centre.
+
+A map coordinate when the [Image](#classImage) was made with automap true. While x or y is -1 the [Image](#classImage) is not drawn.
 
 #### `public bool `[`visible`](#classImage_1addd9aead76cc50bf9891d4096195c18d) 
 
 Whether or not the [Image](#classImage) is visible.
 
+Defaults to true. A hidden [Image](#classImage) is not drawn and gets no clicks. Only true or false is accepted.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classImage_1a943ad156731bd86b94d77e4f617e0fe8) 
 
 The horizontal alignment.
 
-0 - Left
+0 - Left: x is the picture's left edge
 
-1 - Right
+1 - Right: x is the picture's right edge
 
-2 - Center
+2 - Center: x is the picture's centre
+
+Other values are stored as given and draw as 2. With automap true only 2 (or another value that draws as 2) puts the picture on its map point; 0 and 1 shift it sideways.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classImage_1a8f7cef488ff6a72dde9dea8a5c14e39b) 
 
 The z-order of the [Image](#classImage) (what it covers up and is covered by).
 
+Defaults to 1. Hooks are drawn from the lowest zorder to the highest, so a higher value covers a lower one; hooks with equal values draw in no set order. A click reaches every hook under it, whatever its zorder.
+
 #### `public ClickHandler `[`click`](#classImage_1a69ec2e746b9688ac033064f69a132a35) 
 
 The click handler that gets called when the [Image](#classImage) is clicked. Assign null or undefined to remove it; a value that is not a function is ignored.
+
+It is called as click(button, x, y) when a mouse button is pressed over the [Image](#classImage): button 0 left, 1 right, 2 middle; x and y are window pixels. Only a boolean `true` return keeps the press from the game; the release always reaches the game. The handler runs when the owning script next processes events, and the game gets the press anyway if the handler has not answered within 3 seconds. A paused or ended script's hooks get no clicks.
+
+The [Image](#classImage) gets clicks while its `visible` property is true, even when it is not drawn at the moment (other game state, automap closed, x or y of -1). The click area uses the raw x and y (the automap conversion is not applied) and spans y - height/2 to y + height/2. With align 1 and 2 it matches the picture; with align 0 it is one picture-width to the right of the picture. An [Image](#classImage) whose file did not load (a blank [Image](#classImage)) gets no clicks.
 
 #### `public HoverHandler `[`hover`](#classImage_1ad60232f651bec42eab0f73f2344e4bf0) 
 
@@ -3174,24 +3340,23 @@ A hover handler for the [Image](#classImage). D2BS keeps it and returns it from 
 
 #### `public String `[`location`](#classImage_1af4f3e489b1fb5cfa4ffdbe52ea4aee51) 
 
-Location of the file to load for display, relative to the script folder (an uncompressed 8-bit bottom-up BMP, as for new Image()). Setting a name that new Image() would refuse throws "Invalid image file path" and keeps the current file; a name that does not load leaves the Image blank.
+Location of the file to load for display.
+
+It is relative to the script folder (an uncompressed 8-bit bottom-up BMP, as for new Image()). Setting a name that new Image() would refuse throws "Invalid image file path" and keeps the current file; a name that does not load leaves the Image blank. Reading it returns the name as it was given; assigning a value that is not a string is ignored.
 
 #### `public  `[`Image`](#classImage_1ae6297ffbf18a41caa7971e58571250db)`(String szText,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` 
 
 Create an [Image](#classImage) hook with the given parameters.
 
 #### Parameters
-* `szText` The filename to load the image from, relative to the script folder. Only uncompressed 8-bit (256-color) bottom-up BMP files in the script folder load; a missing file or any other format leaves the Image blank, and a file fixed on disk loads the next time an Image or location names it. A name that has loaded once keeps that picture until Diablo II (Game.exe) exits, even if the file is rewritten on disk, and the same file under another spelling (letter case, `.\`, `/` instead of `\`) loads again as its own picture; a file that is deleted or cannot be opened (for example while another program holds it locked) leaves the Image blank and writes a line to the log. A name that leaves that folder (`..\` or `../`), contains any of `":?*<>|`, or makes a path longer than 515 characters when joined to the script folder's path throws "Invalid image file path".
+* `szText` The filename to load the image from, relative to the script folder. Only uncompressed 8-bit (256-color) bottom-up BMP files in the script folder load; a missing file or any other format leaves the Image blank, and a file fixed on disk loads the next time an Image or location names it. A name that has loaded once keeps that picture until Diablo II (Game.exe) exits, even if the file is rewritten on disk, and the same file under another spelling (letter case, `.\`, `/` instead of `\`) loads again as its own picture; a file that is deleted or cannot be opened (for example while another program holds it locked) leaves the Image blank and writes a line to the log. A name that leaves that folder (`..\` or `../`), contains any of `":?*<>|`, or makes a path longer than 515 characters when joined to the script folder's path throws "Invalid image file path". A value that is not a string, or no file at all, counts as an empty name, which loads nothing, leaves the Image blank and writes a line to the log.
 
-* `x` The x coordinate (left) of the [Image](#classImage).
+* `x` The x coordinate of the [Image](#classImage)'s anchor: its left edge (align 0), right edge (align 1) or centre (align 2).
 
-* `y` The y coordinate (top) of the [Image](#classImage).
+* `y` The y coordinate of the [Image](#classImage)'s vertical centre.
 
-* `color` The color of the [Image](#classImage).
+* `color` A game palette index (0-255; only the low 8 bits are used) for the BMP's pixels of index 255. Pixels of index 0 are transparent, and every other index is drawn as that entry of the game's current palette.
 
-See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botnet.org/viewtopic.php?f=18&t=1000)
-
-#### Parameters
 * `align` The horizontal alignment.
 
 0 - Left
@@ -3201,7 +3366,7 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 2 - Center
 
 #### Parameters
-* `automap` Whether the [Image](#classImage) is in automap coordinate space (true) or screen coordinate space (false).
+* `automap` true to place the [Image](#classImage) at game map coordinates and draw it only while the automap is open; false (the default) for screen coordinates. Only true or false is accepted.
 
 * `click` A function to call when the [Image](#classImage) is clicked; any other value sets no handler.
 
@@ -3209,15 +3374,19 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 
 #### `public void `[`remove`](#classImage_1a777c1f1bf88cf556aa256c6559bd3401)`()` 
 
-Remove the [Image](#classImage) from the screen and destroy the corresponding object.
+Remove the [Image](#classImage) from the screen for good.
+
+The object stays and its click and hover handlers are released. Its properties then read undefined, writes to them are ignored, and calling remove() again does nothing. Returns undefined.
 
 # class `Line` 
 
 A 2d line.
 
-Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
+A [Line](#classLine) is a straight line from (x, y) to (x2, y2) in one palette color. Create one with `new Line(x, y, x2, y2, color, automap, click, hover)`; every argument is optional (defaults 0, 0, 0, 0, 0, false, none, none). Coordinates are game-window pixels, x to the right and y down. With `automap` true both ends are game map coordinates (the units of unit.x and unit.y), and the [Line](#classLine) shows only while the automap is open; `automap` is a constructor argument only. A [Line](#classLine) made by an out-of-game script draws only at the menus; one made in game (or from the console) draws only in game. A [Line](#classLine) has no alignment and can never be clicked.
 
-> Todo: Verify all the documentation in this class.
+Hooks of every script and every hook class are drawn in ascending `zorder` (default 1), so a higher value draws on top. Set `visible` to hide or show the [Line](#classLine), and call remove() to delete it. Keep a reference to every hook: one whose object is garbage-collected is removed. When the script that made a hook ends, its hooks leave the screen (with the default `DisableCache=true` in d2bs.ini; with `DisableCache=false` a script that ended normally keeps its hooks drawn until the script cache is flushed).
+
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color` and `zorder` keep only the low 16 bits, so -1 reads back 65535. `automap` and `visible` take only true or false; any other value is ignored.
 
 ## Summary
 
@@ -3233,7 +3402,7 @@ Number arguments and number properties take any finite number and drop its fract
 `public ClickHandler `[`click`](#classLine_1a4d07ee7727434b01299b0d41389a1e01) | The click handler for the [Line](#classLine); kept but never called, since a click never hits a [Line](#classLine). Null or undefined removes it.
 `public HoverHandler `[`hover`](#classLine_1a290a03210ee18d9644db5679e931f7a3) | A hover handler for the [Line](#classLine); kept but never called.
 `public  `[`Line`](#classLine_1afcf6affa1a4e375b37e61669b1103f12)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y2,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,bool automap,ClickHandler click,HoverHandler hover)` | Create a [Line](#classLine) hook with the given parameters.
-`public void `[`remove`](#classLine_1a33c4869ac6002c11dcace8c4e5d47c60)`()` | Remove the [Line](#classLine) from the screen and destroy the corresponding object.
+`public void `[`remove`](#classLine_1a33c4869ac6002c11dcace8c4e5d47c60)`()` | Remove the [Line](#classLine) from the screen for good.
 
 ## Members
 
@@ -3241,31 +3410,43 @@ Number arguments and number properties take any finite number and drop its fract
 
 The first x coordinate of the [Line](#classLine).
 
+A map coordinate when the [Line](#classLine) was made with automap true. While x or y is -1 the [Line](#classLine) is not drawn (x2 and y2 of -1 do not hide it).
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classLine_1aba0b47fa036eff1c6cbc4369389a0cf8) 
 
 The first y coordinate of the [Line](#classLine).
+
+A map coordinate when the [Line](#classLine) was made with automap true. While x or y is -1 the [Line](#classLine) is not drawn.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x2`](#classLine_1a4f08d1038eba337d6f0fb32713e528f1) 
 
 The second x coordinate of the [Line](#classLine).
 
+An absolute coordinate, not a width; a map coordinate when the [Line](#classLine) was made with automap true.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y2`](#classLine_1ae31c92ab0df730a2fdd34201ce6feb9d) 
 
 The second y coordinate of the [Line](#classLine).
+
+An absolute coordinate, not a height; a map coordinate when the [Line](#classLine) was made with automap true.
 
 #### `public bool `[`visible`](#classLine_1ad03610daf3369fe0beaaa0b63bb00826) 
 
 Whether or not the [Line](#classLine) is visible.
 
+Defaults to true. Only true or false is accepted.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`color`](#classLine_1a9efd376d9b6ac16dd115bd7bfbf9c923) 
 
 The color of the [Line](#classLine).
 
-See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botnet.org/viewtopic.php?f=18&t=1000)
+An index (0-255) into the game's 256-color palette. Only the low 8 bits are drawn, so 256 draws as 0, though the property reads back the low 16 bits.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classLine_1ab5abf5a8115842ca5e99a827966a332b) 
 
 The z-order of the [Line](#classLine) (what it covers up and is covered by).
+
+Defaults to 1. Hooks are drawn from the lowest zorder to the highest, so a higher value covers a lower one; hooks with equal values draw in no set order.
 
 #### `public ClickHandler `[`click`](#classLine_1a4d07ee7727434b01299b0d41389a1e01) 
 
@@ -3280,20 +3461,17 @@ A hover handler for the [Line](#classLine). D2BS keeps it and returns it from `h
 Create a [Line](#classLine) hook with the given parameters.
 
 #### Parameters
-* `x` The x coordinate (left) of the [Line](#classLine).
+* `x` The x coordinate of the first end of the [Line](#classLine).
 
-* `y` The y coordinate (top) of the [Line](#classLine).
+* `y` The y coordinate of the first end of the [Line](#classLine).
 
-* `x2` The xsize (width) of the [Line](#classLine).
+* `x2` The x coordinate of the second end of the [Line](#classLine).
 
-* `y2` The ysize (height) of the [Line](#classLine).
+* `y2` The y coordinate of the second end of the [Line](#classLine).
 
-* `color` The color of the [Line](#classLine).
+* `color` The color of the [Line](#classLine): an index into the game's 256-color palette; only the low 8 bits are drawn.
 
-See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botnet.org/viewtopic.php?f=18&t=1000)
-
-#### Parameters
-* `automap` Whether the [Line](#classLine) is in automap coordinate space (true) or screen coordinate space (false).
+* `automap` With true, all four coordinates are map coordinates and the [Line](#classLine) shows only while the automap is open. Only true or false is accepted.
 
 * `click` A click function for the [Line](#classLine), kept but never called (a click never hits a [Line](#classLine)); any other value sets no handler.
 
@@ -3301,7 +3479,9 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 
 #### `public void `[`remove`](#classLine_1a33c4869ac6002c11dcace8c4e5d47c60)`()` 
 
-Remove the [Line](#classLine) from the screen and destroy the corresponding object.
+Remove the [Line](#classLine) from the screen for good.
+
+The object stays and its click and hover handlers are released. Its properties then read undefined, writes to them are ignored, and calling remove() again does nothing. Returns undefined.
 
 # class `Me` 
 
@@ -3336,7 +3516,7 @@ Technically, also called [Unit](#classUnit), but since C++ doesn't support class
 `public double `[`owner`](#classMe_1a3322befee99b6afa964c5f8ee52983d2) | The unit id of the owner of the unit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`ownertype`](#classMe_1a6f9f7bbef6962920fe9306a620f204b6) | The type of owner.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`spectype`](#classMe_1ad244e2f81cefed6a58bc2b3aed36b9f3) | The special type of the unit.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`direction`](#classMe_1a6ee239b2452d3c06e33de7e1725be36a) | The direction of the unit.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`direction`](#classMe_1a6ee239b2452d3c06e33de7e1725be36a) | The direction the unit is facing, from 0 to 63.
 `public String `[`code`](#classMe_1aa90bcab94a360d2e8380323d8b4640cf) | The three digit code for an item.
 `public String `[`prefix`](#classMe_1ab68062a31f250f249221a399c541b5e8) | The magic prefix of the item.
 `public String `[`suffix`](#classMe_1a3633bb215e73eda5916b9c0f372d1f80) | The magic suffix of the item.
@@ -3344,7 +3524,7 @@ Technically, also called [Unit](#classUnit), but since C++ doesn't support class
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`suffixnum`](#classMe_1a3d523157c13fcf3229ecc1b9d7724367) | The id code for the magic suffix.
 `public String `[`fname`](#classMe_1a756f0b6b2b2b5f2439d1afe17e9d23ca) | The full name of an item.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`quality`](#classMe_1ace5f9a9c6a8139fbe30ca258e2f1bdc5) | The item quality.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`node`](#classMe_1a71440306ac4fa9414da959b615f24200) | No clue.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`node`](#classMe_1a71440306ac4fa9414da959b615f24200) | Which kind of inventory grid holds the item.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`location`](#classMe_1a8932e926ae2bd373885fd45b2ef78907) | The location of the item (ground, inventory, stash, etc.).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`sizex`](#classMe_1a2a1356d1bb2c3fdbda515446a06b626f) | The x size of the item.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`sizey`](#classMe_1ad5a059256862e2a27e4473f299c1c2a0) | The y size of the item.
@@ -3369,21 +3549,21 @@ Technically, also called [Unit](#classUnit), but since C++ doesn't support class
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`fps`](#classMe_1a26cbb5b87c79ba3d8fd43e56cce260c7) | The frame rate.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`playertype`](#classMe_1a8cf7291feb3bc8ebeb35dd5baf373427) | Whether or not the gametype is hardcore.
 `public String `[`realm`](#classMe_1a9d5e5a2fec0a033316b6d49073b961d5) | The realm name.
-`public String `[`realmshort`](#classMe_1aa8bdeb8ae3ba0db767a64f84ba489094) | The short realm name.
+`public String `[`realmshort`](#classMe_1aa8bdeb8ae3ba0db767a64f84ba489094) | The realm name, normally the same value as me.realm.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`mercrevivecost`](#classMe_1a913adbc2fce146ef6c9f5268a76ebfc5) | The cost to revive the merc.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`chickenhp`](#classMe_1a215c51bfd214de4bff2eeefdc5ecd5ab) | The health at or below which to chicken, outside town; 0 turns it off.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`chickenmp`](#classMe_1a7e95aede9d9b33b217e2c74b0aed9865) | The mana at or below which to chicken, outside town; 0 turns it off.
 `public bool `[`quitonhostile`](#classMe_1a2b52680cdbc8a340cf1b83a11f288e9a) | Whether to chicken if another player hostiles the controlled character.
-`public bool `[`blockKeys`](#classMe_1a32b0fe4966c613767100bca03d4cff54) | Block keys...
-`public bool `[`blockMouse`](#classMe_1aa9360f70984b69d889ca7744a977d031) | Block mouse...
+`public bool `[`blockKeys`](#classMe_1a32b0fe4966c613767100bca03d4cff54) | Whether keyboard input to the game window is blocked.
+`public bool `[`blockMouse`](#classMe_1aa9360f70984b69d889ca7744a977d031) | Whether mouse input to the game window is blocked.
 `public bool `[`gameReady`](#classMe_1adbf3d1e8b502d34c5f6895bb2c40f1d8) | Whether or not the game window is in the game.
 `public String `[`profile`](#classMe_1a5321127db8f2c6ca21d1428fd753157d) | The profile currently being used.
 `public bool `[`nopickup`](#classMe_1a0a3973ed5dae29cbfe95dc7745646004) | Whether the game is set to not pick up items or not.
 `public double `[`pid`](#classMe_1ad10c9c74976842a1f9634410ad833744) | The process id of Diablo II.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`screensize`](#classMe_1acf69e064892375059446599a1494fea6) | The window size.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`screensize`](#classMe_1acf69e064892375059446599a1494fea6) | The game's resolution mode.
 `public String `[`windowtitle`](#classMe_1ae1fb424ddea108a0894dddafae0febbd) | The window title.
 `public bool `[`ingame`](#classMe_1a92d8763c52f3ac2ec1d680bd026e2404) | True if the game is not at menu.
-`public bool `[`quitonerror`](#classMe_1a57806876c33f36d3bcc1ca4599fe60be) | Whether or not to quit when there's an error.
+`public bool `[`quitonerror`](#classMe_1a57806876c33f36d3bcc1ca4599fe60be) | Whether a script error makes the client leave the current game.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`maxgametime`](#classMe_1ad4f57667eb1a3bd8e45288c9f3fe923a) | The max time in milliseconds to stay in game before the game auto-quits.
 `public bool `[`getNext`](#classMe_1ac38694e80aec8caa323c50785816bcbd)`()` | Get the next unit that matches the originally given name or class id and originally specified mode.
 `public bool `[`getNext`](#classMe_1a978176a65b1a7d182cee4fb9384cb626)`(String szName)` | Get the next unit that matches the given name and originally specified mode.
@@ -3403,20 +3583,16 @@ Technically, also called [Unit](#classUnit), but since C++ doesn't support class
 `public String `[`getSkill`](#classMe_1a449dad9a671272e94c7df7ab07277043)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` | Get skill name from hand.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classMe_1a482e347e3d2131af87a6aca7019bf4fd)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` | Get skill id from hand.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classMe_1a68d6118cef94eb973cfa1591ea890e3f)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dummy)` | Get all skills.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classMe_1a8319dc883867a8e9f6cc101ecbee0aa5)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nExt)` | Calls D2COMMON_GetSkillLevel and returns the result.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classMe_1a8319dc883867a8e9f6cc101ecbee0aa5)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nExt)` | Get the base or total level of a skill.
 `public `[`Unit`](#classUnit)` `[`getParent`](#classMe_1a211afa5299fc94407dc2a6d78ebadd8c)`()` | Gets the parent of a unit.
 `public String `[`getParent`](#classMe_1a4019ee0bef41f98dd4170a205de08cd7)`()` | Gets the parent of a unit.
 `public void `[`overhead`](#classMe_1a6f5c4067c0304c88ab5105b93e787f7d)`(Object message)` | Puts the string equivalent of message over the unit.
 `public void `[`revive`](#classMe_1a7e53744fc9cd8233451fa8562e4ce7e9)`()` | Revive the character.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getFlags`](#classMe_1a2901a55f39537ba49f5c90cfb8efe1a3)`()` | Returns the item flags.
 `public double `[`getStat`](#classMe_1a1d7999f11e2a07f70dc69432b06ba782)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get a stat by stat id and sub index.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classMe_1a95d5d3cf98c32092985203abcadb172d)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get a stat by stat id and sub index.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classMe_1a34c73953d580d9eae5a32d67d26a7ea0)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get an array of all the stats of the item.
-`public bool `[`getState`](#classMe_1a6a8f7eed0b6808691957c24f79f8e111)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nState)` | TODO: Handle getStat(-2);.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classMe_1ab11bd84870974d2573c76661841b4584)`(`[`Unit`](#classUnit)` npc,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell)` | Get the price of the item at a given npc, with choice of buying or selling, in the current difficulty.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classMe_1a3d5496648a0727819638f23c7a4eb271)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` npcId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell)` | Get the price of the item at a given npc (by id), which choice of buying or selling, in the current difficulty.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classMe_1a5242237cafb7693f78ac1f3e250fd113)`(`[`Unit`](#classUnit)` npc,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` difficulty)` | Get the price of the item at a given npc, with choice of buying or selling, in a given difficulty.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classMe_1ae9a1131724c2be79d5b23fb695594774)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` npcId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` difficulty)` | Get the price of the item at a given npc (by id), with choice of buying or selling, in a given difficulty.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classMe_1a34c73953d580d9eae5a32d67d26a7ea0)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get an array of the unit's listed stats.
+`public Object[] `[`getStat`](#classMe_1getStat_byId)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get the unit's stats as an array indexed by stat id.
+`public bool `[`getState`](#classMe_1a6a8f7eed0b6808691957c24f79f8e111)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nState)` | Return whether or not the unit has a given state.
 `public bool `[`getEnchant`](#classMe_1a2b35f9abde10c9fe6ba08b6e2c31ee3c)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nEnchant)` | Determine whether or not a unit has a given enchant.
 `public bool `[`shop`](#classMe_1a3469ed7606e573d7e09e197999ae494e)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dwMode)` | Shop with a given npc, either buying or selling.
 `public bool `[`setSkill`](#classMe_1aa6e655c613c557c0ef44cfb8ad536cde)`(String skillName,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand)` | Set the skill on the given hand to be skill with name skillName.
@@ -3511,6 +3687,10 @@ Where the game is taking the unit.
 
 The id of the area (level) the unit is located in.
 
+The value is the Id column of Levels.txt, for example 1 = Rogue Encampment, 108 = The Chaos Sanctuary (Chaos Sanctum in Levels.txt), 109 = Harrogath. See [Area ids](#area-ids) in the reference tables.
+
+Undefined when the game has no room for the unit.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`hp`](#classMe_1ada4675cf13005bce0c1562c903dc44c5) 
 
 The unit's current health.
@@ -3565,9 +3745,13 @@ Represents things like unique, minion, boss, etc.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`direction`](#classMe_1a6ee239b2452d3c06e33de7e1725be36a) 
 
-The direction of the unit.
+The direction the unit is facing, from 0 to 63.
 
-> Todo: Figure out what the direction is.
+0 faces straight down the screen and the value increases clockwise: 16 faces left (west), 32 up (north) and 48 right (east). 8, 24, 40 and 56 lie between them along the game's map axes (down-left, up-left, up-right and down-right).
+
+A player or monster turns a step at a time, so while it turns this value can trail the direction it is moving in.
+
+Undefined when the unit has no path or its path is not in a room. For objects and items the value is currently not their facing: it can be undefined or an arbitrary number.
 
 #### `public String `[`code`](#classMe_1aa90bcab94a360d2e8380323d8b4640cf) 
 
@@ -3619,9 +3803,21 @@ Source: botNET
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`node`](#classMe_1a71440306ac4fa9414da959b615f24200) 
 
-No clue.
+Which kind of inventory grid holds the item.
 
-> Todo: Get a clue.
+0 - Not in any inventory grid (on the ground or on the cursor)
+
+1 - A storage page (inventory, cube, stash, trade or shop)
+
+2 - The belt
+
+3 - Equipped (body locations 1-10)
+
+4 - Equipped in a weapon-switch slot (body locations 11 and 12)
+
+Use location to tell storage pages apart. An item linked into an inventory without a grid cell also reads 1, so node 1 alone does not prove the item sits on a storage page.
+
+Undefined for units that are not items, so me.node is always undefined.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`location`](#classMe_1a8932e926ae2bd373885fd45b2ef78907) 
 
@@ -3655,7 +3851,9 @@ The y size of the item.
 
 The type of the item.
 
-> Todo: Put together a reference for item type.
+The base item's primary type: its row index in ItemTypes.txt, counting data rows from 0 and skipping the "Expansion" separator row (for example 2 = shield, 4 = gold, 10 = ring, 12 = amulet, 58 = jewel, 74 = rune). Class-specific bases report their own type, so an auric shield is not 2. See [Item types](#item-types) in the reference tables.
+
+Undefined for units that are not items, so me.itemType is always undefined.
 
 #### `public String `[`description`](#classMe_1a52e690a6c8b7786a7bc56f400a96c4f4) 
 
@@ -3753,7 +3951,11 @@ For a game D2BS was loaded into, it is when D2BS first saw that game; before the
 
 The game type, expansion or not.
 
-> Todo: Determine what the values are.
+0 - Classic
+
+1 - Expansion (Lord of Destruction)
+
+It reads 0 at the menus, early while a game loads and while a game is left; it can take its real value shortly before gameReady turns true, so read it once gameReady is true. Read-only.
 
 #### `public bool `[`itemoncursor`](#classMe_1abd16276ae4f171422e7185fdc3bb49cc) 
 
@@ -3781,9 +3983,9 @@ The realm name.
 
 #### `public String `[`realmshort`](#classMe_1aa8bdeb8ae3ba0db767a64f84ba489094) 
 
-The short realm name.
+The realm name, normally the same value as me.realm.
 
-> Todo: Determine the difference between this and realm.
+It is not an abbreviation: it holds the name of the Battle.net realm the client logged in to, for example "Europe". Empty in single player and TCP/IP; undefined if the client has no Battle.net data. Read-only.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`mercrevivecost`](#classMe_1a913adbc2fce146ef6c9f5268a76ebfc5) 
 
@@ -3803,15 +4005,15 @@ Whether to chicken if another player hostiles the controlled character.
 
 #### `public bool `[`blockKeys`](#classMe_1a32b0fe4966c613767100bca03d4cff54) 
 
-Block keys...
+Whether keyboard input to the game window is blocked.
 
-> Todo: Determine what this means.
+While true, keyboard input to the game window is discarded before it reaches the game, the D2BS console (including the Home key) or keydown/keyup event listeners. Alt+F4 still works. Keystrokes sent with sendKey() still reach the game. Defaults to false and is shared by all scripts. Only true or false is accepted, so other values are ignored. login() sets it to true while it runs and to false when it returns, whatever a script set before.
 
 #### `public bool `[`blockMouse`](#classMe_1aa9360f70984b69d889ca7744a977d031) 
 
-Block mouse...
+Whether mouse input to the game window is blocked.
 
-> Todo: Determine what this means.
+While true, mouse input to the game window is discarded before the game handles it, and no mouse click/move events or screen-hook clicks are delivered; getMouseCoords() does not follow the real cursor meanwhile. Clicks on the title bar (and the left or top border) still pass through. Defaults to false and is shared by all scripts. Only true or false is accepted, so other values are ignored. login() sets it to true while it runs and to false when it returns, whatever a script set before.
 
 #### `public bool `[`gameReady`](#classMe_1adbf3d1e8b502d34c5f6895bb2c40f1d8) 
 
@@ -3831,9 +4033,17 @@ The process id of Diablo II.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`screensize`](#classMe_1acf69e064892375059446599a1494fea6) 
 
-The window size.
+The game's resolution mode.
 
-> Todo: Determine what the numbers mean.
+A mode number, not a pixel size:
+
+0 - 640x480 (in a game)
+
+1 - 800x600 (at the out-of-game menus)
+
+2 - 800x600 (in a game)
+
+The game also maps 3 to 1344x700, but nothing in stock 1.14d is known to set it. Compare against 0 to detect 640x480 in a game; at the menus it reads 1, so a test for 2 there fails. Read-only.
 
 #### `public String `[`windowtitle`](#classMe_1ae1fb424ddea108a0894dddafae0febbd) 
 
@@ -3843,13 +4053,13 @@ The window title.
 
 True if the game is not at menu.
 
-> Todo: Determine when this is different from gameReady. Maybe when going between acts for instance.
+Unlike gameReady, it is also true while a game is loading, during act changes and on the loading screens between the menus and a game. Use gameReady to know the game can be acted on. Read-only.
 
 #### `public bool `[`quitonerror`](#classMe_1a57806876c33f36d3bcc1ca4599fe60be) 
 
-Whether or not to quit when there's an error.
+Whether a script error makes the client leave the current game.
 
-> Todo: Figure out if this means js errors.
+When true, any script error (an uncaught exception or a compile error, not a warning) in any script, the console included, makes the client leave the current game and return to the menus; the in-game scripts end with the game as on any game exit. The error is still logged and printed. It has no effect at the menus or while the game is loading. The process keeps running. The default comes from QuitOnError in d2bs.ini (false if absent; a value starting with t, T or 1 is true). Only true or false is accepted, so other values such as 1 are ignored.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`maxgametime`](#classMe_1ad4f57667eb1a3bd8e45288c9f3fe923a) 
 
@@ -3937,7 +4147,7 @@ true if menu was found.
 
 Interact with the unit.
 
-If the unit is an item in inventory pick it up. Otherwise click it on the map.
+If the unit is an item in your inventory or stash, the call uses it as a right-click does: a potion is drunk, a town portal tome or scroll opens a portal outside town, and an identify tome or scroll gives the identify cursor. An item in the belt is used the same way. Either use returns false, whether or not the game acts on it. Any other unit, an item anywhere else included, gets a left-button-down click on its map position that targets it, the same kind of click clickMap(0, 0, unit) makes, and the call returns true. Called on your own character, or on a unit that has left the game, it does nothing and returns false. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public bool `[`interact`](#classMe_1a4742f918ff80aa898da57756b1a95fbd)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` destId)` 
 
@@ -3990,7 +4200,7 @@ Get a player's merc.
 The unit being operated on should be a player.
 
 #### Returns
-The merc if there is one, null otherwise.
+The merc unit, or null when none is found (the merc must be in a room the client has loaded) or the unit is not a player. Any argument is ignored: getMerc(true) returns the same unit or null, so test the result for truthiness. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getMercHP`](#classMe_1a8b9d83bd2cc1d39c89c47c2f3d97f398)`()` 
 
@@ -4013,7 +4223,7 @@ Get skill name from hand.
 1 - Left hand
 
 #### Returns
-Skill name.
+The skill's in-game name in the client's language. It is not always a name setSkill() accepts; getSkill(2) and getSkill(3) give the ids. Returns false when the unit has left the game.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classMe_1a482e347e3d2131af87a6aca7019bf4fd)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` 
 
@@ -4039,16 +4249,23 @@ Gets all skill ids, along with corresponding base and total skill levels.
 * `dummy` Should be 4.
 
 #### Returns
-An array of arrays of integers. Inside the inner array the 0th index is the skill id, the 1st index is the base skill level and the 2nd index is the total skill level. Only the first 256 skills are read.
+An array of arrays of integers. Inside the inner array the 0th index is the skill id, the 1st index is the base skill level and the 2nd index is the total skill level.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classMe_1a8319dc883867a8e9f6cc101ecbee0aa5)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nExt)` 
 
-Calls D2COMMON_GetSkillLevel and returns the result.
+Get the base or total level of a skill.
 
-> Todo: Figure out what D2COMMON_GetSkillLevel does.
+With two arguments, only the unit's own (non-charged) entry for the skill is read. The total adds the bonuses the game applies to that skill: +all skills, +class skills, +skill tab, +single skill, +elemental skills, oskills and temporary bonuses such as the Skill shrine. Oskills add at most 3 to a player's own class skills. Skills that come from item charges get no bonuses. The result, base or total, is never below 0 and never above 99.
+
+Pass a boolean third argument to choose the entry: true reads the skill from an item with charges (the charge level), false reads the first entry with that id, charged or not.
+
+#### Parameters
+* `nSkillId` The skill id. See [Skill ids](#skill-ids) in the reference tables.
+
+* `nExt` 0 for the base level (the hard points put into the skill), any other integer (usually 1) for the total level.
 
 #### Returns
-Whatever D2COMMON_GetSkillLevel returns.
+The skill level. Returns false when the unit does not have the skill, when nSkillId or nExt is not an integer, when a third argument is passed that is not a boolean, or when the unit has left the game. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public `[`Unit`](#classUnit)` `[`getParent`](#classMe_1a211afa5299fc94407dc2a6d78ebadd8c)`()` 
 
@@ -4127,33 +4344,21 @@ Source: [http://subversion.assembla.com/svn/d2bs/scripts/YAMB/libs/YAMB/common/Y
 
 Get a stat by stat id and sub index.
 
-Used for every stat except 6-11.
+Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. On an item, stat 92 returns the item's level requirement for your character (the same value as the itemlevelreq property) and ignores nSubIndex. On any other unit, your own character included, stat 92 does not read a stat: the game's item level-requirement calculation runs on that unit and returns a number with no fixed meaning. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
 
 #### Parameters
-* `nStat` The stat type. See [http://forums.d2botnet.org/viewtopic.php?f=18&t=989](http://forums.d2botnet.org/viewtopic.php?f=18&t=989)
+* `nStat` The stat id (the ID column of ItemStatCost.txt).
 
-* `nSubIndex` A subindex to a certain type of stat. For instance a specific skill for the +1 to skill tab stat.
-
-#### Returns
-The stat value.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classMe_1a95d5d3cf98c32092985203abcadb172d)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` 
-
-Get a stat by stat id and sub index.
-
-Used for stats 6-11.
-
-#### Parameters
-* `nStat` The stat type. See [http://forums.d2botnet.org/viewtopic.php?f=18&t=989](http://forums.d2botnet.org/viewtopic.php?f=18&t=989)
-
-* `nSubIndex` A subindex to a certain type of stat. For instance a specific skill for the +1 to skill tab stat.
+* `nSubIndex` A subindex to a certain type of stat. For instance a specific skill for the +1 to skill tab stat. Defaults to 0.
 
 #### Returns
-The stat value.
+The stat value. Returns false when no stat id is passed or the unit has left the game. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classMe_1a34c73953d580d9eae5a32d67d26a7ea0)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` 
 
-Get an array of all the stats of the item.
+Get an array of the unit's listed stats.
+
+The array holds the entries of the unit's stat list plus any of the unit's base stats not already in it. It is not every stat the unit has. Values are raw: life, mana and stamina are in 1/256 points, and values of 2^31 and above (such as high experience) come back negative.
 
 #### Parameters
 * `nStat` Set to -1.
@@ -4161,89 +4366,37 @@ Get an array of all the stats of the item.
 * `nSubIndex` Ignored.
 
 #### Returns
-An array of the first 64 stats. The indices of the inner array are: 0 - nStat, 1 - nSubIndex, 2 - nValue.
+An array of arrays. The indices of the inner array are: 0 - stat id, 1 - subindex, 2 - value. Returns false when the unit has no such stat list, even if it has base stats. Outside a ready game it returns false (with a 'Game not ready' warning).
+
+#### `public Object[] `[`getStat`](#classMe_1getStat_byId)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` 
+
+Get the unit's stats as an array indexed by stat id.
+
+Each element is an array indexed by subindex that holds the value, with life, mana and stamina (stats 6-11) in whole points. Other values are raw, so values of 2^31 and above (such as high experience) come back negative. The values come from the unit's base stats, its stat totals (the values the single-stat form reads) and the stat list that getStat(-1) reads, in that order; where more than one holds the same stat and subindex, the last one wins, so a value here is not always the one the single-stat form returns.
+
+A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, for skill ids 8 and up; lower skill ids come back as ordinary entries. A charged skill also gets charges and maxcharges, except on an item with a maximum of 1 charge, or of 2 charges with none left. When the same stat id occurs more than once, the element is an array of such objects. On many items each skill-carrying entry is returned twice (a single skill gives an array of two identical objects); on other items and on a player each comes back once. So check an element with Array.isArray and allow for duplicate objects. Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
+
+#### Parameters
+* `nStat` Set to -2.
+
+* `nSubIndex` Ignored.
+
+#### Returns
+A sparse array indexed by stat id. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public bool `[`getState`](#classMe_1a6a8f7eed0b6808691957c24f79f8e111)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nState)` 
 
-TODO: Handle getStat(-2);.
-
 Return whether or not the unit has a given state.
 
-#### Parameters
-* `nState` The state id.
+Objects, items and tiles always return false: the game's state check answers false for them.
 
-Throws "Invalid arguments" if no state id is passed.
+#### Parameters
+* `nState` The state id: the id column of States.txt, 0-183. State 184 (uberminion) exists in 1.14d but getState rejects it and returns false.
+
+Throws "Invalid arguments" if no state id is passed. Returns false when the unit has left the game, or when nState is not an integer or is out of range. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### Returns
 Whether or not the unit has the state.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classMe_1ab11bd84870974d2573c76661841b4584)`(`[`Unit`](#classUnit)` npc,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell)` 
-
-Get the price of the item at a given npc, with choice of buying or selling, in the current difficulty.
-
-> Deprecated: Use getItemCost instead.
-
-> Todo: Determine the meaning of "buysell".
-
-#### Parameters
-* `npc` The npc to determine the price at.
-
-* `buysell` Unknown
-
-#### Returns
-The price requested.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classMe_1a3d5496648a0727819638f23c7a4eb271)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` npcId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell)` 
-
-Get the price of the item at a given npc (by id), which choice of buying or selling, in the current difficulty.
-
-> Deprecated: Use getItemCost instead.
-
-> Todo: Determine the meaning of "buysell".
-
-#### Parameters
-* `npcId` The id of the npc to determine the price at.
-
-* `buysell` Unknown
-
-#### Returns
-The price requested.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classMe_1a5242237cafb7693f78ac1f3e250fd113)`(`[`Unit`](#classUnit)` npc,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` difficulty)` 
-
-Get the price of the item at a given npc, with choice of buying or selling, in a given difficulty.
-
-> Deprecated: Use getItemCost instead.
-
-> Todo: Determine the meaning of "buysell".
-
-#### Parameters
-* `npc` The npc to determine the price at.
-
-* `buysell` Unknown
-
-* `difficulty` The difficulty of interest: 0 - normal, 1 - nightmare, 2 - hell
-
-#### Returns
-The price requested.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classMe_1ae9a1131724c2be79d5b23fb695594774)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` npcId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` difficulty)` 
-
-Get the price of the item at a given npc (by id), with choice of buying or selling, in a given difficulty.
-
-> Deprecated: Use getItemCost instead.
-
-> Todo: Determine the meaning of "buysell".
-
-#### Parameters
-* `npcId` The id of the npc to determine the price at.
-
-* `buysell` Unknown
-
-* `difficulty` The difficulty of interest: 0 - normal, 1 - nightmare, 2 - hell
-
-#### Returns
-The price requested.
 
 #### `public bool `[`getEnchant`](#classMe_1a2b35f9abde10c9fe6ba08b6e2c31ee3c)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nEnchant)` 
 
@@ -4269,69 +4422,65 @@ Whether or not the shop went through.
 
 Set the skill on the given hand to be skill with name skillName.
 
-Waits up to one second for the skill to be set.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
-> Todo: Fix argc < 1, should be argc < 2
+The name is matched case-insensitively against D2BS's built-in English skill-name table, not the game's localized strings. "Shadow Master" and "Phoenix Strike" are not recognized by name; pass their ids (279 and 280) instead.
 
 #### Parameters
 * `skillName` Name of the skill to put up.
 
-* `nHand` Hand to put the skill on. non-zero left, 0 - right.
+* `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
 #### Returns
-Whether operation was successful.
+true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classMe_1aa8850569751822ba3088f40bfd94584a)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand)` 
 
 Set the skill on the given hand to be skill with id nSkillId.
 
-Waits up to one second for the skill to be set.
-
-> Todo: Fix argc < 1, should be argc < 2
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 #### Parameters
-* `nSkillId` Id of the skill to put up.
+* `nSkillId` Id of the skill to put up. See [Skill ids](#skill-ids) in the reference tables.
 
-* `nHand` Hand to put the skill on. non-zero left, 0 - right.
+* `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
 #### Returns
-Whether operation was successful.
+true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classMe_1af20eafc6d55f4dabcba4fdcf7f8bae40)`(String skillName,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` 
 
 Set the skill on the given hand to be skill with name skillName.
 
-Waits up to one second for the skill to be set.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
-> Todo: Fix argc < 1, should be argc < 2
+The name is matched case-insensitively against D2BS's built-in English skill-name table, not the game's localized strings. "Shadow Master" and "Phoenix Strike" are not recognized by name; pass their ids (279 and 280) instead.
 
 #### Parameters
 * `skillName` Name of the skill to put up.
 
-* `nHand` Hand to put the skill on. non-zero left, 0 - right.
+* `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
-* `item` The item that the skill is attached to.
+* `item` An item unit: the hand gets that item's charged skill. A third argument that is not an item unit is ignored, and the skill is set as a normal skill. The item is not checked to be yours.
 
 #### Returns
-Whether operation was successful.
+true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classMe_1a10a595cd98b1bb7fcc54bfebdd61ac6c)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` 
 
 Set the skill on the given hand to be skill with id nSkillId.
 
-Waits up to one second for the skill to be set.
-
-> Todo: Fix argc < 1, should be argc < 2
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 #### Parameters
-* `nSkillId` Id of the skill to put up.
+* `nSkillId` Id of the skill to put up. See [Skill ids](#skill-ids) in the reference tables.
 
-* `nHand` Hand to put the skill on. non-zero left, 0 - right.
+* `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
-* `item` The item that the skill is attached to.
+* `item` An item unit: the hand gets that item's charged skill. A third argument that is not an item unit is ignored, and the skill is set as a normal skill. The item is not checked to be yours.
 
 #### Returns
-Whether operation was successful.
+true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public void `[`move`](#classMe_1a497c1507b060c2fcbdf79fcb7263ebdd)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y)` 
 
@@ -4446,9 +4595,9 @@ A [Party](#classParty) object follows its player and reads the current values on
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classParty_1a7b27f3dc2f2cf8428bcf88369f974644) | The y coordinate of the location of the RosterUnit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`area`](#classParty_1a673a0ec1ad99bdc49b0cab8fed947876) | The [Area](#classArea) ID of the RosterUnit.
 `public double `[`gid`](#classParty_1a00ed094a817469dfb8cbdebabcdd95a7) | The unique id of the RosterUnit.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`life`](#classParty_1a61a88341743f372a3b9556e528c7403c) | The life of the RosterUnit.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`partyflag`](#classParty_1aed25455e977af2f00d59dc34bae5adab) | The [Party](#classParty) flags of the RosterUnit.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`partyid`](#classParty_1abc7e22a4373225cef75b49598ae4ef10) | The [Party](#classParty) ID.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`life`](#classParty_1a61a88341743f372a3b9556e528c7403c) | The life of the RosterUnit as a percentage of its maximum life, 0 to 100.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`partyflag`](#classParty_1aed25455e977af2f00d59dc34bae5adab) | The state of the party button for this player, as your character sees it.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`partyid`](#classParty_1abc7e22a4373225cef75b49598ae4ef10) | The id of the party this player belongs to, or 65535 when they are in no party.
 `public String `[`name`](#classParty_1a82db2ed7f8d2d3e5ed7dfb1210098d57) | The name of the RosterUnit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`classid`](#classParty_1ac5ec74e94715df07ca680b1247074627) | The class ID of the RosterUnit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`level`](#classParty_1ad32c6abaa6e2f25660b7e00a12f1c7a4) | The character level of the RosterUnit.
@@ -4474,21 +4623,32 @@ The unique id of the RosterUnit.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`life`](#classParty_1a61a88341743f372a3b9556e528c7403c) 
 
-The life of the RosterUnit.
+The life of the RosterUnit as a percentage of its maximum life, 0 to 100.
 
-> Todo: Determine how one is to get the maximum life of the RosterUnit.
+It is kept current only for members of your party; for other players it can be stale, and your own entry is not reliable either. The roster holds neither the player's absolute life nor their maximum life, so there is no maximum-life field. For your own character, use me.hp and me.hpmax.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`partyflag`](#classParty_1aed25455e977af2f00d59dc34bae5adab) 
 
-The [Party](#classParty) flags of the RosterUnit.
+The state of the party button for this player, as your character sees it.
 
-> Todo: Determine the values that this can take on.
+The value is a single state, not a set of bits:
+
+| Value | Meaning |
+|---|---|
+| 0 | The player is in no party and has no pending invite: clickParty(party, 2) invites them |
+| 1 | The player is already in a party (yours or another; compare partyid to tell which); your own entry also reads 1. clickParty(party, 2) returns false without acting |
+| 2 | The player has invited you: clickParty(party, 2) accepts and you join |
+| 4 | You have invited the player and they have not answered: clickParty(party, 2) cancels the invite |
+
+The game's client also accepts 3 (clicking acts like accepting an invite); 1.14d's own server never sends it, and whether a Battle.net realm does is unknown.
+
+clickParty(party, 2) also returns false for your own entry and for a member of your own party.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`partyid`](#classParty_1abc7e22a4373225cef75b49598ae4ef10) 
 
-The [Party](#classParty) ID.
+The id of the party this player belongs to, or 65535 when they are in no party.
 
-> Todo: Determine what a [Party](#classParty) ID is.
+The game numbers each party; two players are in the same party exactly when their partyid values are equal and not 65535. To list your party, compare each entry's partyid with your own (getParty(me).partyid). Your own entry reads 65535 as soon as you leave a party.
 
 #### `public String `[`name`](#classParty_1a82db2ed7f8d2d3e5ed7dfb1210098d57) 
 
@@ -4504,8 +4664,6 @@ See Unit::classId.
 
 The character level of the RosterUnit.
 
-> Todo: Verify that this level is the character level.
-
 #### `public `[`Party`](#classParty)` `[`getNext`](#classParty_1a1f0c9289dac815268bc3662a477aa397)`()` 
 
 Move to the next RosterUnit.
@@ -4517,17 +4675,17 @@ This object, now on the next player; or false at the end of the list, or when th
 
 Represents a [PresetUnit](#classPresetUnit) (a type of [Unit](#classUnit) that is available as soon as the [Area](#classArea) data is available).
 
-> Todo: Determine how location is determine based off roomx, roomy, x, and y.
+A preset unit's position is stored relative to its room. Its game map coordinates are x: roomx * 5 + x and y: roomy * 5 + y. roomx and roomy are the room's position in room tiles (5 map units each, the same values as [Room::x](#classRoom_1a7e5d5a363ed3c93efc6b1c321f0ec957) and [Room::y](#classRoom_1a8bfbccf2843aab2175743f8d9b5ffe48)), and x and y are the unit's offset in map units from the room's top-left (minimum x and y) corner.
 
 ## Summary
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`type`](#classPresetUnit_1aeb44ea9243dc41da4cfa2796ae14e276) | The type ID.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`roomx`](#classPresetUnit_1ad3178939e97c6a2bcadff92ee6e8dbba) | The room X (?).
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`roomy`](#classPresetUnit_1a661012095ec30341597c37e437bc60b0) | The room Y (?).
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classPresetUnit_1a52f264129d70ba87ae8e7de714264994) | The X coordinate (?).
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classPresetUnit_1a6d875aeb1be7022712bcba59ba256733) | The Y coordinate (?).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`roomx`](#classPresetUnit_1ad3178939e97c6a2bcadff92ee6e8dbba) | The X position of the room the [PresetUnit](#classPresetUnit) is in, in room tiles of 5 map units (the same value as [Room::x](#classRoom_1a7e5d5a363ed3c93efc6b1c321f0ec957)).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`roomy`](#classPresetUnit_1a661012095ec30341597c37e437bc60b0) | The Y position of the room the [PresetUnit](#classPresetUnit) is in, in room tiles of 5 map units (the same value as [Room::y](#classRoom_1a8bfbccf2843aab2175743f8d9b5ffe48)).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classPresetUnit_1a52f264129d70ba87ae8e7de714264994) | The X offset in map units from the room's corner.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classPresetUnit_1a6d875aeb1be7022712bcba59ba256733) | The Y offset in map units from the room's corner.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`id`](#classPresetUnit_1af1a516a03965b9e23cf2a4ab77bf4f62) | The unique ID of the [PresetUnit](#classPresetUnit).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`level`](#classPresetUnit_1aa3ae3f2724bf489f6341dc905537623f) | The [Area](#classArea) ID of the [Area](#classArea) the [PresetUnit](#classPresetUnit) is in.
 
@@ -4541,19 +4699,23 @@ See [Unit::type](#classUnit_1a45243122ae655f50179f96bc831bfb1d).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`roomx`](#classPresetUnit_1ad3178939e97c6a2bcadff92ee6e8dbba) 
 
-The room X (?).
+The X position of the room the [PresetUnit](#classPresetUnit) is in, in room tiles of 5 map units (the same value as [Room::x](#classRoom_1a7e5d5a363ed3c93efc6b1c321f0ec957)).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`roomy`](#classPresetUnit_1a661012095ec30341597c37e437bc60b0) 
 
-The room Y (?).
+The Y position of the room the [PresetUnit](#classPresetUnit) is in, in room tiles of 5 map units (the same value as [Room::y](#classRoom_1a8bfbccf2843aab2175743f8d9b5ffe48)).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classPresetUnit_1a52f264129d70ba87ae8e7de714264994) 
 
-The X coordinate (?).
+The X offset in map units from the room's corner.
+
+Add roomx * 5 for the map X coordinate.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classPresetUnit_1a6d875aeb1be7022712bcba59ba256733) 
 
-The Y coordinate (?).
+The Y offset in map units from the room's corner.
+
+Add roomy * 5 for the map Y coordinate.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`id`](#classPresetUnit_1af1a516a03965b9e23cf2a4ab77bf4f62) 
 
@@ -4686,7 +4848,7 @@ A [Room](#classRoom) keeps its area, position and size, so its properties keep t
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`number`](#classRoom_1ace0776823076279027a43e37096f44a2) | Get the [Room](#classRoom) number.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`number`](#classRoom_1ace0776823076279027a43e37096f44a2) | The LvlPrest.txt row (Def column) of the preset map the [Room](#classRoom) was built from.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classRoom_1a7e5d5a363ed3c93efc6b1c321f0ec957) | Get the x coordinate of the [Room](#classRoom).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classRoom_1a8bfbccf2843aab2175743f8d9b5ffe48) | Get the y coordinate of the [Room](#classRoom).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`xsize`](#classRoom_1a7c90b0e176a112beb7e8dcc808576e8b) | Get the x size (width) of the [Room](#classRoom).
@@ -4694,7 +4856,7 @@ A [Room](#classRoom) keeps its area, position and size, so its properties keep t
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`subnumber`](#classRoom_1adf03f03ffb94895c18f291a325e51fb2) | No implementation.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`area`](#classRoom_1a0e12c557e6658e021fc94dfe950ace67) | Get the [Area](#classArea) ID for the area which the [Room](#classRoom) is in.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`level`](#classRoom_1a5d8cf5f2d71723e3244654603a5ae84f) | Get the [Area](#classArea) ID for the area which the [Room](#classRoom) is in.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`correcttomb`](#classRoom_1af1e1126e1534f1653ce6b5fcd77026a4) | Get the correct tomb.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`correcttomb`](#classRoom_1af1e1126e1534f1653ce6b5fcd77026a4) | The [Area](#classArea) ID (66 to 72) of the true Tal Rasha's Tomb in the current game, the one with the Orifice leading to Tal Rasha's Chamber (area 73).
 `public bool `[`getNext`](#classRoom_1a3dc890fc3d954ae8bd4c6da5721ed0ac)`()` | Move to the next [Room](#classRoom).
 `public bool `[`reveal`](#classRoom_1a8b1a054e31adb584622cafc321e9e064)`()` | Reveal the [Room](#classRoom) on the map.
 `public `[`PresetUnit`](#classPresetUnit)` `[`getPresetUnits`](#classRoom_1a0ddb9c16273a4e9d11365b9f927e74aa)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nType,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nClass)` | Get the [PresetUnit](#classPresetUnit) s from the current [Room](#classRoom).
@@ -4708,9 +4870,9 @@ A [Room](#classRoom) keeps its area, position and size, so its properties keep t
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`number`](#classRoom_1ace0776823076279027a43e37096f44a2) 
 
-Get the [Room](#classRoom) number.
+The LvlPrest.txt row (Def column) of the preset map the [Room](#classRoom) was built from.
 
-> Todo: Determine what a "room number" is.
+This includes the pieces of randomly generated dungeons and caves. A large preset map is cut into several rooms, which all read the same number. It is -1 for rooms of outdoor areas that were not built from a preset map; an outdoor area can also hold rooms built from a preset map, so not every room of an outdoor area reads -1.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classRoom_1a7e5d5a363ed3c93efc6b1c321f0ec957) 
 
@@ -4742,11 +4904,9 @@ Get the [Area](#classArea) ID for the area which the [Room](#classRoom) is in.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`correcttomb`](#classRoom_1af1e1126e1534f1653ce6b5fcd77026a4) 
 
-Get the correct tomb.
+The [Area](#classArea) ID (66 to 72) of the true Tal Rasha's Tomb in the current game, the one with the Orifice leading to Tal Rasha's Chamber (area 73).
 
-> Todo: Determine if this is the [Area](#classArea) ID of the correct tomb.
-
-> Todo: Determine what [Room](#classRoom) s this is valid on.
+The game picks it from the act's map seed, so every [Room](#classRoom) in Act II reads the same value. It is undefined on rooms in other acts. See [Area ids](#area-ids) in the reference tables.
 
 #### `public bool `[`getNext`](#classRoom_1a3dc890fc3d954ae8bd4c6da5721ed0ac)`()` 
 
@@ -4778,10 +4938,12 @@ An array of all the [PresetUnit](#classPresetUnit) s from the current [Room](#cl
 
 Get the collision data for the [Room](#classRoom).
 
-> Todo: Verify that the array does actually have reverse of usual dimensions.
+The array holds one entry per map row, each an array with one value per map column: result[dy][dx] is the subtile at map offset dx in x and dy in y from the room's corner (the corner with the smallest x and y). That is the subtile at map coordinates (x * 5 + dx, y * 5 + dy), where x and y are this Room's x and y. A room whose data is not loaded is loaded for the call and unloaded again.
+
+Each value is the game's 16-bit collision mask for that subtile, a set of flag bits. See [Collision flags](#collision-flags) in the reference tables for what each bit means and which ones getPath() treats as blocking.
 
 #### Returns
-An array with the collision data. The first dimension is the y coordinate, the second is the x coordinate.
+An array with the collision data. The first dimension is the y coordinate, the second is the x coordinate. Returns undefined when the game is not ready, when the room is no longer in your current act or game, or when it has no collision data.
 
 #### `public `[`Room`](#classRoom)` `[`getNearby`](#classRoom_1a43d7c3ae8cf396e9883e79c5d5a4b902)`()` 
 
@@ -4953,58 +5115,74 @@ true. Throws "Could not close database: " followed by SQLite's message when SQLi
 
 A [Text](#classText) screen hook.
 
-Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color`, `font` and `zorder` keep only the low 16 bits, so -1 reads back 65535.
+A [Text](#classText) draws a string with one of the game's fonts on the game screen or the automap. Create one with `new Text(text, x, y, color, font, align, automap, click, hover)`; every argument is optional (defaults "", 0, 0, 0, 0, 0, false, none, none). y is the bottom of the first line. Each `\n` in the text starts a new line above the previous one, so the first line is the bottom one and later lines stack upward. Color codes in the text (the character 0xFF, written `\xFF` in a script string, followed by `c` and a code character) change the color from that point on; see `color`. A [Text](#classText) made by an out-of-game script draws only at the menus; one made in game (or from the console) draws only in game. With `automap` true (a constructor argument only), x and y are game map coordinates (the units of unit.x and unit.y) and the [Text](#classText) is drawn only while the automap is open; only align 0 then puts the text on its map point, while 1 and 2 shift it sideways.
 
-> Todo: Verify all the documentation in this class.
+Hooks of every script and every hook class are drawn in ascending `zorder` (default 1), so a higher value draws on top. Set `visible` to hide or show the [Text](#classText), and call remove() to delete it. Keep a reference to every hook: one whose object is garbage-collected is removed. When the script that made a hook ends, its hooks leave the screen (with the default `DisableCache=true` in d2bs.ini; with `DisableCache=false` a script that ended normally keeps its hooks drawn, but not clickable, until the script cache is flushed).
+
+Number arguments and number properties take any finite number and drop its fraction (the same result as `value | 0` in script); any other value is ignored and the default or current value stays. `color`, `font` and `zorder` keep only the low 16 bits, so -1 reads back 65535. `automap` and `visible` take only true or false; any other value is ignored.
 
 ## Summary
 
  Members                        | Descriptions                                
 --------------------------------|---------------------------------------------
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classText_1a0561058ba47e899900800635dbe270c2) | The x coordinate (left) of the [Text](#classText).
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classText_1a90f1e6cb7aa15a593d36c96144087179) | The y coordinate (top) of the [Text](#classText).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classText_1a0561058ba47e899900800635dbe270c2) | The x coordinate of the [Text](#classText).
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classText_1a90f1e6cb7aa15a593d36c96144087179) | The y coordinate of the bottom of the [Text](#classText)'s first line.
 `public bool `[`visible`](#classText_1a9d8567b4c506868eeabe14720a627096) | Whether or not the [Text](#classText) is visible.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classText_1a4c8c8cccbf4fe4c50f9e56ff3f5e5c96) | The horizontal alignment.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classText_1ab953550b21d489b9c3a686e8119f19fe) | The z-order of the [Text](#classText) (what it covers up and is covered by).
 `public ClickHandler `[`click`](#classText_1a6d8b641a52b4e8dcd78b3477fe0456c4) | The click handler that gets called when the [Text](#classText) is clicked; null or undefined removes it.
 `public HoverHandler `[`hover`](#classText_1ac180c2f5c657fb60f5ec3b81bd1b8cd3) | A hover handler for the [Text](#classText); kept but never called.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`color`](#classText_1a6f4e60b7e0ccd69f154dad14a48be330) | The color of the [Text](#classText).
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`font`](#classText_1a4113e8ec35bb03fa7529d357c5f389b1) | Something that determines the font.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`font`](#classText_1a4113e8ec35bb03fa7529d357c5f389b1) | The game font, 0-13.
 `public String `[`text`](#classText_1a562d404f9579c7f6e04ada90126d4125) | The string that the [Text](#classText) hook displays.
 `public  `[`Text`](#classText_1ac6a792e28f41717fc5a4c803ec90d41b)`(String szText,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` font,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` | Create a [Text](#classText) hook with the given parameters.
-`public void `[`remove`](#classText_1a6d32e163a5fb4eb1a2b90e85baf83600)`()` | Remove the [Text](#classText) hook from the screen and destroy the corresponding object.
+`public void `[`remove`](#classText_1a6d32e163a5fb4eb1a2b90e85baf83600)`()` | Remove the [Text](#classText) hook from the screen for good.
 
 ## Members
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classText_1a0561058ba47e899900800635dbe270c2) 
 
-The x coordinate (left) of the [Text](#classText).
+The x coordinate of the [Text](#classText).
+
+It is the text's left edge with align 0, its right edge with align 1 and its centre with align 2. A map coordinate when the [Text](#classText) was made with automap true. While x or y is -1 the [Text](#classText) is not drawn.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`y`](#classText_1a90f1e6cb7aa15a593d36c96144087179) 
 
-The y coordinate (top) of the [Text](#classText).
+The y coordinate of the bottom of the [Text](#classText)'s first line.
+
+Each further line (after a `\n`) is drawn above the previous one, so the block grows upward from y. A map coordinate when the [Text](#classText) was made with automap true. While x or y is -1 the [Text](#classText) is not drawn.
 
 #### `public bool `[`visible`](#classText_1a9d8567b4c506868eeabe14720a627096) 
 
 Whether or not the [Text](#classText) is visible.
 
+Defaults to true. A hidden [Text](#classText) is not drawn and gets no clicks. Only true or false is accepted.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`align`](#classText_1a4c8c8cccbf4fe4c50f9e56ff3f5e5c96) 
 
 The horizontal alignment.
 
-0 - Left
+0 - Left: x is the text's left edge
 
-1 - Right
+1 - Right: x is the text's right edge
 
-2 - Center
+2 - Center: x is the text's centre
+
+Other values are stored as given and draw as 0. With automap true only 0 (or another value that draws as 0) puts the text on its map point; 1 and 2 shift it sideways.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`zorder`](#classText_1ab953550b21d489b9c3a686e8119f19fe) 
 
 The z-order of the [Text](#classText) (what it covers up and is covered by).
 
+Defaults to 1. Hooks are drawn from the lowest zorder to the highest, so a higher value covers a lower one; hooks with equal values draw in no set order. A click reaches every hook under it, whatever its zorder.
+
 #### `public ClickHandler `[`click`](#classText_1a6d8b641a52b4e8dcd78b3477fe0456c4) 
 
 The click handler that gets called when the [Text](#classText) is clicked. Assign null or undefined to remove it; a value that is not a function is ignored.
+
+It is called as click(button, x, y) when a mouse button is pressed over the [Text](#classText): button 0 left, 1 right, 2 middle; x and y are window pixels. Only a boolean `true` return keeps the press from the game; the release always reaches the game. The handler runs when the owning script next processes events, and the game gets the press anyway if the handler has not answered within 3 seconds. A paused or ended script's hooks get no clicks.
+
+The [Text](#classText) gets clicks while its `visible` property is true, even when it is not drawn at the moment (other game state, automap closed, x or y of -1). The click area is the text's width at its aligned x, from y minus the height of all its lines up to y (edges excluded), on the raw x and y: the automap conversion is not applied.
 
 #### `public HoverHandler `[`hover`](#classText_1ac180c2f5c657fb60f5ec3b81bd1b8cd3) 
 
@@ -5014,33 +5192,34 @@ A hover handler for the [Text](#classText). D2BS keeps it and returns it from `h
 
 The color of the [Text](#classText).
 
-See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botnet.org/viewtopic.php?f=18&t=1000)
+0-12 select the game's text colors; see [Text colors](#text-colors) in the reference tables for their names. Other values are not defined. Color codes in the text override it from that point on: the character 0xFF (written `\xFF` in a script string) followed by `c` and one of `0`-`9`, `:`, `;` or `<` selects colors 0-12; a code character after `<` selects 0, and one before `0` gives an undefined color.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`font`](#classText_1a4113e8ec35bb03fa7529d357c5f389b1) 
 
-Something that determines the font.
+The game font, 0-13.
+
+See [Fonts](#fonts) in the reference tables for the font names. Values of 14 or more are invalid: the game reads past its font table and can crash. D2BS does not check the value.
 
 #### `public String `[`text`](#classText_1a562d404f9579c7f6e04ada90126d4125) 
 
 The string that the [Text](#classText) hook displays.
+
+Each `\n` starts a new line above the previous one (the first line is the bottom one), and color codes (see `color`) change the color from that point on. Assigning a value that is not a string is ignored.
 
 #### `public  `[`Text`](#classText_1ac6a792e28f41717fc5a4c803ec90d41b)`(String szText,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` color,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` font,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` align,bool automap,ClickHandler click,HoverHandler hover)` 
 
 Create a [Text](#classText) hook with the given parameters.
 
 #### Parameters
-* `szText` The string that the [Text](#classText) hook displays.
+* `szText` The string that the [Text](#classText) hook displays. A value that is not a string shows nothing (pass String(n) for a number).
 
-* `x` The x coordinate (left) of the [Text](#classText).
+* `x` The x coordinate of the text's anchor: its left edge (align 0), right edge (align 1) or centre (align 2).
 
-* `y` The y coordinate (top) of the [Text](#classText).
+* `y` The y coordinate of the bottom of the first line; further lines stack upward.
 
-* `color` The color of the [Text](#classText).
+* `color` The text color, 0-12 (see [Text colors](#text-colors) in the reference tables).
 
-See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botnet.org/viewtopic.php?f=18&t=1000)
-
-#### Parameters
-* `font` Something that determines the font.
+* `font` The game font, 0-13 (see [Fonts](#fonts) in the reference tables). Values of 14 or more are invalid and can crash the game.
 
 * `align` The horizontal alignment.
 
@@ -5051,7 +5230,7 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 2 - Center
 
 #### Parameters
-* `automap` Whether the [Text](#classText) is in automap coordinate space (true) or screen coordinate space (false).
+* `automap` true to place the [Text](#classText) at game map coordinates and draw it only while the automap is open; false (the default) for screen coordinates. Only true or false is accepted.
 
 * `click` A function to call when the [Text](#classText) is clicked; any other value sets no handler.
 
@@ -5059,7 +5238,9 @@ See: [http://forums.d2botnet.org/viewtopic.php?f=18&t=1000](http://forums.d2botn
 
 #### `public void `[`remove`](#classText_1a6d32e163a5fb4eb1a2b90e85baf83600)`()` 
 
-Remove the [Text](#classText) hook from the screen and destroy the corresponding object.
+Remove the [Text](#classText) hook from the screen for good.
+
+The object stays and its click and hover handlers are released. Its properties then read undefined, writes to them are ignored, and calling remove() again does nothing. Returns undefined.
 
 # class `Unit` 
 
@@ -5093,7 +5274,7 @@ When the unit or item has left the game, getFlag(), getEnchant() and getSkill() 
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`owner`](#classUnit_1a8616a100c244d69e7592d5b6843a0b61) | The unit id of the owner of the unit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`ownertype`](#classUnit_1ae2003fc0bc7e60523ff0c05d1f7bb1ca) | The type of owner.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`spectype`](#classUnit_1a90be3cd88e866777cffb925e3244e730) | The special type of the unit.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`direction`](#classUnit_1af64fb0f78ce8cb663fe12ec8a1c5f81d) | The direction of the unit.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`direction`](#classUnit_1af64fb0f78ce8cb663fe12ec8a1c5f81d) | The direction the unit is facing, from 0 to 63.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`uniqueid`](#classUnit_1aeda7422b700e357cdda91fb24312e58e) | The unique id of a boss.
 `public String `[`code`](#classUnit_1a1dfbd39341316980c6c17305555e141c) | The three digit code for an item.
 `public String `[`prefix`](#classUnit_1a6b00de01b009bf7b212d4c52326fa7fc) | The magic prefix of the item.
@@ -5106,7 +5287,7 @@ When the unit or item has left the game, getFlag(), getEnchant() and getSkill() 
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`suffixnums`](#classUnit_1af668286ae6c3d1d87bfc531ab8d54f77) | The id codes for the magic suffixes.
 `public String `[`fname`](#classUnit_1a23495fdca380dc2f19c624b5bcf3f4c8) | The full name of an item.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`quality`](#classUnit_1af7a138ffb9643f0015ba22f0230e5ce4) | The item quality.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`node`](#classUnit_1ab5da58f77c0aaa3f3ce81cccee12e057) | No clue.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`node`](#classUnit_1ab5da58f77c0aaa3f3ce81cccee12e057) | Which kind of inventory grid holds the item.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`location`](#classUnit_1a60b8bec5206902278dfbbebe75c3617e) | The location of the item (ground, inventory, stash, etc.).
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`sizex`](#classUnit_1a1320b38ed997f4922abfeb2966fed81b) | The x size of the item.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`sizey`](#classUnit_1afe39c0f050662a28ffd252d50f94910d) | The y size of the item.
@@ -5118,7 +5299,7 @@ When the unit or item has left the game, getFlag(), getEnchant() and getSkill() 
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`gfx`](#classUnit_1a9bd325f9e2eb378709bf785a2b4bc6ad) | Get the id for the graphic used for the item.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`runwalk`](#classUnit_1ac8a909f484cee949343474ff0cddcb5f) | Whether the controlled character is in the always run mode or not.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`weaponswitch`](#classUnit_1ac9b8c63afb5360437af31a0b0902232a) | Set the weapon switch.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`objtype`](#classUnit_1adfb606b289eeccde32b0ed79ed0020c9) | The object type.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`objtype`](#classUnit_1adfb606b289eeccde32b0ed79ed0020c9) | The object's interaction type.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`islocked`](#classUnit_1afa81eef36e4eddf98f8dd69c48e22875) | Whether or not the chest is locked.
 `public bool `[`getNext`](#classUnit_1aa6a3842cbc14d3456f1f447153d68b53)`()` | Get the next unit that matches the originally given name or class id and originally specified mode.
 `public bool `[`getNext`](#classUnit_1a3745b5481a9ede47f517caa64e5eb6d2)`(String szName)` | Get the next unit that matches the given name and originally specified mode.
@@ -5133,29 +5314,27 @@ When the unit or item has left the game, getFlag(), getEnchant() and getSkill() 
 `public `[`Unit`](#classUnit)` `[`getItem`](#classUnit_1a4ef77dc37b10ba1fa7254935549f66fc)`(String name,uint32_t mode,uint32_t nUnitId)` | Get an item from inventory by name, mode and nUnitId.
 `public `[`Unit`](#classUnit)` `[`getItem`](#classUnit_1ad5dbc6824bff1d1847be8052ab36d381)`(uint32_t classId,uint32_t mode,uint32_t nUnitId)` | Get an item from inventory by classId, mode and nUnitId.
 `public `[`Unit`](#classUnit)` `[`getItems`](#classUnit_1af421c40cb966dd2bef028c3ae2660e78)`()` | Get all items from inventory.
-`public bool `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` | Get whether this player has a merc.
+`public `[`Unit`](#classUnit)` `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` | Get a player's merc; the argument is ignored.
 `public `[`Unit`](#classUnit)` `[`getMerc`](#classUnit_1a765ff16754426875b9975e71c776a6ac)`()` | Get a player's merc.
 `public String `[`getSkill`](#classUnit_1a85219a0b1d3856c432b6db80249ecc63)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` | Get skill name from hand.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classUnit_1a94823fedd1fb16eece0fe7fd729bb4e8)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` | Get skill id from hand.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classUnit_1acfc83d3e88c549e6dae3c682c3baf40f)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dummy)` | Get all skills.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classUnit_1ab14f99798787ec5b258a47824f089604)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nExt)` | Calls D2COMMON_GetSkillLevel and returns the result.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classUnit_1ab14f99798787ec5b258a47824f089604)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nExt)` | Get the base or total level of a skill.
 `public `[`Unit`](#classUnit)` `[`getParent`](#classUnit_1aba1d739e034f714e07e5c66a1bcd8297)`()` | Gets the parent of a unit.
 `public String `[`getParent`](#classUnit_1a59389e13f5a91193cc7c57a51372a529)`()` | Gets the parent of a unit.
 `public void `[`overhead`](#classUnit_1a3b8b22982ac3eb1dcefb354102a19a30)`(Object message)` | Puts the string equivalent of message over the unit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getFlags`](#classUnit_1a01704c64338a7818f03ea9fdb0205ee6)`()` | Returns the item flags.
 `public bool `[`getFlag`](#classUnit_1a66aba538357c70138e3126b022749f56)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` flags)` | Same as getFlags, but returns a boolean.
 `public double `[`getStat`](#classUnit_1a273cc4dadf71bdf8c2ad9b6ee5ed122a)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get a stat by stat id and sub index.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classUnit_1ab7cb6e0da97e16296f391f448630c4e0)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get a stat by stat id and sub index.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classUnit_1a106c9cbe30bae8d80322f3ec1bc3aafa)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get an array of all the stats of the item.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classUnit_1a106c9cbe30bae8d80322f3ec1bc3aafa)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get an array of the unit's listed stats.
+`public Object[] `[`getStat`](#classUnit_1getStat_byId)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` | Get the unit's stats as an array indexed by stat id.
 `public bool `[`getState`](#classUnit_1a8ec41cccbb61db284264cc5879686a6d)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nState)` | Return whether or not the unit has a given state.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classUnit_1ac12f87a160fd951c157ab1107029a2d9)`(`[`Unit`](#classUnit)` npc,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell)` | Get the price of the item at a given npc, with choice of buying or selling, in the current difficulty.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classUnit_1acb192f1005a38a4c7090c0a7f64d2c50)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` npcId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell)` | Get the price of the item at a given npc (by id), which choice of buying or selling, in the current difficulty.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classUnit_1aa8ba674e6441c93355844d49619998e8)`(`[`Unit`](#classUnit)` npc,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` difficulty)` | Get the price of the item at a given npc, with choice of buying or selling, in a given difficulty.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classUnit_1a4b9c81d08835307ba5900dc99c8b9313)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` npcId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` difficulty)` | Get the price of the item at a given npc (by id), with choice of buying or selling, in a given difficulty.
 `public bool `[`getEnchant`](#classUnit_1a082ad92039c9a817574adb3431ddb159)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nEnchant)` | Determine whether or not a unit has a given enchant.
 `public bool `[`shop`](#classUnit_1aa4e63e5e27420a6965bda5d855bb8c49)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` dwMode)` | Shop with a given npc, either buying or selling.
 `public bool `[`setSkill`](#classUnit_1a89e811c8b062728894b6504a8f02372d)`(String skillName,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand)` | Set the skill on the given hand to be skill with name skillName.
 `public bool `[`setSkill`](#classUnit_1a3f88599825b6b93e1bf52f9c13df0a95)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand)` | Set the skill on the given hand to be skill with id nSkillId.
+`public bool `[`setSkill`](#classUnit_1setSkill_name_item)`(String skillName,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` | Set the skill on the given hand to be skill with name skillName.
+`public bool `[`setSkill`](#classUnit_1setSkill_id_item)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` | Set the skill on the given hand to be skill with id nSkillId.
 `public void `[`move`](#classUnit_1a0b13c1bcd85e4a2fda08548feef07d0b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y)` | Move to the given location.
 `public void `[`move`](#classUnit_1a4a295cc929f3a8ccf67287d4f6f5515b)`()` | Move to this unit.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getQuest`](#classUnit_1afbb11a6c2f4457b19fd464c1df647065)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nAct,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nQuest)` | Get the quest flag for a quest specified by act and quest number.
@@ -5240,7 +5419,9 @@ Where the game is taking the unit.
 
 The id of the area (level) the unit is located in.
 
-> Todo: Get a reference for the area IDs.
+The value is the Id column of Levels.txt, for example 1 = Rogue Encampment, 108 = The Chaos Sanctuary (Chaos Sanctum in Levels.txt), 109 = Harrogath. See [Area ids](#area-ids) in the reference tables.
+
+Undefined when the game has no room for the unit.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`hp`](#classUnit_1ae9d3c95ccf18f5bc2bd6a7e68f0e7b1c) 
 
@@ -5296,9 +5477,13 @@ Represents things like unique, minion, boss, etc.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`direction`](#classUnit_1af64fb0f78ce8cb663fe12ec8a1c5f81d) 
 
-The direction of the unit.
+The direction the unit is facing, from 0 to 63.
 
-> Todo: Figure out what the direction is.
+0 faces straight down the screen and the value increases clockwise: 16 faces left (west), 32 up (north) and 48 right (east). 8, 24, 40 and 56 lie between them along the game's map axes (down-left, up-left, up-right and down-right).
+
+A player or monster turns a step at a time, so while it turns this value can trail the direction it is moving in.
+
+Undefined when the unit has no path or its path is not in a room. For objects and items the value is currently not their facing: it can be undefined or an arbitrary number.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`uniqueid`](#classUnit_1aeda7422b700e357cdda91fb24312e58e) 
 
@@ -5372,9 +5557,21 @@ Source: botNET
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`node`](#classUnit_1ab5da58f77c0aaa3f3ce81cccee12e057) 
 
-No clue.
+Which kind of inventory grid holds the item.
 
-> Todo: Get a clue.
+0 - Not in any inventory grid (on the ground or on the cursor)
+
+1 - A storage page (inventory, cube, stash, trade or shop)
+
+2 - The belt
+
+3 - Equipped (body locations 1-10)
+
+4 - Equipped in a weapon-switch slot (body locations 11 and 12)
+
+Use location to tell storage pages apart. An item linked into an inventory without a grid cell also reads 1, so node 1 alone does not prove the item sits on a storage page.
+
+Undefined for units that are not items.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`location`](#classUnit_1a60b8bec5206902278dfbbebe75c3617e) 
 
@@ -5410,7 +5607,9 @@ The y size of the item.
 
 The type of the item.
 
-> Todo: Put together a reference for item type.
+The base item's primary type: its row index in ItemTypes.txt, counting data rows from 0 and skipping the "Expansion" separator row (for example 2 = shield, 4 = gold, 10 = ring, 12 = amulet, 58 = jewel, 74 = rune). Class-specific bases report their own type, so an auric shield is not 2. See [Item types](#item-types) in the reference tables.
+
+Undefined for units that are not items.
 
 #### `public String `[`description`](#classUnit_1a7c76ba13eb7e3a3f26f50282fb8b431e) 
 
@@ -5472,9 +5671,19 @@ Set the weapon switch.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`objtype`](#classUnit_1adfb606b289eeccde32b0ed79ed0020c9) 
 
-The object type.
+The object's interaction type.
 
-> Todo: Figure out what this means.
+This is a byte the server sends with the object. Its known uses:
+
+* For a shrine or well, the shrine kind: the row index in Shrines.txt (for example 1 = refill, 2 = health, 3 = mana, 12 = skill, 15 = experience, 18 = gem). A shrine seen in game read 1 and a well read 2.
+
+* For a portal, the id of the area it leads to (the same ids as area; see [Area ids](#area-ids) in the reference tables).
+
+* For a chest, bit 0x80 is set while the chest is locked, so a locked chest reads 128 or more (see islocked).
+
+Other objects read 0 in the cases seen: the stash, the waypoint, fires, torches and a chest.
+
+Undefined for units that are not objects.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`islocked`](#classUnit_1afa81eef36e4eddf98f8dd69c48e22875) 
 
@@ -5562,7 +5771,7 @@ true if menu was found.
 
 Interact with the unit.
 
-If the unit is an item in inventory or stash pick it up. Otherwise click it on the map.
+If the unit is an item in your inventory or stash, the call uses it as a right-click does: a potion is drunk, a town portal tome or scroll opens a portal outside town, and an identify tome or scroll gives the identify cursor. An item in the belt is used the same way. Either use returns false, whether or not the game acts on it. Any other unit, an item anywhere else included, gets a left-button-down click on its map position that targets it, the same kind of click clickMap(0, 0, unit) makes, and the call returns true. Called on your own character, or on a unit that has left the game, it does nothing and returns false. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public bool `[`interact`](#classUnit_1aa1a4ac5b77fc8561252cad2af1ba9ba3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` destId)` 
 
@@ -5608,17 +5817,17 @@ Get all items from inventory.
 #### Returns
 An array of all the items from inventory; empty when the unit has no items, has left the game, or the method is called on something that is not a unit.
 
-#### `public bool `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` 
+#### `public `[`Unit`](#classUnit)` `[`getMerc`](#classUnit_1a33171db06dfdf2cc7d7826e1ea7242e4)`(bool dummy)` 
 
-Get whether this player has a merc.
+Get a player's merc; the argument is ignored.
 
 The unit being operated on should be a player.
 
 #### Parameters
-* `dummy` Used to signify boolean result instead of object. Should be true.
+* `dummy` Ignored.
 
 #### Returns
-true if the player has a live merc.
+The merc unit, or null when none is found (the merc must be in a room the client has loaded) or the unit is not a player. Any argument is ignored: getMerc(true) returns the same unit or null, so test the result for truthiness. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public `[`Unit`](#classUnit)` `[`getMerc`](#classUnit_1a765ff16754426875b9975e71c776a6ac)`()` 
 
@@ -5627,7 +5836,7 @@ Get a player's merc.
 The unit being operated on should be a player.
 
 #### Returns
-The merc if there is one.
+The merc unit, or null when none is found (the merc must be in a room the client has loaded) or the unit is not a player. Any argument is ignored: getMerc(true) returns the same unit or null, so test the result for truthiness. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public String `[`getSkill`](#classUnit_1a85219a0b1d3856c432b6db80249ecc63)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` 
 
@@ -5641,7 +5850,7 @@ Get skill name from hand.
 1 - Left hand
 
 #### Returns
-Skill name.
+The skill's in-game name in the client's language. It is not always a name setSkill() accepts; getSkill(2) and getSkill(3) give the ids. Returns false when the unit has left the game.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classUnit_1a94823fedd1fb16eece0fe7fd729bb4e8)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` hand)` 
 
@@ -5667,16 +5876,23 @@ Gets all skill ids, along with corresponding base and total skill levels.
 * `dummy` Should be 4.
 
 #### Returns
-An array of arrays of integers. Inside the inner array the 0th index is the skill id, the 1st index is the base skill level and the 2nd index is the total skill level. Only the first 256 skills are read.
+An array of arrays of integers. Inside the inner array the 0th index is the skill id, the 1st index is the base skill level and the 2nd index is the total skill level.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getSkill`](#classUnit_1ab14f99798787ec5b258a47824f089604)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nExt)` 
 
-Calls D2COMMON_GetSkillLevel and returns the result.
+Get the base or total level of a skill.
 
-> Todo: Figure out what D2COMMON_GetSkillLevel does.
+With two arguments, only the unit's own (non-charged) entry for the skill is read. The total adds the bonuses the game applies to that skill: +all skills, +class skills, +skill tab, +single skill, +elemental skills, oskills and temporary bonuses such as the Skill shrine. Oskills add at most 3 to a player's own class skills. Skills that come from item charges get no bonuses. The result, base or total, is never below 0 and never above 99.
+
+Pass a boolean third argument to choose the entry: true reads the skill from an item with charges (the charge level), false reads the first entry with that id, charged or not.
+
+#### Parameters
+* `nSkillId` The skill id. See [Skill ids](#skill-ids) in the reference tables.
+
+* `nExt` 0 for the base level (the hard points put into the skill), any other integer (usually 1) for the total level.
 
 #### Returns
-Whatever D2COMMON_GetSkillLevel returns.
+The skill level. Returns false when the unit does not have the skill, when nSkillId or nExt is not an integer, when a third argument is passed that is not a boolean, or when the unit has left the game. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public `[`Unit`](#classUnit)` `[`getParent`](#classUnit_1aba1d739e034f714e07e5c66a1bcd8297)`()` 
 
@@ -5763,33 +5979,21 @@ true if any of the flags are set in the item flags.
 
 Get a stat by stat id and sub index.
 
-Used for stat 13.
+Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. On an item, stat 92 returns the item's level requirement for your character (the same value as the itemlevelreq property) and ignores nSubIndex. On any other unit, your own character included, stat 92 does not read a stat: the game's item level-requirement calculation runs on that unit and returns a number with no fixed meaning. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
 
 #### Parameters
-* `nStat` The stat type. See [http://forums.d2botnet.org/viewtopic.php?f=18&t=989](http://forums.d2botnet.org/viewtopic.php?f=18&t=989)
+* `nStat` The stat id (the ID column of ItemStatCost.txt).
 
-* `nSubIndex` A subindex to a certain type of stat. For instance a specific skill for the +1 to skill tab stat.
-
-#### Returns
-The stat value.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classUnit_1ab7cb6e0da97e16296f391f448630c4e0)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` 
-
-Get a stat by stat id and sub index.
-
-Used for everything except stat 13.
-
-#### Parameters
-* `nStat` The stat type. See [http://forums.d2botnet.org/viewtopic.php?f=18&t=989](http://forums.d2botnet.org/viewtopic.php?f=18&t=989)
-
-* `nSubIndex` A subindex to a certain type of stat. For instance a specific skill for the +1 to skill tab stat.
+* `nSubIndex` A subindex to a certain type of stat. For instance a specific skill for the +1 to skill tab stat. Defaults to 0.
 
 #### Returns
-The stat value.
+The stat value. Returns false when no stat id is passed or the unit has left the game. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getStat`](#classUnit_1a106c9cbe30bae8d80322f3ec1bc3aafa)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` 
 
-Get an array of all the stats of the item.
+Get an array of the unit's listed stats.
+
+The array holds the entries of the unit's stat list plus any of the unit's base stats not already in it. It is not every stat the unit has. Values are raw: life, mana and stamina are in 1/256 points, and values of 2^31 and above (such as high experience) come back negative.
 
 #### Parameters
 * `nStat` Set to -1.
@@ -5797,79 +6001,37 @@ Get an array of all the stats of the item.
 * `nSubIndex` Ignored.
 
 #### Returns
-An array of the first 64 stats. The indices of the inner array are: 0 - nStat, 1 - nSubIndex, 2 - nValue.
+An array of arrays. The indices of the inner array are: 0 - stat id, 1 - subindex, 2 - value. Returns false when the unit has no such stat list, even if it has base stats. Outside a ready game it returns false (with a 'Game not ready' warning).
+
+#### `public Object[] `[`getStat`](#classUnit_1getStat_byId)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nStat,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSubIndex)` 
+
+Get the unit's stats as an array indexed by stat id.
+
+Each element is an array indexed by subindex that holds the value, with life, mana and stamina (stats 6-11) in whole points. Other values are raw, so values of 2^31 and above (such as high experience) come back negative. The values come from the unit's base stats, its stat totals (the values the single-stat form reads) and the stat list that getStat(-1) reads, in that order; where more than one holds the same stat and subindex, the last one wins, so a value here is not always the one the single-stat form returns.
+
+A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, for skill ids 8 and up; lower skill ids come back as ordinary entries. A charged skill also gets charges and maxcharges, except on an item with a maximum of 1 charge, or of 2 charges with none left. When the same stat id occurs more than once, the element is an array of such objects. On many items each skill-carrying entry is returned twice (a single skill gives an array of two identical objects); on other items and on a player each comes back once. So check an element with Array.isArray and allow for duplicate objects. Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
+
+#### Parameters
+* `nStat` Set to -2.
+
+* `nSubIndex` Ignored.
+
+#### Returns
+A sparse array indexed by stat id. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public bool `[`getState`](#classUnit_1a8ec41cccbb61db284264cc5879686a6d)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nState)` 
 
 Return whether or not the unit has a given state.
 
-#### Parameters
-* `nState` The state id.
+Objects, items and tiles always return false: the game's state check answers false for them.
 
-Throws "Invalid arguments" if no state id is passed.
+#### Parameters
+* `nState` The state id: the id column of States.txt, 0-183. State 184 (uberminion) exists in 1.14d but getState rejects it and returns false.
+
+Throws "Invalid arguments" if no state id is passed. Returns false when the unit has left the game, or when nState is not an integer or is out of range. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### Returns
 Whether or not the unit has the state.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classUnit_1ac12f87a160fd951c157ab1107029a2d9)`(`[`Unit`](#classUnit)` npc,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell)` 
-
-Get the price of the item at a given npc, with choice of buying or selling, in the current difficulty.
-
-> Todo: Determine the meaning of "buysell".
-
-#### Parameters
-* `npc` The npc to determine the price at.
-
-* `buysell` Unknown
-
-#### Returns
-The price requested.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classUnit_1acb192f1005a38a4c7090c0a7f64d2c50)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` npcId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell)` 
-
-Get the price of the item at a given npc (by id), which choice of buying or selling, in the current difficulty.
-
-> Todo: Determine the meaning of "buysell".
-
-#### Parameters
-* `npcId` The id of the npc to determine the price at.
-
-* `buysell` Unknown
-
-#### Returns
-The price requested.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classUnit_1aa8ba674e6441c93355844d49619998e8)`(`[`Unit`](#classUnit)` npc,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` difficulty)` 
-
-Get the price of the item at a given npc, with choice of buying or selling, in a given difficulty.
-
-> Todo: Determine the meaning of "buysell".
-
-#### Parameters
-* `npc` The npc to determine the price at.
-
-* `buysell` Unknown
-
-* `difficulty` The difficulty of interest: 0 - normal, 1 - nightmare, 2 - hell
-
-#### Returns
-The price requested.
-
-#### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`getPrice`](#classUnit_1a4b9c81d08835307ba5900dc99c8b9313)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` npcId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` buysell,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` difficulty)` 
-
-Get the price of the item at a given npc (by id), with choice of buying or selling, in a given difficulty.
-
-> Todo: Determine the meaning of "buysell".
-
-#### Parameters
-* `npcId` The id of the npc to determine the price at.
-
-* `buysell` Unknown
-
-* `difficulty` The difficulty of interest: 0 - normal, 1 - nightmare, 2 - hell
-
-#### Returns
-The price requested.
 
 #### `public bool `[`getEnchant`](#classUnit_1a082ad92039c9a817574adb3431ddb159)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nEnchant)` 
 
@@ -5895,33 +6057,65 @@ Whether or not the shop went through.
 
 Set the skill on the given hand to be skill with name skillName.
 
-Waits up to one second for the skill to be set.
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
-> Todo: Fix argc < 1, should be argc < 2
+The name is matched case-insensitively against D2BS's built-in English skill-name table, not the game's localized strings. "Shadow Master" and "Phoenix Strike" are not recognized by name; pass their ids (279 and 280) instead.
 
 #### Parameters
 * `skillName` Name of the skill to put up.
 
-* `nHand` Hand to put the skill on. non-zero left, 0 - right.
+* `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
 #### Returns
-Whether operation was successful.
+true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public bool `[`setSkill`](#classUnit_1a3f88599825b6b93e1bf52f9c13df0a95)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand)` 
 
 Set the skill on the given hand to be skill with id nSkillId.
 
-Waits up to one second for the skill to be set.
-
-> Todo: Fix argc < 1, should be argc < 2
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
 
 #### Parameters
-* `nSkillId` Id of the skill to put up.
+* `nSkillId` Id of the skill to put up. See [Skill ids](#skill-ids) in the reference tables.
 
-* `nHand` Hand to put the skill on. non-zero left, 0 - right.
+* `nHand` Hand to put the skill on: 0 - right, any other integer - left.
 
 #### Returns
-Whether operation was successful.
+true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
+
+#### `public bool `[`setSkill`](#classUnit_1setSkill_name_item)`(String skillName,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` 
+
+Set the skill on the given hand to be skill with name skillName.
+
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
+
+The name is matched case-insensitively against D2BS's built-in English skill-name table, not the game's localized strings. "Shadow Master" and "Phoenix Strike" are not recognized by name; pass their ids (279 and 280) instead.
+
+#### Parameters
+* `skillName` Name of the skill to put up.
+
+* `nHand` Hand to put the skill on: 0 - right, any other integer - left.
+
+* `item` An item unit: the hand gets that item's charged skill. A third argument that is not an item unit is ignored, and the skill is set as a normal skill. The item is not checked to be yours.
+
+#### Returns
+true once the hand shows the skill. Returns false when the skill name is unknown, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
+
+#### `public bool `[`setSkill`](#classUnit_1setSkill_id_item)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nSkillId,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nHand,`[`Unit`](#classUnit)` item)` 
+
+Set the skill on the given hand to be skill with id nSkillId.
+
+Asks the game to put the skill on the hand, then waits up to about one second for the hand to show it. When the hand already shows the skill, the call returns true at once. The call always acts on your own character, whichever unit it is called on.
+
+#### Parameters
+* `nSkillId` Id of the skill to put up. See [Skill ids](#skill-ids) in the reference tables.
+
+* `nHand` Hand to put the skill on: 0 - right, any other integer - left.
+
+* `item` An item unit: the hand gets that item's charged skill. A third argument that is not an item unit is ignored, and the skill is set as a normal skill. The item is not checked to be yours.
+
+#### Returns
+true once the hand shows the skill. Returns false when the first argument is neither a string nor an integer, nHand is missing or not an integer, your character does not have the skill (total level 0), you are not in a game, or the hand does not show the skill in time.
 
 #### `public void `[`move`](#classUnit_1a0b13c1bcd85e4a2fda08548feef07d0b)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` x,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` y)` 
 
@@ -6019,5 +6213,803 @@ Get the cost to do something (buy, sell, repair) with the given item, at the giv
 
 #### Returns
 The price.
+
+# Reference tables
+
+These tables list the ids and flag values that the script API takes and returns. The area, skill and item-type tables come from the game's own 1.14d data tables.
+
+## Area ids
+
+Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index instead (the Levels.txt Waypoint column). An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. Name is the name the game shows, from its English string tables; Levels.txt LevelName is the key it is looked up by, which differs for 25 areas (120 Rocky Summit is the in-game Arreat Summit, and 125-127 Hell1-3 are Abaddon, Pit of Acheron and Infernal Pit). Scripts get the LevelName, not Name: `getArea(120).name` and `getBaseStat("levels", 120, "LevelName")` both return "Rocky Summit". The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one whose Orifice leads to Tal Rasha's Chamber (73) in the current game. Act is the act the area belongs to (1-5; - for id 0). The calls that look up an area know only the areas the client has created for the player's act. In a new game some are missing at first (in a new Act 1 game, 21-25 and 29-38 were still missing 5 seconds after the game was ready), and such an area counts as not in the player's act.
+
+Id | Name | Levels.txt LevelName | Internal name (Levels.txt Name) | Act
+---|---|---|---|---
+0 | (none) | - | Null | -
+1 | Rogue Encampment | Rogue Encampment | Act 1 - Town | 1
+2 | Blood Moor | Blood Moor | Act 1 - Wilderness 1 | 1
+3 | Cold Plains | Cold Plains | Act 1 - Wilderness 2 | 1
+4 | Stony Field | Stony Field | Act 1 - Wilderness 3 | 1
+5 | Dark Wood | Dark Wood | Act 1 - Wilderness 4 | 1
+6 | Black Marsh | Black Marsh | Act 1 - Wilderness 5 | 1
+7 | Tamoe Highland | Tamoe Highland | Act 1 - Wilderness 6 | 1
+8 | Den of Evil | Den of Evil | Act 1 - Cave 1 | 1
+9 | Cave Level 1 | Cave Level 1 | Act 1 - Cave 2 | 1
+10 | Underground Passage Level 1 | Underground Passage Level 1 | Act 1 - Cave 3 | 1
+11 | Hole Level 1 | Hole Level 1 | Act 1 - Cave 4 | 1
+12 | Pit Level 1 | Pit Level 1 | Act 1 - Cave 5 | 1
+13 | Cave Level 2 | Cave Level 2 | Act 1 - Cave 2 Treasure | 1
+14 | Underground Passage Level 2 | Underground Passage Level 2 | Act 1 - Cave 3 Treasure | 1
+15 | Hole Level 2 | Hole Level 2 | Act 1 - Cave 4 Treasure | 1
+16 | Pit Level 2 | Pit Level 2 | Act 1 - Cave 5 Treasure | 1
+17 | Burial Grounds | Burial Grounds | Act 1 - Graveyard | 1
+18 | Crypt | Crypt | Act 1 - Crypt 1 A | 1
+19 | Mausoleum | Mausoleum | Act 1 - Crypt 2 A | 1
+20 | Forgotten Tower | Forgotten Tower | Act 1 - Tower 2 | 1
+21 | Tower Cellar Level 1 | Tower Cellar Level 1 | Act 1 - Crypt 3 A | 1
+22 | Tower Cellar Level 2 | Tower Cellar Level 2 | Act 1 - Crypt 3 B | 1
+23 | Tower Cellar Level 3 | Tower Cellar Level 3 | Act 1 - Crypt 3 C | 1
+24 | Tower Cellar Level 4 | Tower Cellar Level 4 | Act 1 - Crypt 3 D | 1
+25 | Tower Cellar Level 5 | Tower Cellar Level 5 | Act 1 - Crypt 3 E | 1
+26 | Monastery Gate | Monastery Gate | Act 1 - Monastery | 1
+27 | Outer Cloister | Outer Cloister | Act 1 - Courtyard 1 | 1
+28 | Barracks | Barracks | Act 1 - Barracks | 1
+29 | Jail Level 1 | Jail Level 1 | Act 1 - Jail 1 | 1
+30 | Jail Level 2 | Jail Level 2 | Act 1 - Jail 2 | 1
+31 | Jail Level 3 | Jail Level 3 | Act 1 - Jail 3 | 1
+32 | Inner Cloister | Inner Cloister | Act 1 - Courtyard 2 | 1
+33 | Cathedral | Cathedral | Act 1 - Cathedral | 1
+34 | Catacombs Level 1 | Catacombs Level 1 | Act 1 - Catacombs 1 | 1
+35 | Catacombs Level 2 | Catacombs Level 2 | Act 1 - Catacombs 2 | 1
+36 | Catacombs Level 3 | Catacombs Level 3 | Act 1 - Catacombs 3 | 1
+37 | Catacombs Level 4 | Catacombs Level 4 | Act 1 - Catacombs 4 | 1
+38 | Tristram | Tristram | Act 1 - Tristram | 1
+39 | The Secret Cow Level | Moo Moo Farm | Act 1 - Moo Moo Farm | 1
+40 | Lut Gholein | Lut Gholein | Act 2 - Town | 2
+41 | Rocky Waste | Rocky Waste | Act 2 - Desert 1 | 2
+42 | Dry Hills | Dry Hills | Act 2 - Desert 2 | 2
+43 | Far Oasis | Far Oasis | Act 2 - Desert 3 | 2
+44 | Lost City | Lost City | Act 2 - Desert 4 | 2
+45 | Valley of Snakes | Valley of Snakes | Act 2 - Desert 5 | 2
+46 | Canyon of the Magi | Canyon of the Magi | Act 2 - Valley of the Kings | 2
+47 | Sewers Level 1 | Sewers Level 1 | Act 2 - Sewer 1 A | 2
+48 | Sewers Level 2 | Sewers Level 2 | Act 2 - Sewer 1 B | 2
+49 | Sewers Level 3 | Sewers Level 3 | Act 2 - Sewer 1 C | 2
+50 | Harem Level 1 | Harem Level 1 | Act 2 - Harem | 2
+51 | Harem Level 2 | Harem Level 2 | Act 2 - Corrupt Harem 1 | 2
+52 | Palace Cellar Level 1 | Palace Cellar Level 1 | Act 2 - Basement 1 | 2
+53 | Palace Cellar Level 2 | Palace Cellar Level 2 | Act 2 - Basement 2 | 2
+54 | Palace Cellar Level 3 | Palace Cellar Level 3 | Act 2 - Basement 3 | 2
+55 | Stony Tomb Level 1 | Stony Tomb Level 1 | Act 2 - Tomb 1 A | 2
+56 | Halls of the Dead Level 1 | Halls of the Dead Level 1 | Act 2 - Tomb 2 A | 2
+57 | Halls of the Dead Level 2 | Halls of the Dead Level 2 | Act 2 - Tomb 2 B | 2
+58 | Claw Viper Temple Level 1 | Claw Viper Temple Level 1 | Act 2 - Tomb 3 A | 2
+59 | Stony Tomb Level 2 | Stony Tomb Level 2 | Act 2 - Tomb 1 Treasure | 2
+60 | Halls of the Dead Level 3 | Halls of the Dead Level 3 | Act 2 - Tomb 2 Treasure | 2
+61 | Claw Viper Temple Level 2 | Claw Viper Temple Level 2 | Act 2 - Tomb 3 Treasure | 2
+62 | Maggot Lair Level 1 | Maggot Lair Level 1 | Act 2 - Lair 1 A | 2
+63 | Maggot Lair Level 2 | Maggot Lair Level 2 | Act 2 - Lair 1 B | 2
+64 | Maggot Lair Level 3 | Maggot Lair Level 3 | Act 2 - Lair 1 Treasure | 2
+65 | Ancient Tunnels | Ancient Tunnels | Act 2 - Sewer 2 A | 2
+66 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 1 | 2
+67 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 2 | 2
+68 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 3 | 2
+69 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 4 | 2
+70 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 5 | 2
+71 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 6 | 2
+72 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 7 | 2
+73 | Tal Rasha's Chamber | Duriel's Lair | Act 2 - Duriel's Lair | 2
+74 | Arcane Sanctuary | Arcane Sanctuary | Act 2 - Arcane | 2
+75 | Kurast Docks | Kurast Docktown | Act 3 - Town | 3
+76 | Spider Forest | Spider Forest | Act 3 - Jungle 1 | 3
+77 | Great Marsh | Great Marsh | Act 3 - Jungle 2 | 3
+78 | Flayer Jungle | Flayer Jungle | Act 3 - Jungle 3 | 3
+79 | Lower Kurast | Lower Kurast | Act 3 - Kurast 1 | 3
+80 | Kurast Bazaar | Kurast Bazaar | Act 3 - Kurast 2 | 3
+81 | Upper Kurast | Upper Kurast | Act 3 - Kurast 3 | 3
+82 | Kurast Causeway | Kurast Causeway | Act 3 - Kurast 4 | 3
+83 | Travincal | Travincal | Act 3 - Travincal | 3
+84 | Arachnid Lair | Spider Cave | Act 3 - Spider 1 | 3
+85 | Spider Cavern | Spider Cavern | Act 3 - Spider 2 | 3
+86 | Swampy Pit Level 1 | Swampy Pit Level 1 | Act 3 - Dungeon 1 A | 3
+87 | Swampy Pit Level 2 | Swampy Pit Level 2 | Act 3 - Dungeon 1 B | 3
+88 | Flayer Dungeon Level 1 | Flayer Dungeon Level 1 | Act 3 - Dungeon 2 A | 3
+89 | Flayer Dungeon Level 2 | Flayer Dungeon Level 2 | Act 3 - Dungeon 2 B | 3
+90 | Swampy Pit Level 3 | Swampy Pit Level 3 | Act 3 - Dungeon 1 Treasure | 3
+91 | Flayer Dungeon Level 3 | Flayer Dungeon Level 3 | Act 3 - Dungeon 2 Treasure | 3
+92 | Sewers Level 1 | Sewers Level 1 | Act 3 - Sewer 1 | 3
+93 | Sewers Level 2 | Sewers Level 2 | Act 3 - Sewer 2 | 3
+94 | Ruined Temple | Ruined Temple | Act 3 - Temple 1 | 3
+95 | Disused Fane | Disused Fane | Act 3 - Temple 2 | 3
+96 | Forgotten Reliquary | Forgotten Reliquary | Act 3 - Temple 3 | 3
+97 | Forgotten Temple | Forgotten Temple | Act 3 - Temple 4 | 3
+98 | Ruined Fane | Ruined Fane | Act 3 - Temple 5 | 3
+99 | Disused Reliquary | Disused Reliquary | Act 3 - Temple 6 | 3
+100 | Durance of Hate Level 1 | Durance of Hate Level 1 | Act 3 - Mephisto 1 | 3
+101 | Durance of Hate Level 2 | Durance of Hate Level 2 | Act 3 - Mephisto 2 | 3
+102 | Durance of Hate Level 3 | Durance of Hate Level 3 | Act 3 - Mephisto 3 | 3
+103 | The Pandemonium Fortress | The Pandemonium Fortress | Act 4 - Town | 4
+104 | Outer Steppes | Outer Steppes | Act 4 - Mesa 1 | 4
+105 | Plains of Despair | Plains of Despair | Act 4 - Mesa 2 | 4
+106 | City of the Damned | City of the Damned | Act 4 - Mesa 3 | 4
+107 | River of Flame | River of Flame | Act 4 - Lava 1 | 4
+108 | The Chaos Sanctuary | Chaos Sanctum | Act 4 - Diablo 1 | 4
+109 | Harrogath | Harrogath | Act 5 - Town | 5
+110 | Bloody Foothills | Bloody Foothills | Act 5 - Siege 1 | 5
+111 | Frigid Highlands | Rigid Highlands | Act 5 - Barricade 1 | 5
+112 | Arreat Plateau | Arreat Plateau | Act 5 - Barricade 2 | 5
+113 | Crystalline Passage | Crystalized Cavern Level 1 | Act 5 - Ice Cave 1 | 5
+114 | Frozen River | Cellar of Pity | Act 5 - Ice Cave 1A | 5
+115 | Glacial Trail | Crystalized Cavern Level 2 | Act 5 - Ice Cave 2 | 5
+116 | Drifter Cavern | Echo Chamber | Act 5 - Ice Cave 2A | 5
+117 | Frozen Tundra | Tundra Wastelands | Act 5 - Barricade Snow | 5
+118 | The Ancients' Way | Glacial Caves Level 1 | Act 5 - Ice Cave 3 | 5
+119 | Icy Cellar | Glacial Caves Level 2 | Act 5 - Ice Cave 3A | 5
+120 | Arreat Summit | Rocky Summit | Act 5 - Mountain Top | 5
+121 | Nihlathak's Temple | Nihlathaks Temple | Act 5 - Temple Entrance | 5
+122 | Halls of Anguish | Halls of Anguish | Act 5 - Temple 1 | 5
+123 | Halls of Pain | Halls of Death's Calling | Act 5 - Temple 2 | 5
+124 | Halls of Vaught | Halls of Vaught | Act 5 - Temple Boss | 5
+125 | Abaddon | Hell1 | Act 5 - Hell 1 | 5
+126 | Pit of Acheron | Hell2 | Act 5 - Hell 2 | 5
+127 | Infernal Pit | Hell3 | Act 5 - Hell 3 | 5
+128 | Worldstone Keep Level 1 | The Worldstone Keep Level 1 | Act 5 - Baal Temple 1 | 5
+129 | Worldstone Keep Level 2 | The Worldstone Keep Level 2 | Act 5 - Baal Temple 2 | 5
+130 | Worldstone Keep Level 3 | The Worldstone Keep Level 3 | Act 5 - Baal Temple 3 | 5
+131 | Throne of Destruction | Throne of Destruction | Act 5 - Throne Room | 5
+132 | The Worldstone Chamber | The Worldstone Chamber | Act 5 - World Stone | 5
+133 | Matron's Den | Pandemonium Run 1 | Act 5 - Pandemonium 1 | 5
+134 | Forgotten Sands | Pandemonium Run 2 | Act 5 - Pandemonium 2 | 5
+135 | Furnace of Pain | Pandemonium Run 3 | Act 5 - Pandemonium 3 | 5
+136 | Tristram | Tristram | Act 5 - Pandemonium Finale | 5
+
+## Skill ids
+
+Skill ids, as `getSkill()`, `setSkill()`, `useSkillPoint()` and `getSkillById()` use them and `getSkillByName()` returns them: the `Id` column of the game's Skills.txt. Names are the Skills.txt names; the in-game names can differ. `getSkillByName()` and `setSkill()` with a name take D2BS's own English names instead, which differ from some of these (for example Werewolf, Fissure, Burst of Speed). Class skills are Amazon 6-35, Sorceress 36-65, Necromancer 66-95, Paladin 96-125, Barbarian 126-155, Druid 221-250 and Assassin 251-280; a character can spend skill points only on its own class's skills. The other ids are shared, monster and item skills (for example 217-220, the identify and town portal scrolls and tomes).
+
+Id | Skill (Skills.txt skill) | Class
+---|---|---
+0 | Attack | -
+1 | Kick | -
+2 | Throw | -
+3 | Unsummon | -
+4 | Left Hand Throw | -
+5 | Left Hand Swing | -
+6 | Magic Arrow | Amazon
+7 | Fire Arrow | Amazon
+8 | Inner Sight | Amazon
+9 | Critical Strike | Amazon
+10 | Jab | Amazon
+11 | Cold Arrow | Amazon
+12 | Multiple Shot | Amazon
+13 | Dodge | Amazon
+14 | Power Strike | Amazon
+15 | Poison Javelin | Amazon
+16 | Exploding Arrow | Amazon
+17 | Slow Missiles | Amazon
+18 | Avoid | Amazon
+19 | Impale | Amazon
+20 | Lightning Bolt | Amazon
+21 | Ice Arrow | Amazon
+22 | Guided Arrow | Amazon
+23 | Penetrate | Amazon
+24 | Charged Strike | Amazon
+25 | Plague Javelin | Amazon
+26 | Strafe | Amazon
+27 | Immolation Arrow | Amazon
+28 | Dopplezon | Amazon
+29 | Evade | Amazon
+30 | Fend | Amazon
+31 | Freezing Arrow | Amazon
+32 | Valkyrie | Amazon
+33 | Pierce | Amazon
+34 | Lightning Strike | Amazon
+35 | Lightning Fury | Amazon
+36 | Fire Bolt | Sorceress
+37 | Warmth | Sorceress
+38 | Charged Bolt | Sorceress
+39 | Ice Bolt | Sorceress
+40 | Frozen Armor | Sorceress
+41 | Inferno | Sorceress
+42 | Static Field | Sorceress
+43 | Telekinesis | Sorceress
+44 | Frost Nova | Sorceress
+45 | Ice Blast | Sorceress
+46 | Blaze | Sorceress
+47 | Fire Ball | Sorceress
+48 | Nova | Sorceress
+49 | Lightning | Sorceress
+50 | Shiver Armor | Sorceress
+51 | Fire Wall | Sorceress
+52 | Enchant | Sorceress
+53 | Chain Lightning | Sorceress
+54 | Teleport | Sorceress
+55 | Glacial Spike | Sorceress
+56 | Meteor | Sorceress
+57 | Thunder Storm | Sorceress
+58 | Energy Shield | Sorceress
+59 | Blizzard | Sorceress
+60 | Chilling Armor | Sorceress
+61 | Fire Mastery | Sorceress
+62 | Hydra | Sorceress
+63 | Lightning Mastery | Sorceress
+64 | Frozen Orb | Sorceress
+65 | Cold Mastery | Sorceress
+66 | Amplify Damage | Necromancer
+67 | Teeth | Necromancer
+68 | Bone Armor | Necromancer
+69 | Skeleton Mastery | Necromancer
+70 | Raise Skeleton | Necromancer
+71 | Dim Vision | Necromancer
+72 | Weaken | Necromancer
+73 | Poison Dagger | Necromancer
+74 | Corpse Explosion | Necromancer
+75 | Clay Golem | Necromancer
+76 | Iron Maiden | Necromancer
+77 | Terror | Necromancer
+78 | Bone Wall | Necromancer
+79 | Golem Mastery | Necromancer
+80 | Raise Skeletal Mage | Necromancer
+81 | Confuse | Necromancer
+82 | Life Tap | Necromancer
+83 | Poison Explosion | Necromancer
+84 | Bone Spear | Necromancer
+85 | BloodGolem | Necromancer
+86 | Attract | Necromancer
+87 | Decrepify | Necromancer
+88 | Bone Prison | Necromancer
+89 | Summon Resist | Necromancer
+90 | IronGolem | Necromancer
+91 | Lower Resist | Necromancer
+92 | Poison Nova | Necromancer
+93 | Bone Spirit | Necromancer
+94 | FireGolem | Necromancer
+95 | Revive | Necromancer
+96 | Sacrifice | Paladin
+97 | Smite | Paladin
+98 | Might | Paladin
+99 | Prayer | Paladin
+100 | Resist Fire | Paladin
+101 | Holy Bolt | Paladin
+102 | Holy Fire | Paladin
+103 | Thorns | Paladin
+104 | Defiance | Paladin
+105 | Resist Cold | Paladin
+106 | Zeal | Paladin
+107 | Charge | Paladin
+108 | Blessed Aim | Paladin
+109 | Cleansing | Paladin
+110 | Resist Lightning | Paladin
+111 | Vengeance | Paladin
+112 | Blessed Hammer | Paladin
+113 | Concentration | Paladin
+114 | Holy Freeze | Paladin
+115 | Vigor | Paladin
+116 | Conversion | Paladin
+117 | Holy Shield | Paladin
+118 | Holy Shock | Paladin
+119 | Sanctuary | Paladin
+120 | Meditation | Paladin
+121 | Fist of the Heavens | Paladin
+122 | Fanaticism | Paladin
+123 | Conviction | Paladin
+124 | Redemption | Paladin
+125 | Salvation | Paladin
+126 | Bash | Barbarian
+127 | Sword Mastery | Barbarian
+128 | Axe Mastery | Barbarian
+129 | Mace Mastery | Barbarian
+130 | Howl | Barbarian
+131 | Find Potion | Barbarian
+132 | Leap | Barbarian
+133 | Double Swing | Barbarian
+134 | Pole Arm Mastery | Barbarian
+135 | Throwing Mastery | Barbarian
+136 | Spear Mastery | Barbarian
+137 | Taunt | Barbarian
+138 | Shout | Barbarian
+139 | Stun | Barbarian
+140 | Double Throw | Barbarian
+141 | Increased Stamina | Barbarian
+142 | Find Item | Barbarian
+143 | Leap Attack | Barbarian
+144 | Concentrate | Barbarian
+145 | Iron Skin | Barbarian
+146 | Battle Cry | Barbarian
+147 | Frenzy | Barbarian
+148 | Increased Speed | Barbarian
+149 | Battle Orders | Barbarian
+150 | Grim Ward | Barbarian
+151 | Whirlwind | Barbarian
+152 | Berserk | Barbarian
+153 | Natural Resistance | Barbarian
+154 | War Cry | Barbarian
+155 | Battle Command | Barbarian
+156 | Fire Hit | -
+157 | UnHolyBolt | -
+158 | SkeletonRaise | -
+159 | MaggotEgg | -
+160 | ShamanFire | -
+161 | MagottUp | -
+162 | MagottDown | -
+163 | MagottLay | -
+164 | AndrialSpray | -
+165 | Jump | -
+166 | Swarm Move | -
+167 | Nest | -
+168 | Quick Strike | -
+169 | VampireFireball | -
+170 | VampireFirewall | -
+171 | VampireMeteor | -
+172 | GargoyleTrap | -
+173 | SpiderLay | -
+174 | VampireHeal | -
+175 | VampireRaise | -
+176 | Submerge | -
+177 | FetishAura | -
+178 | FetishInferno | -
+179 | ZakarumHeal | -
+180 | Emerge | -
+181 | Resurrect | -
+182 | Bestow | -
+183 | MissileSkill1 | -
+184 | MonTeleport | -
+185 | PrimeLightning | -
+186 | PrimeBolt | -
+187 | PrimeBlaze | -
+188 | PrimeFirewall | -
+189 | PrimeSpike | -
+190 | PrimeIceNova | -
+191 | PrimePoisonball | -
+192 | PrimePoisonNova | -
+193 | DiabLight | -
+194 | DiabCold | -
+195 | DiabFire | -
+196 | FingerMageSpider | -
+197 | DiabWall | -
+198 | DiabRun | -
+199 | DiabPrison | -
+200 | PoisonBallTrap | -
+201 | AndyPoisonBolt | -
+202 | HireableMissile | -
+203 | DesertTurret | -
+204 | ArcaneTower | -
+205 | MonBlizzard | -
+206 | Mosquito | -
+207 | CursedBallTrapRight | -
+208 | CursedBallTrapLeft | -
+209 | MonFrozenArmor | -
+210 | MonBoneArmor | -
+211 | MonBoneSpirit | -
+212 | MonCurseCast | -
+213 | HellMeteor | -
+214 | RegurgitatorEat | -
+215 | MonFrenzy | -
+216 | QueenDeath | -
+217 | Scroll of Identify | -
+218 | Book of Identify | -
+219 | Scroll of Townportal | -
+220 | Book of Townportal | -
+221 | Raven | Druid
+222 | Plague Poppy | Druid
+223 | Wearwolf | Druid
+224 | Shape Shifting | Druid
+225 | Firestorm | Druid
+226 | Oak Sage | Druid
+227 | Summon Spirit Wolf | Druid
+228 | Wearbear | Druid
+229 | Molten Boulder | Druid
+230 | Arctic Blast | Druid
+231 | Cycle of Life | Druid
+232 | Feral Rage | Druid
+233 | Maul | Druid
+234 | Eruption | Druid
+235 | Cyclone Armor | Druid
+236 | Heart of Wolverine | Druid
+237 | Summon Fenris | Druid
+238 | Rabies | Druid
+239 | Fire Claws | Druid
+240 | Twister | Druid
+241 | Vines | Druid
+242 | Hunger | Druid
+243 | Shock Wave | Druid
+244 | Volcano | Druid
+245 | Tornado | Druid
+246 | Spirit of Barbs | Druid
+247 | Summon Grizzly | Druid
+248 | Fury | Druid
+249 | Armageddon | Druid
+250 | Hurricane | Druid
+251 | Fire Trauma | Assassin
+252 | Claw Mastery | Assassin
+253 | Psychic Hammer | Assassin
+254 | Tiger Strike | Assassin
+255 | Dragon Talon | Assassin
+256 | Shock Field | Assassin
+257 | Blade Sentinel | Assassin
+258 | Quickness | Assassin
+259 | Fists of Fire | Assassin
+260 | Dragon Claw | Assassin
+261 | Charged Bolt Sentry | Assassin
+262 | Wake of Fire Sentry | Assassin
+263 | Weapon Block | Assassin
+264 | Cloak of Shadows | Assassin
+265 | Cobra Strike | Assassin
+266 | Blade Fury | Assassin
+267 | Fade | Assassin
+268 | Shadow Warrior | Assassin
+269 | Claws of Thunder | Assassin
+270 | Dragon Tail | Assassin
+271 | Lightning Sentry | Assassin
+272 | Inferno Sentry | Assassin
+273 | Mind Blast | Assassin
+274 | Blades of Ice | Assassin
+275 | Dragon Flight | Assassin
+276 | Death Sentry | Assassin
+277 | Blade Shield | Assassin
+278 | Venom | Assassin
+279 | Shadow Master | Assassin
+280 | Royal Strike | Assassin
+281 | Wake Of Destruction Sentry | -
+282 | Imp Inferno | -
+283 | Imp Fireball | -
+284 | Baal Taunt | -
+285 | Baal Corpse Explode | -
+286 | Baal Monster Spawn | -
+287 | Catapult Charged Ball | -
+288 | Catapult Spike Ball | -
+289 | Suck Blood | -
+290 | Cry Help | -
+291 | Healing Vortex | -
+292 | Teleport 2 | -
+293 | Self-resurrect | -
+294 | Vine Attack | -
+295 | Overseer Whip | -
+296 | Barbs Aura | -
+297 | Wolverine Aura | -
+298 | Oak Sage Aura | -
+299 | Imp Fire Missile | -
+300 | Impregnate | -
+301 | Siege Beast Stomp | -
+302 | MinionSpawner | -
+303 | CatapultBlizzard | -
+304 | CatapultPlague | -
+305 | CatapultMeteor | -
+306 | BoltSentry | -
+307 | CorpseCycler | -
+308 | DeathMaul | -
+309 | Defense Curse | -
+310 | Blood Mana | -
+311 | mon inferno sentry | -
+312 | mon death sentry | -
+313 | sentry lightning | -
+314 | fenris rage | -
+315 | Baal Tentacle | -
+316 | Baal Nova | -
+317 | Baal Inferno | -
+318 | Baal Cold Missiles | -
+319 | MegademonInferno | -
+320 | EvilHutSpawner | -
+321 | CountessFirewall | -
+322 | ImpBolt | -
+323 | Horror Arctic Blast | -
+324 | death sentry ltng | -
+325 | VineCycler | -
+326 | BearSmite | -
+327 | Resurrect2 | -
+328 | BloodLordFrenzy | -
+329 | Baal Teleport | -
+330 | Imp Teleport | -
+331 | Baal Clone Teleport | -
+332 | ZakarumLightning | -
+333 | VampireMissile | -
+334 | MephistoMissile | -
+335 | DoomKnightMissile | -
+336 | RogueMissile | -
+337 | HydraMissile | -
+338 | NecromageMissile | -
+339 | MonBow | -
+340 | MonFireArrow | -
+341 | MonColdArrow | -
+342 | MonExplodingArrow | -
+343 | MonFreezingArrow | -
+344 | MonPowerStrike | -
+345 | SuccubusBolt | -
+346 | MephFrostNova | -
+347 | MonIceSpear | -
+348 | ShamanIce | -
+349 | Diablogeddon | -
+350 | Delerium Change | -
+351 | NihlathakCorpseExplosion | -
+352 | SerpentCharge | -
+353 | Trap Nova | -
+354 | UnHolyBoltEx | -
+355 | ShamanFireEx | -
+356 | Imp Fire Missile Ex | -
+
+## Item types
+
+Item types, as `unit.itemType` returns them: the item's base type, counted as the row of the game's ItemTypes.txt from 0 with the "Expansion" separator row left out. `itemType` gives only the first type of the item's base item. Names are the ItemTypes.txt names. For charms they differ from the in-game names: Medium Charm (`mcha`) is the in-game Large Charm and Large Charm (`lcha`) is the Grand Charm.
+
+Index | Item type (ItemTypes.txt ItemType) | Code
+---|---|---
+0 | None | -
+1 | None | -
+2 | Shield | shie
+3 | Armor | tors
+4 | Gold | gold
+5 | Bow Quiver | bowq
+6 | Crossbow Quiver | xboq
+7 | Player Body Part | play
+8 | Herb | herb
+9 | Potion | poti
+10 | Ring | ring
+11 | Elixir | elix
+12 | Amulet | amul
+13 | Charm | char
+14 | Not Used | -
+15 | Boots | boot
+16 | Gloves | glov
+17 | Not Used | -
+18 | Book | book
+19 | Belt | belt
+20 | Gem | gem
+21 | Torch | torc
+22 | Scroll | scro
+23 | Not Used | -
+24 | Scepter | scep
+25 | Wand | wand
+26 | Staff | staf
+27 | Bow | bow
+28 | Axe | axe
+29 | Club | club
+30 | Sword | swor
+31 | Hammer | hamm
+32 | Knife | knif
+33 | Spear | spea
+34 | Polearm | pole
+35 | Crossbow | xbow
+36 | Mace | mace
+37 | Helm | helm
+38 | Missile Potion | tpot
+39 | Quest | ques
+40 | Body Part | body
+41 | Key | key
+42 | Throwing Knife | tkni
+43 | Throwing Axe | taxe
+44 | Javelin | jave
+45 | Weapon | weap
+46 | Melee Weapon | mele
+47 | Missile Weapon | miss
+48 | Thrown Weapon | thro
+49 | Combo Weapon | comb
+50 | Any Armor | armo
+51 | Any Shield | shld
+52 | Miscellaneous | misc
+53 | Socket Filler | sock
+54 | Second Hand | seco
+55 | Staves And Rods | rod
+56 | Missile | misl
+57 | Blunt | blun
+58 | Jewel | jewl
+59 | Class Specific | clas
+60 | Amazon Item | amaz
+61 | Barbarian Item | barb
+62 | Necromancer Item | necr
+63 | Paladin Item | pala
+64 | Sorceress Item | sorc
+65 | Assassin Item | assn
+66 | Druid Item | drui
+67 | Hand to Hand | h2h
+68 | Orb | orb
+69 | Voodoo Heads | head
+70 | Auric Shields | ashd
+71 | Primal Helm | phlm
+72 | Pelt | pelt
+73 | Cloak | cloa
+74 | Rune | rune
+75 | Circlet | circ
+76 | Healing Potion | hpot
+77 | Mana Potion | mpot
+78 | Rejuv Potion | rpot
+79 | Stamina Potion | spot
+80 | Antidote Potion | apot
+81 | Thawing Potion | wpot
+82 | Small Charm | scha
+83 | Medium Charm | mcha
+84 | Large Charm | lcha
+85 | Amazon Bow | abow
+86 | Amazon Spear | aspe
+87 | Amazon Javelin | ajav
+88 | Hand to Hand 2 | h2h2
+89 | Magic Bow Quiv | mboq
+90 | Magic Xbow Quiv | mxbq
+91 | Chipped Gem | gem0
+92 | Flawed Gem | gem1
+93 | Standard Gem | gem2
+94 | Flawless Gem | gem3
+95 | Perfect Gem | gem4
+96 | Amethyst | gema
+97 | Diamond | gemd
+98 | Emerald | geme
+99 | Ruby | gemr
+100 | Sapphire | gems
+101 | Topaz | gemt
+102 | Skull | gemz
+
+## UI flags
+
+Ids for `getUIFlag(id)`: the slots of the game's UI-state array. A slot reads true while the state in its "Set while" column holds: most slots are panels that read true while open, and 19 and 35 are on during normal play. Only 0-37 are valid: in a game, any other integer id (38 or more, or negative) makes the game exit at once, since D2BS does not check the range. The names are D2BS's C++ `Constants.h` names, which scripts do not have; pass the number. "Seen" marks the ids observed in a 1.14d single-player game (at rest, with each panel open, and with Alt held); the meanings of the other ids follow those names and kolbot and were not observed.
+
+Id | Name | Set while | Seen
+---|---|---|---
+0 (0x00) | UI_GAME | a game is running | yes
+1 (0x01) | UI_INVENTORY | the inventory panel is open | yes
+2 (0x02) | UI_CHARACTER | the character (stats) panel is open | yes
+3 (0x03) | UI_MINISKILL | the skill selection list is open (a click on the left skill button opens it) | yes
+4 (0x04) | UI_SKILLTREE | the skill tree panel is open | yes
+5 (0x05) | UI_CHAT_CONSOLE | the chat input box is open | yes
+6 (0x06) | UI_UNK | unknown | no
+7 (0x07) | UI_UNK_EX | unknown | no
+8 (0x08) | UI_NPCMENU (UI_DIALOG) | an NPC's menu is open, and while that NPC's trade screen is open | yes
+9 (0x09) | UI_ESCMENU_MAIN | the Escape game menu is open | yes
+10 (0x0A) | UI_AUTOMAP | the automap is shown | yes
+11 (0x0B) | UI_HOTKEY_CONFIG | the configure-controls screen is open | no
+12 (0x0C) | UI_NPCSHOP | an NPC trade (shop) screen is open | yes
+13 (0x0D) | UI_ALTDOWN (UI_GROUND_ITEMS) | the ground item labels are shown (Alt held) | yes
+14 (0x0E) | UI_ANVIL | the submit-item panel is open (for example the Horadric Staff orifice) | no
+15 (0x0F) | UI_QUEST | the quest log is open | yes
+16 (0x10) | UI_BARKSCROLL | a scroll text screen is open (for example the Scroll of Inifuss) | no
+17 (0x11) | UI_QUEST_LOG | unknown (the quest log sets 15, not 17) | no
+18 (0x12) | UI_STATUS_AREA | unknown | no
+19 (0x13) | UI_ESCMENU_EX | unknown; on during normal play (seen in town and in Cold Plains) | yes
+20 (0x14) | UI_WPMENU | the waypoint menu is open | yes
+21 (0x15) | UI_MINIPANEL | set together with 33 when the help screen opens | yes
+22 (0x16) | UI_PARTY | the party screen is open | no
+23 (0x17) | UI_TRADE | a trade with another player is open (the request prompt or the trade window) | no
+24 (0x18) | UI_MESSAGE_LOG | the message log is open | yes
+25 (0x19) | UI_STASH | the stash is open (it turns off when the cube is opened from the stash) | yes
+26 (0x1A) | UI_CUBE | the Horadric Cube is open | yes
+27 (0x1B) | UI_UNUSED | unknown | no
+28 (0x1C) | UI_INVENTORY_EX | unknown | no
+29 (0x1D) | UI_INVENTORY_EXX | unknown | no
+30 (0x1E) | UI_UNUSED_EX | unknown | no
+31 (0x1F) | UI_BELT | the expanded belt is shown | yes
+32 (0x20) | UI_UNUSED_EXX | unknown | no
+33 (0x21) | UI_HELP_MENU | the help screen is open | yes
+34 (0x22) | UI_HELP_BUTTON | unknown | no
+35 (0x23) | UI_ESCMENU | on during normal play; off while the Escape menu (9) is open | yes
+36 (0x24) | UI_MERC | the mercenary screen is open | yes
+37 (0x25) | UI_SCROLL | unknown | no
+
+## Out-of-game locations
+
+Values of `getLocation()`: the out-of-game screen the client is on. D2BS recognizes a screen by the buttons and text boxes it shows. `getLocation()` returns null while the client is not on the out-of-game menus: in a game, while a game loads, and between two screens. A popup that D2BS knows reports the popup rather than the screen under it. The names are D2BS's C++ `Constants.h` names, which scripts do not have; compare against the number. The character-select values (12, 13, 20, 23 and 42) need the expansion screen layout; the classic layout does not report them.
+
+Value | Name | Screen
+---|---|---
+0 | OOG_NONE | On the menus, but no known screen matched
+1 | OOG_LOBBY | Battle.net lobby
+2 | OOG_INLINE | Waiting in line to create or join a game
+3 | OOG_CHAT | Battle.net chat channel
+4 | OOG_CREATE | Create Game panel
+5 | OOG_JOIN | Join Game panel
+6 | OOG_LADDER | Ladder panel, or any other lobby panel with its Cancel button in the same place
+7 | OOG_CHANNEL | Channel list panel
+8 | OOG_MAIN_MENU | Main menu
+9 | OOG_LOGIN | Battle.net account login
+10 | OOG_LOGIN_ERROR | Login error popup
+11 | OOG_UNABLE_TO_CONNECT | Unable to connect to Battle.net
+12 | OOG_CHAR_SELECT | Character select (expansion screen layout), with a character shown
+13 | OOG_REALM_DOWN | Character select: the realm could not be reached, or the connection is temporarily restricted from it
+14 | OOG_DISCONNECTED | Disconnected from Battle.net popup
+15 | OOG_NEW_CHARACTER | Character create screen after a class is picked (its OK button is shown, greyed until a name is typed); also the fallback for any other screen with the Exit button at the bottom left
+16 | OOG_CHARACTER_SELECT_PLEASE_WAIT | A "Please Wait" popup
+17 | OOG_LOST_CONNECTION | Lost connection to Battle.net popup
+18 | OOG_D2SPLASH | Splash screen
+19 | OOG_CDKEY_IN_USE | CD key in use popup
+20 | OOG_DIFFICULTY | Single player difficulty choice
+21 | OOG_MAIN_MENU_CONNECTING | Connecting to Battle.net from the main menu
+22 | OOG_INVALID_CDKEY | Invalid CD key popup, or another popup with its OK button in the same place
+23 | OOG_CONNECTING | Character select: connecting to the realm
+24 | OOG_SERVER_DOWN | Server down popup
+25 | OOG_PLEASE_WAIT | A centered popup with a Cancel button and a message box, such as "Please wait" (16 is the same popup with its message higher up)
+26 | OOG_GAME_EXIST | A game with that name already exists
+27 | OOG_GATEWAY | Gateway (realm) list
+28 | OOG_GAME_DOES_NOT_EXIST | Game does not exist
+29 | OOG_CHARACTER_CREATE | Character create screen before a class is picked (its OK button is still hidden)
+30 | OOG_CHARACTER_CREATE_ALREADY_EXISTS | Any other centered popup with an OK button (for example a duplicate character name)
+31 | OOG_AGREE_TO_TERMS | Terms of use
+32 | OOG_NEW_ACCOUNT | Create a new Battle.net account
+33 | OOG_PLEASE_READ | "Please read" notice
+34 | OOG_REGISTER_EMAIL | Register an email address
+35 | OOG_CREDITS | Credits
+36 | OOG_CINEMATICS | Cinematics menu
+37 | OOG_CHARACTOR_CHANGE_REALM | Never returned (the change-realm screen reports 43)
+38 | OOG_GAME_IS_FULL | Game is full
+39 | OOG_OTHER_MULTIPLAYER | Other Multiplayer menu
+40 | OOG_TCP_IP | TCP/IP game menu
+41 | OOG_ENTER_IP_ADDRESS | TCP/IP: enter the host's IP address
+42 | OOG_CHARACTER_SELECT_NO_CHARS | Character select with no characters (also briefly while the character list is still loading)
+43 | OOG_CHARACTER_SELECT_CHANGE_REALM | Character select: change realm
+44 | OOG_UNABLE_TO_CONNECT_TCPIP | TCP/IP: unable to connect to the host
+
+## Collision flags
+
+Bits of the 16-bit collision mask that `getCollision()` and `Room.getCollision()` return for each map subtile. `getCollision()` also returns 65535 (every bit set) for a point it cannot read and for barricade-tower spots; that value does not mean the bits below are set. `getPath()` with reduction 0, 1 or 2 treats a subtile as blocked when it or one of the 4 subtiles next to it has 0x1 or 0x8 set. The walking path (reduction 0) also gives a higher cost to a subtile when it or a subtile 2 away in a straight line has 0x1 or 0x8 set, and to subtiles with 0x400 (objects) or 0x800 (closed doors), so it keeps clear of them where it can without treating them as blocked. `getPath()` reads no other bit. The names are D2BS's own, from its pathing code. Where kolbot's `sdk.collision` name differs by more than a plural, it is given in brackets; kolbot's `sdk.collision.BlockWalk` is the combination 0x1805, not 0x1. The notes on where a bit was seen come from a 1.14d single-player game in the Rogue Encampment.
+
+Bit | Name | Meaning
+---|---|---
+0x0001 | BlockWalk | Blocks walking (walls, cliffs, unwalkable space; also seen on a bonfire; kolbot: BlockWall)
+0x0002 | BlockLineOfSight | Blocks line of sight (kolbot: LineOfSight)
+0x0004 | Wall | Wall (kolbot calls it Ranged); in the room checked it was always set together with 0x1
+0x0008 | BlockPlayer | Blocks players (kolbot: PlayerToWalk)
+0x0010 | AlternateTile | Alternate floor tile (kolbot: DarkArea)
+0x0020 | Blank | Blank subtile (kolbot: Casting)
+0x0040 | Missile | Missile (kolbot: Unknown)
+0x0080 | Player | A player's cell and the 4 cells next to it
+0x0100 | NPCLocation | A monster's or NPC's cell and the cells next to it (kolbot: Monsters)
+0x0200 | Item | An item's cell (seen for a gold pile)
+0x0400 | Object | An object's cell (seen for a torch and a standard)
+0x0800 | ClosedDoor | A closed door
+0x1000 | NPCCollision | The cell the player stands on, and that of some NPCs (seen for Akara, Kashya and Warriv) (kolbot: IsOnFloor)
+0x2000 | FriendlyNPC | The cell of some NPCs and animals, and for larger ones (the cows) the 4 cells next to it too (seen for the mercenary, the rogue guards and the cows)
+0x4000 | Unknown | Unknown (kolbot: Unknown2)
+0x8000 | DeadBody | A corpse, by its name (not seen in the game checked; a D2BS code comment says portals set it too)
+
+## Box opacity
+
+A Box's `opacity` is the game's draw mode for the rectangle (default 0). Only 0-7 are supported; the value is not range-checked, so use nothing else. The effects below were measured in a 1.14d single-player game running windowed (-w), where the game draws through its GDI renderer; other video modes were not checked. Blended results are snapped to the game's 256-color palette.
+
+Mode | Effect
+---|---
+0 | The color blended over what is underneath, about 25% color (the default)
+1 | The color blended over what is underneath, about 50% color
+2 | The color blended over what is underneath, about 75% color
+3 | Nothing visible: what is underneath is unchanged
+4 | Black: the color is ignored
+5 | The color, solid
+6 | The color is ignored and what is underneath is darkened through a palette table (some colors stay as they are)
+7 | The color, solid (the same as 5)
+
+## Text colors
+
+The game's 13 text colors, as `Text.color` takes them. Inside a Text hook's string, the character 0xFF (written `\xFF` in a script string) followed by `c` and one more character switches the color from that point on: `\xFFc0` to `\xFFc9` select 0-9, and `\xFFc:`, `\xFFc;` and `\xFFc<` select 10, 11 and 12. Other values are not defined. In a string, `\xFFc` followed by a character after `<` selects 0, and one before `0` gives an undefined color. A `\xFF` followed by anything other than `c` is not a color code and is drawn as an ordinary character. The names are the conventional ones (kolbot's); the RGB values were measured in a 1.14d game (glyphs also carry a dark shadow).
+
+Value | Code | Color | RGB
+---|---|---|---
+0 | `\xFFc0` | White (the default) | C4C4C4
+1 | `\xFFc1` | Red | B04434
+2 | `\xFFc2` | Green (set items) | 18FC00
+3 | `\xFFc3` | Blue (magic items) | 5050AC
+4 | `\xFFc4` | Dark gold (unique items) | 948064
+5 | `\xFFc5` | Gray | 505050
+6 | `\xFFc6` | Black | 000000
+7 | `\xFFc7` | Light gold | AC9C64
+8 | `\xFFc8` | Orange (crafted items) | D08420
+9 | `\xFFc9` | Yellow (rare items) | D8B864
+10 | `\xFFc:` | Dark green | 186408
+11 | `\xFFc;` | Purple | A420FC
+12 | `\xFFc<` | Green | 287C14
+
+## Fonts
+
+The game's fonts, as `Text.font` and `getTextSize()` take them. Only 0-13 are valid: a larger value makes the game read past its font table and can crash it. The names are the game's own font names. The height is that of the text "Ag" drawn in a 1.14d game, in pixels, without the glyph shadow.
+
+Value | Font | Height of "Ag"
+---|---|---
+0 | Font8 (the default) | 11
+1 | Font16 | 10
+2 | Font30 | 16
+3 | Font42 | 24
+4 | FontFormal10 | 12
+5 | FontFormal12 | 15
+6 | Font6 | 9
+7 | Font24 | 14
+8 | FontFormal11 | 12
+9 | FontExocet10 | 13
+10 | FontRidiculous | 9
+11 | FontExocet8 | 8
+12 | ReallyTheLastSucker | 9
+13 | FontInGameChat | 12
 
 Generated by [Moxygen](https://sourcey.com/moxygen)

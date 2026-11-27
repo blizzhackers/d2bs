@@ -14,6 +14,10 @@ public:
 	Exit[] exits;
 
 	/** The name of the Area.
+	 *
+	 * Its Levels.txt LevelName, which for 25 areas is not the name the game
+	 * shows ("Rocky Summit" for the in-game Arreat Summit, area 120). See
+	 * \ref reference_areas.
 	 */
 	String name;
 

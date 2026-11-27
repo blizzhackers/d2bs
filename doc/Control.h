@@ -59,9 +59,27 @@ public:
 	 */
 	double ysize;
 
-	/** The state (?) of the Control.
+	/** The Control's display state: its flag word (the value disabled reads)
+	 * minus 2, read as an unsigned number.
 	 *
-	 * \todo Find a reference for these values.
+	 * Common reads: 3 = shown and enabled, 2 = shown but greyed, 11 or 10 = the
+	 * same on the popup layer. A hidden control reads 1 or 0 (7 or 6 on the
+	 * popup layer), or 4294967295 or 4294967294 when its flag word is below 2.
+	 *
+	 * The flag word is a set of bits: 0x01 enabled (takes clicks; a button
+	 * without it is drawn greyed), 0x04 shown (drawn and clickable), 0x08 popup
+	 * layer (drawn after every other control; popups have it), and 0x02, a
+	 * transient bit the game sets while a button is being released.
+	 *
+	 * Setting 0-3 replaces the whole flag word with state + 2: 3 shows and
+	 * enables the control, 2 shows it greyed, and 1 and 0 hide it. Setting it
+	 * also removes the popup-layer bit. States 0 and 1 also set a transient bit
+	 * the game uses while a button is being released, with effects that are not
+	 * fully known, so prefer 2 and 3. Any other 32-bit integer throws "Invalid
+	 * state value"; a non-integer value, or an integer outside the signed
+	 * 32-bit range, is ignored.
+	 *
+	 * Reads undefined once the control is gone.
 	 */
 	double state;
 
@@ -71,48 +89,59 @@ public:
 
 	/** The type of control.
 	 *
-	 * 1 - TextBox
-	 *
-	 * 2 - Image
-	 *
-	 * 3 - Image2
-	 *
-	 * 4 - LabelBox
-	 *
-	 * 5 - ScrollBar
-	 *
-	 * 6 - Button
-	 *
-	 * 7 - List
-	 *
-	 * 8 - Timer
-	 *
-	 * 9 - Smack
-	 *
-	 * 10 - ProgressBar
-	 *
-	 * 11 - Popup
-	 *
-	 * 12 - AccountList
+	 * | Value | Type | Notes |
+	 * |---|---|---|
+	 * | 1 | Edit box | Single-line text input (account, password, game name); its text is writable |
+	 * | 2 | Image | Image or picture |
+	 * | 3 | (unused) | Never constructed in 1.14d |
+	 * | 4 | Text box | Multi-line text or label box; read it with getText() |
+	 * | 5 | Scroll bar | |
+	 * | 6 | Button | |
+	 * | 7 | List | List box |
+	 * | 8 | Timer | Invisible timer control |
+	 * | 9 | Video | Smacker video player |
+	 * | 10 | Progress bar | |
+	 * | 11 | Popup | |
+	 * | 12 | Account list | |
 	 */
 	double type;
 
 	/** The position of the text cursor in an edit box. Reading it returns the current position, and setting it stores a new one. On any other control type it reads as undefined and ignores writes. */
 	double cursorpos;
 
-	/** Someting...
+	/** On an edit box, the character index of the selection's moving end.
 	 *
-	 * \todo Determine what this is.
+	 * It follows the cursor while the selection is extended with Shift or the
+	 * mouse. Despite its name it is not where the selection began; that is
+	 * selectend. The selection is the text between selectstart and selectend,
+	 * in whichever order they fall; nothing is selected when selectend is
+	 * 4294967295 or equals selectstart. It reads 0 once the selection is
+	 * cleared (moving the cursor with the keyboard without Shift clears it), so
+	 * it is meaningful only while a selection exists.
+	 *
+	 * Read-only. On other control types the value has no selection meaning.
+	 * Reads undefined once the control is gone.
 	 */
 	double selectstart;
 
-	/** Something...
+	/** On an edit box, the character index where the current selection began
+	 * (its fixed end).
 	 *
-	 * \todo Determine what this is.
+	 * Reads 4294967295 when no selection has been started. Nothing is selected
+	 * either when selectend equals selectstart. The selection is the text
+	 * between selectend and selectstart, in whichever order they fall. Select
+	 * all gives selectend 0 and selectstart equal to the text length.
+	 *
+	 * Read-only. On other control types the value has no selection meaning.
+	 * Reads undefined once the control is gone.
 	 */
 	double selectend;
 
-	/** Whether the Control is disabled or not.
+	/** The Control's raw flag word; its bits are listed under state. Despite
+	 * its name it is not a boolean: a shown, enabled control reads 5 and a
+	 * shown, greyed one reads 4 (13 and 12 on the popup layer). Read-only: an
+	 * assignment is ignored, and throws a TypeError in strict code. Reads
+	 * undefined once the control is gone.
 	 */
 	double disabled;
 };

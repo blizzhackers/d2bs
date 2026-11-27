@@ -2179,6 +2179,8 @@ This includes arrays where you can walk between two areas and warp [Unit](#class
 
 The name of the [Area](#classArea).
 
+Its Levels.txt LevelName, which for 25 areas is not the name the game shows ("Rocky Summit" for the in-game Arreat Summit, area 120). See [Area ids](#area-ids) in the reference tables.
+
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`x`](#classArea_1a7b57ea354fbe94f9480d28e07857e4c3) 
 
 The x coordinate of the left side of the map.
@@ -6218,7 +6220,7 @@ These tables list the ids and flag values that the script API takes and returns.
 
 ## Area ids
 
-Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index instead (the Levels.txt Waypoint column). An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. Name is the name the game shows, from its English string tables; Levels.txt LevelName is the key it is looked up by, which differs for 25 areas (120 Rocky Summit is the in-game Arreat Summit, and 125-127 Hell1-3 are Abaddon, Pit of Acheron and Infernal Pit). The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one that holds Tal Rasha's chamber in the current game. Act is the act the area belongs to (1-5; - for id 0). The calls that look up an area know only the areas the client has created for the player's act. In a new game some are missing at first (in a new Act 1 game, 21-25 and 29-38 were still missing 5 seconds after the game was ready), and such an area counts as not in the player's act.
+Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index instead (the Levels.txt Waypoint column). An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. Name is the name the game shows, from its English string tables; Levels.txt LevelName is the key it is looked up by, which differs for 25 areas (120 Rocky Summit is the in-game Arreat Summit, and 125-127 Hell1-3 are Abaddon, Pit of Acheron and Infernal Pit). Scripts get the LevelName, not Name: `getArea(120).name` and `getBaseStat("levels", 120, "LevelName")` both return "Rocky Summit". The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one whose Orifice leads to Tal Rasha's Chamber (73) in the current game. Act is the act the area belongs to (1-5; - for id 0). The calls that look up an area know only the areas the client has created for the player's act. In a new game some are missing at first (in a new Act 1 game, 21-25 and 29-38 were still missing 5 seconds after the game was ready), and such an area counts as not in the player's act.
 
 Id | Name | Levels.txt LevelName | Internal name (Levels.txt Name) | Act
 ---|---|---|---|---

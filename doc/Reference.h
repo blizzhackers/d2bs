@@ -14,14 +14,16 @@
  * the game shows, from its English string tables; Levels.txt LevelName is the
  * key it is looked up by, which differs for 25 areas (120 Rocky Summit is the
  * in-game Arreat Summit, and 125-127 Hell1-3 are Abaddon, Pit of Acheron and
- * Infernal Pit). The seven Tal Rasha's Tomb areas share one name; the
- * internal name tells them apart, and `correcttomb` of any Act II room gives
- * the id of the one that holds Tal Rasha's chamber in the current game. Act
- * is the act the area belongs to (1-5; - for id 0). The calls that look up an
- * area know only the areas the client has created for the player's act. In a
- * new game some are missing at first (in a new Act 1 game, 21-25 and 29-38
- * were still missing 5 seconds after the game was ready), and such an area
- * counts as not in the player's act.
+ * Infernal Pit). Scripts get the LevelName, not Name: `getArea(120).name` and
+ * `getBaseStat("levels", 120, "LevelName")` both return "Rocky Summit". The
+ * seven Tal Rasha's Tomb areas share one name; the internal name tells them
+ * apart, and `correcttomb` of any Act II room gives the id of the one whose
+ * Orifice leads to Tal Rasha's Chamber (73) in the current game. Act is the
+ * act the area belongs to (1-5; - for id 0). The calls that look up an area
+ * know only the areas the client has created for the player's act. In a new
+ * game some are missing at first (in a new Act 1 game, 21-25 and 29-38 were
+ * still missing 5 seconds after the game was ready), and such an area counts
+ * as not in the player's act.
  *
  * Id | Name | Levels.txt LevelName | Internal name (Levels.txt Name) | Act
  * ---|---|---|---|---

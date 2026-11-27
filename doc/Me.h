@@ -83,8 +83,16 @@ public:
 
 	/** Interact with the unit.
 	 *
-	 * If the unit is an item in inventory pick it up. Otherwise click it on
-	 * the map.
+	 * If the unit is an item in your inventory or stash, the call uses it as a
+	 * right-click does: a potion is drunk, a town portal tome or scroll opens a
+	 * portal outside town, and an identify tome or scroll gives the identify
+	 * cursor. An item in the belt is used the same way. Either use returns
+	 * false, whether or not the game acts on it. Any other unit, an item
+	 * anywhere else included, gets a left-button-down click on its map
+	 * position that targets it, the same kind of click clickMap(0, 0, unit)
+	 * makes, and the call returns true. Called on your own character, or on a
+	 * unit that has left the game, it does nothing and returns false. Outside
+	 * a ready game it returns false (with a 'Game not ready' warning).
 	 */
 	bool interact();
 
@@ -297,8 +305,9 @@ public:
 	 * above stay positive. On an item, stat 92 returns the item's level
 	 * requirement for your character (the same value as the itemlevelreq
 	 * property) and ignores nSubIndex. On any other unit, your own character
-	 * included, stat 92 does not read a stat, and its result is not a level
-	 * requirement. Any other stat returns the game's total for that stat and
+	 * included, stat 92 does not read a stat: the game's item level-requirement
+	 * calculation runs on that unit and returns a number with no fixed
+	 * meaning. Any other stat returns the game's total for that stat and
 	 * subindex; when that total is 0, the value of that stat and subindex in
 	 * the stat list that getStat(-1) reads (not the base stats getStat(-1)
 	 * adds) is returned instead (0 if it is not there). Arguments that are not
@@ -350,11 +359,12 @@ public:
 	 * back as ordinary entries. A charged skill also gets charges and
 	 * maxcharges, except on an item with a maximum of 1 charge, or of 2
 	 * charges with none left. When the same stat id occurs more than once,
-	 * the element is an array of such objects. On an item, each
-	 * skill-carrying entry is returned twice, so such an element is an array
-	 * in which every object appears twice (a single skill gives an array of
-	 * two identical objects). Oskill mods (stat 97) are ordinary entries:
-	 * element 97 is indexed by skill id and holds the bonus level.
+	 * the element is an array of such objects. On many items each
+	 * skill-carrying entry is returned twice (a single skill gives an array of
+	 * two identical objects); on other items and on a player each comes back
+	 * once. So check an element with Array.isArray and allow for duplicate
+	 * objects. Oskill mods (stat 97) are ordinary entries: element 97 is
+	 * indexed by skill id and holds the bonus level.
 	 *
 	 * \param nStat Set to -2.
 	 *

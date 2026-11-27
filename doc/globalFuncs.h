@@ -264,8 +264,9 @@ int getSkillByName(String skillName);
  *
  * \return The skill's in-game name in the client's language (its skilldesc
  * string), which is not always a name getSkillByName() and setSkill() accept.
- * Returns "Unknown" for an id outside the game's skill table, and undefined
- * when the argument is missing or is not an integer.
+ * Returns "Unknown" for an id outside the game's skill table and for a skill
+ * that has no skill description (for example 156), and undefined when the
+ * argument is missing or is not an integer.
  */
 String getSkillById(int skillId);
 

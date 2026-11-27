@@ -345,7 +345,7 @@ Get skill name by ID.
 * `skillId` The skill ID.
 
 #### Returns
-The skill's in-game name in the client's language (its skilldesc string), which is not always a name getSkillByName() and setSkill() accept. Returns "Unknown" for an id outside the game's skill table, and undefined when the argument is missing or is not an integer.
+The skill's in-game name in the client's language (its skilldesc string), which is not always a name getSkillByName() and setSkill() accept. Returns "Unknown" for an id outside the game's skill table and for a skill that has no skill description (for example 156), and undefined when the argument is missing or is not an integer.
 
 #### `public String `[`getLocaleString`](#group__globalFunctions_1gaf2065d798cd6a0337fb94f7bae718283)`(uint16_t localeId)` 
 
@@ -2448,7 +2448,7 @@ Read-only. On other control types the value has no selection meaning. Reads unde
 
 #### `public double `[`disabled`](#classControl_1a8b89abb5d91642620cc5ffe5173a6619) 
 
-The [Control](#classControl)'s raw flag word; its bits are listed under state. Despite its name it is not a boolean: a shown, enabled control reads 5 and a shown, greyed one reads 4 (13 and 12 on the popup layer). Read-only. Reads undefined once the control is gone.
+The [Control](#classControl)'s raw flag word; its bits are listed under state. Despite its name it is not a boolean: a shown, enabled control reads 5 and a shown, greyed one reads 4 (13 and 12 on the popup layer). Read-only: an assignment is ignored, and throws a TypeError in strict code. Reads undefined once the control is gone.
 
 #### `public `[`Control`](#classControl)` `[`getNext`](#classControl_1a4894f8dd6595425524cd468938ed327c)`()` 
 
@@ -4145,7 +4145,7 @@ true if menu was found.
 
 Interact with the unit.
 
-If the unit is an item in inventory pick it up. Otherwise click it on the map.
+If the unit is an item in your inventory or stash, the call uses it as a right-click does: a potion is drunk, a town portal tome or scroll opens a portal outside town, and an identify tome or scroll gives the identify cursor. An item in the belt is used the same way. Either use returns false, whether or not the game acts on it. Any other unit, an item anywhere else included, gets a left-button-down click on its map position that targets it, the same kind of click clickMap(0, 0, unit) makes, and the call returns true. Called on your own character, or on a unit that has left the game, it does nothing and returns false. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public bool `[`interact`](#classMe_1a4742f918ff80aa898da57756b1a95fbd)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` destId)` 
 
@@ -4342,7 +4342,7 @@ Source: [http://subversion.assembla.com/svn/d2bs/scripts/YAMB/libs/YAMB/common/Y
 
 Get a stat by stat id and sub index.
 
-Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. On an item, stat 92 returns the item's level requirement for your character (the same value as the itemlevelreq property) and ignores nSubIndex. On any other unit, your own character included, stat 92 does not read a stat, and its result is not a level requirement. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
+Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. On an item, stat 92 returns the item's level requirement for your character (the same value as the itemlevelreq property) and ignores nSubIndex. On any other unit, your own character included, stat 92 does not read a stat: the game's item level-requirement calculation runs on that unit and returns a number with no fixed meaning. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
 
 #### Parameters
 * `nStat` The stat id (the ID column of ItemStatCost.txt).
@@ -4372,7 +4372,7 @@ Get the unit's stats as an array indexed by stat id.
 
 Each element is an array indexed by subindex that holds the value, with life, mana and stamina (stats 6-11) in whole points. Other values are raw, so values of 2^31 and above (such as high experience) come back negative. The values come from the unit's base stats, its stat totals (the values the single-stat form reads) and the stat list that getStat(-1) reads, in that order; where more than one holds the same stat and subindex, the last one wins, so a value here is not always the one the single-stat form returns.
 
-A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, for skill ids 8 and up; lower skill ids come back as ordinary entries. A charged skill also gets charges and maxcharges, except on an item with a maximum of 1 charge, or of 2 charges with none left. When the same stat id occurs more than once, the element is an array of such objects. On an item, each skill-carrying entry is returned twice, so such an element is an array in which every object appears twice (a single skill gives an array of two identical objects). Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
+A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, for skill ids 8 and up; lower skill ids come back as ordinary entries. A charged skill also gets charges and maxcharges, except on an item with a maximum of 1 charge, or of 2 charges with none left. When the same stat id occurs more than once, the element is an array of such objects. On many items each skill-carrying entry is returned twice (a single skill gives an array of two identical objects); on other items and on a player each comes back once. So check an element with Array.isArray and allow for duplicate objects. Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
 
 #### Parameters
 * `nStat` Set to -2.
@@ -5769,7 +5769,7 @@ true if menu was found.
 
 Interact with the unit.
 
-If the unit is an item in inventory or stash pick it up. Otherwise click it on the map.
+If the unit is an item in your inventory or stash, the call uses it as a right-click does: a potion is drunk, a town portal tome or scroll opens a portal outside town, and an identify tome or scroll gives the identify cursor. An item in the belt is used the same way. Either use returns false, whether or not the game acts on it. Any other unit, an item anywhere else included, gets a left-button-down click on its map position that targets it, the same kind of click clickMap(0, 0, unit) makes, and the call returns true. Called on your own character, or on a unit that has left the game, it does nothing and returns false. Outside a ready game it returns false (with a 'Game not ready' warning).
 
 #### `public bool `[`interact`](#classUnit_1aa1a4ac5b77fc8561252cad2af1ba9ba3)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` destId)` 
 
@@ -5977,7 +5977,7 @@ true if any of the flags are set in the item flags.
 
 Get a stat by stat id and sub index.
 
-Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. On an item, stat 92 returns the item's level requirement for your character (the same value as the itemlevelreq property) and ignores nSubIndex. On any other unit, your own character included, stat 92 does not read a stat, and its result is not a level requirement. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
+Life, mana and stamina (stats 6-11) come back in whole points. Experience (stats 13, 29 and 30) is read unsigned, so values of 2^31 and above stay positive. On an item, stat 92 returns the item's level requirement for your character (the same value as the itemlevelreq property) and ignores nSubIndex. On any other unit, your own character included, stat 92 does not read a stat: the game's item level-requirement calculation runs on that unit and returns a number with no fixed meaning. Any other stat returns the game's total for that stat and subindex; when that total is 0, the value of that stat and subindex in the stat list that getStat(-1) reads (not the base stats getStat(-1) adds) is returned instead (0 if it is not there). Arguments that are not integers are converted to integers.
 
 #### Parameters
 * `nStat` The stat id (the ID column of ItemStatCost.txt).
@@ -6007,7 +6007,7 @@ Get the unit's stats as an array indexed by stat id.
 
 Each element is an array indexed by subindex that holds the value, with life, mana and stamina (stats 6-11) in whole points. Other values are raw, so values of 2^31 and above (such as high experience) come back negative. The values come from the unit's base stats, its stat totals (the values the single-stat form reads) and the stat list that getStat(-1) reads, in that order; where more than one holds the same stat and subindex, the last one wins, so a value here is not always the one the single-stat form returns.
 
-A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, for skill ids 8 and up; lower skill ids come back as ordinary entries. A charged skill also gets charges and maxcharges, except on an item with a maximum of 1 charge, or of 2 charges with none left. When the same stat id occurs more than once, the element is an array of such objects. On an item, each skill-carrying entry is returned twice, so such an element is an array in which every object appears twice (a single skill gives an array of two identical objects). Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
+A stat that carries a skill (for example a charged skill or a chance-to-cast skill such as one cast on striking) holds an object {skill, level} instead, for skill ids 8 and up; lower skill ids come back as ordinary entries. A charged skill also gets charges and maxcharges, except on an item with a maximum of 1 charge, or of 2 charges with none left. When the same stat id occurs more than once, the element is an array of such objects. On many items each skill-carrying entry is returned twice (a single skill gives an array of two identical objects); on other items and on a player each comes back once. So check an element with Array.isArray and allow for duplicate objects. Oskill mods (stat 97) are ordinary entries: element 97 is indexed by skill id and holds the bonus level.
 
 #### Parameters
 * `nStat` Set to -2.
@@ -6218,7 +6218,7 @@ These tables list the ids and flag values that the script API takes and returns.
 
 ## Area ids
 
-Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index instead (the Levels.txt Waypoint column). An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one that holds Tal Rasha's chamber in the current game. Act is the act the area belongs to (1-5; - for id 0).
+Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index instead (the Levels.txt Waypoint column). An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one that holds Tal Rasha's chamber in the current game. Act is the act the area belongs to (1-5; - for id 0). The calls that look up an area know only the areas the client has created for the player's act. In a new game some are missing at first (in a new Act 1 game, 21-25 and 29-38 were still missing 5 seconds after the game was ready), and such an area counts as not in the player's act.
 
 Id | Name | Internal name (Levels.txt Name) | Act
 ---|---|---|---
@@ -6843,7 +6843,7 @@ Id | Name | Set while | Seen
 0 (0x00) | UI_GAME | a game is running | yes
 1 (0x01) | UI_INVENTORY | the inventory panel is open | yes
 2 (0x02) | UI_CHARACTER | the character (stats) panel is open | yes
-3 (0x03) | UI_MINISKILL | the skill selection list is open | no
+3 (0x03) | UI_MINISKILL | the skill selection list is open (a click on the left skill button opens it) | yes
 4 (0x04) | UI_SKILLTREE | the skill tree panel is open | yes
 5 (0x05) | UI_CHAT_CONSOLE | the chat input box is open | yes
 6 (0x06) | UI_UNK | unknown | no
@@ -6900,7 +6900,7 @@ Value | Name | Screen
 12 | OOG_CHAR_SELECT | Character select (expansion screen layout), with a character shown
 13 | OOG_REALM_DOWN | Character select: the realm could not be reached, or the connection is temporarily restricted from it
 14 | OOG_DISCONNECTED | Disconnected from Battle.net popup
-15 | OOG_NEW_CHARACTER | Character create screen after a class is picked (its OK button is shown); also the fallback for any other screen with the Exit button at the bottom left
+15 | OOG_NEW_CHARACTER | Character create screen after a class is picked (its OK button is shown, greyed until a name is typed); also the fallback for any other screen with the Exit button at the bottom left
 16 | OOG_CHARACTER_SELECT_PLEASE_WAIT | A "Please Wait" popup
 17 | OOG_LOST_CONNECTION | Lost connection to Battle.net popup
 18 | OOG_D2SPLASH | Splash screen
@@ -6956,7 +6956,7 @@ Bit | Name | Meaning
 
 ## Box opacity
 
-The `opacity` of a Box selects the game's draw mode for the rectangle. Only 0-7 are supported. The effects below were measured in a 1.14d single-player game; blended results are snapped to the game's 256-color palette.
+The `opacity` of a Box selects the game's draw mode for the rectangle. Only 0-7 are supported. The effects below were measured in a 1.14d single-player game running windowed (-w), where the game draws through its GDI renderer; other video modes were not checked. Blended results are snapped to the game's 256-color palette.
 
 Mode | Effect
 ---|---

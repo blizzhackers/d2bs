@@ -3,8 +3,10 @@
  * \section opacity Explanation of opacity parameter.
  * A Box's `opacity` is the game's draw mode for the rectangle (default 0).
  * Only 0-7 are supported; the value is not range-checked, so use nothing
- * else. The effects below were measured in a 1.14d single-player game;
- * blended results are snapped to the game's 256-color palette.
+ * else. The effects below were measured in a 1.14d single-player game
+ * running windowed (-w), where the game draws through its GDI renderer;
+ * other video modes were not checked. Blended results are snapped to the
+ * game's 256-color palette.
  *
  * | Mode | Effect |
  * |---|---|

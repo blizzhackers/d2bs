@@ -139,8 +139,9 @@ public:
 
 	/** The Control's raw flag word; its bits are listed under state. Despite
 	 * its name it is not a boolean: a shown, enabled control reads 5 and a
-	 * shown, greyed one reads 4 (13 and 12 on the popup layer). Read-only.
-	 * Reads undefined once the control is gone.
+	 * shown, greyed one reads 4 (13 and 12 on the popup layer). Read-only: an
+	 * assignment is ignored, and throws a TypeError in strict code. Reads
+	 * undefined once the control is gone.
 	 */
 	double disabled;
 };

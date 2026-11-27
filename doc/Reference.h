@@ -14,7 +14,11 @@
  * Rasha's Tomb areas share one name; the internal name tells them apart, and
  * `correcttomb` of any Act II room gives the id of the one that holds Tal
  * Rasha's chamber in the current game. Act is the act the area belongs to
- * (1-5; - for id 0).
+ * (1-5; - for id 0). The calls that look up an area know only the areas the
+ * client has created for the player's act. In a new game some are missing at
+ * first (in a new Act 1 game, 21-25 and 29-38 were still missing 5 seconds
+ * after the game was ready), and such an area counts as not in the player's
+ * act.
  *
  * Id | Name | Internal name (Levels.txt Name) | Act
  * ---|---|---|---
@@ -661,7 +665,7 @@
  * 0 (0x00) | UI_GAME | a game is running | yes
  * 1 (0x01) | UI_INVENTORY | the inventory panel is open | yes
  * 2 (0x02) | UI_CHARACTER | the character (stats) panel is open | yes
- * 3 (0x03) | UI_MINISKILL | the skill selection list is open | no
+ * 3 (0x03) | UI_MINISKILL | the skill selection list is open (a click on the left skill button opens it) | yes
  * 4 (0x04) | UI_SKILLTREE | the skill tree panel is open | yes
  * 5 (0x05) | UI_CHAT_CONSOLE | the chat input box is open | yes
  * 6 (0x06) | UI_UNK | unknown | no
@@ -725,7 +729,7 @@
  * 12 | OOG_CHAR_SELECT | Character select (expansion screen layout), with a character shown
  * 13 | OOG_REALM_DOWN | Character select: the realm could not be reached, or the connection is temporarily restricted from it
  * 14 | OOG_DISCONNECTED | Disconnected from Battle.net popup
- * 15 | OOG_NEW_CHARACTER | Character create screen after a class is picked (its OK button is shown); also the fallback for any other screen with the Exit button at the bottom left
+ * 15 | OOG_NEW_CHARACTER | Character create screen after a class is picked (its OK button is shown, greyed until a name is typed); also the fallback for any other screen with the Exit button at the bottom left
  * 16 | OOG_CHARACTER_SELECT_PLEASE_WAIT | A "Please Wait" popup
  * 17 | OOG_LOST_CONNECTION | Lost connection to Battle.net popup
  * 18 | OOG_D2SPLASH | Splash screen

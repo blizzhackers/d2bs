@@ -32,7 +32,7 @@ class Genhook {
     static bool init;
     static HookList visible, invisible;
     static CRITICAL_SECTION globalSection;
-    static volatile LONG lastId;
+    static ULONGLONG lastId; // under globalSection
 
   protected:
     Script* owner;
@@ -42,8 +42,8 @@ class Genhook {
     // written and read under globalSection.
     bool hasClick;
     // Names the hook in its click events: by the time the owner runs one, the hook may be gone, and a later hook may
-    // sit at the same address.
-    DWORD id;
+    // sit at the same address. Set by Register; 64 bits, so ids never repeat within a process.
+    ULONGLONG id;
     JSObject* self;
     bool isAutomap, isVisible;
     ushort opacity, zorder;
@@ -69,7 +69,7 @@ class Genhook {
     static bool ClickVisibleHooks(int button, POINT* loc);
     // Owner script thread only, inside a request: the click handler of owner's hook with this id, or JSVAL_VOID when
     // the hook is gone. The caller roots the result before anything can run the GC.
-    static jsval GetClickHandler(Script* hookOwner, DWORD hookId);
+    static jsval GetClickHandler(Script* hookOwner, ULONGLONG hookId);
     static void Clean(Script* owner);
     static void Initialize(void) {
         InitializeCriticalSection(&globalSection);

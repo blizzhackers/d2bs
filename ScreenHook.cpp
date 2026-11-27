@@ -12,7 +12,7 @@ bool Genhook::init = false;
 HookList Genhook::visible = HookList();
 HookList Genhook::invisible = HookList();
 CRITICAL_SECTION Genhook::globalSection = {0};
-volatile LONG Genhook::lastId = 0;
+ULONGLONG Genhook::lastId = 0;
 
 void DrawLogo(void) {
     static wchar_t version[] = L"D2BS " D2BS_SHORT_VERSION;
@@ -141,7 +141,7 @@ void Genhook::Clean(Script* owner) {
 Genhook::Genhook(Script* nowner, JSObject* nself, uint x, uint y, ushort nopacity, bool nisAutomap, Align nalign, ScreenhookState ngameState)
     : owner(nowner), isAutomap(nisAutomap), isVisible(true), alignment(nalign), opacity(nopacity), gameState(ngameState), zorder(1) {
     hasClick = false;
-    id = (DWORD)InterlockedIncrement(&lastId);
+    id = 0;
     self = nself;
     SetX(x);
     SetY(y);
@@ -149,6 +149,7 @@ Genhook::Genhook(Script* nowner, JSObject* nself, uint x, uint y, ushort nopacit
 
 void Genhook::Register(void) {
     EnterCriticalSection(&globalSection);
+    id = ++lastId;
     if (isVisible)
         visible.push_back(this);
     else
@@ -178,7 +179,7 @@ static void FreeClickArgs(Event* evt) {
     delete (DWORD*)evt->arg2;
     delete (DWORD*)evt->arg3;
     delete (DWORD*)evt->arg4;
-    delete (DWORD*)evt->arg5;
+    delete (ULONGLONG*)evt->arg5;
 }
 
 // Runs on the game thread under globalSection, so it touches nothing of the owner's JS runtime: the owner's thread
@@ -196,7 +197,7 @@ Event* Genhook::ClickEvent(int button, POINT* loc) {
     evt->arg2 = new DWORD((DWORD)loc->x);
     evt->arg3 = new DWORD((DWORD)loc->y);
     evt->arg4 = new DWORD(false);
-    evt->arg5 = new DWORD(id);
+    evt->arg5 = new ULONGLONG(id);
     evt->freeArgs = FreeClickArgs;
     return evt;
 }
@@ -204,7 +205,7 @@ Event* Genhook::ClickEvent(int button, POINT* loc) {
 // The lists hold hook objects weakly. A listed hook's object is still alive here because each collection of the owner's
 // runtime runs to the end on this thread (no slice budget is set, so no GC is incremental) and its hook_finalize
 // unlists every hook it collects; a sliced GC would need a weak-read check here.
-jsval Genhook::GetClickHandler(Script* hookOwner, DWORD hookId) {
+jsval Genhook::GetClickHandler(Script* hookOwner, ULONGLONG hookId) {
     jsval handler = JSVAL_VOID;
     EnterCriticalSection(&globalSection);
     Genhook* hook = NULL;

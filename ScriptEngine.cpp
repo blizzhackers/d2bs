@@ -807,7 +807,7 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             JS::AutoValueVector fns(cx);
             JS::AutoValueVector argv(cx);
             if (fns.resize(1) && argv.resize(3)) {
-                fns[0] = Genhook::GetClickHandler(evt->owner, *(DWORD*)evt->arg5);
+                fns[0] = Genhook::GetClickHandler(evt->owner, *(ULONGLONG*)evt->arg5);
                 if (JSVAL_IS_FUNCTION(cx, fns[0])) {
                     argv[0] = JS_NumberValue(*(DWORD*)evt->arg1);
                     argv[1] = JS_NumberValue(*(DWORD*)evt->arg2);

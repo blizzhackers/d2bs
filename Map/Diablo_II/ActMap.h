@@ -175,6 +175,15 @@ class ScopedActMap {
         if (level)
             map = new ActMap(level);
     }
+    // Waits out a load first, and again when the level is missing while the game is busy under the lock (WaitForLevel).
+    // The lookup's own hold ends here: the map holds its own, which the path search gives up during its callbacks.
+    ScopedActMap(DWORD levelNo, GameWait& wait) : map(NULL) {
+        AutoCriticalRoom* cRoom = NULL;
+        const Level* level = WaitForLevel(levelNo, wait, cRoom);
+        if (level)
+            map = new ActMap(level);
+        delete cRoom;
+    }
     ~ScopedActMap() {
         if (map) {
             map->CleanUp();

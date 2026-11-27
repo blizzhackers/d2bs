@@ -36,35 +36,16 @@ JSAPI_PROP(area_getProperty) {
     const bool bBuildExits = nProp == AUNIT_EXITS && JSVAL_IS_VOID(exitList);
 
     // Waits out a load, so a read mid-walk does not throw; a blocking listener or a thread that holds the game lock
-    // fails fast instead. The wait reads readiness without the game lock, so a game found busy again under the lock
-    // sends the read back to wait, against the same deadline. bMayWait is sampled before the getter takes the lock.
-    const bool bMayWait = MayWaitForGame();
-    const DWORD start = GetTickCount();
-    bool bLoaded = false, bRetry = false;
+    // fails fast instead.
+    GameWait wait;
     DWORD dwPosX = 0, dwPosY = 0, dwSizeX = 0, dwSizeY = 0, dwLevelNo = 0;
     ExitArray exits;
-    do {
-        // A busy game seen under the lock gets the wait's own poll before the next probe: the deadline, a pause, then
-        // the deadline again.
-        if (bRetry) {
-            if (GameReadyTimedOut(start))
-                break;
-            Sleep(10);
-            if (GameReadyTimedOut(start))
-                break;
-        }
-        if (!WaitForGameReadySince(start))
-            THROW_ERROR(cx, "Area not loaded");
-        // The level and its exits are read under one hold of the game lock, which the game thread needs to free an
-        // act's levels; the hold ends before any value is built, since building one can run the GC.
-        AutoCriticalRoom cRoom;
-        Level* pLevel = GetLevel(pArea->AreaId);
-        if (!pLevel) {
-            bRetry = bMayWait && ClientState() == ClientStateBusy;
-            if (bRetry)
-                continue;
-            break;
-        }
+    // The level and its exits are read under one hold of the game lock, which the game thread needs to free an act's
+    // levels; the hold ends before any value is built, since building one can run the GC.
+    AutoCriticalRoom* cRoom = NULL;
+    Level* pLevel = WaitForLevel(pArea->AreaId, wait, cRoom);
+    bool bLoaded = pLevel != NULL;
+    if (pLevel) {
         dwPosX = pLevel->dwPosX;
         dwPosY = pLevel->dwPosY;
         dwSizeX = pLevel->dwSizeX;
@@ -72,12 +53,13 @@ JSAPI_PROP(area_getProperty) {
         dwLevelNo = pLevel->dwLevelNo;
         if (bBuildExits) {
             ScopedActMap map(pArea->AreaId);
-            if (!map.ok())
-                break;
-            map->GetExits(exits);
+            if (map.ok())
+                map->GetExits(exits);
+            else
+                bLoaded = false;
         }
-        bLoaded = true;
-    } while (!bLoaded);
+    }
+    delete cRoom;
     if (!bLoaded)
         THROW_ERROR(cx, "Area not loaded");
 
@@ -154,10 +136,11 @@ JSAPI_PROP(area_getProperty) {
 JSAPI_FUNC(my_getArea) {
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
 
-    if (!WaitForGameReady())
+    GameWait wait;
+    if (!wait.Ready())
         THROW_ERROR(cx, "Get Area: Game not ready");
 
-    int32 nArea = GetPlayerArea();
+    int32 nArea = 0;
 
     if (argc == 1) {
 
@@ -167,14 +150,24 @@ JSAPI_FUNC(my_getArea) {
             JS_EndRequest(cx);
         } else
             THROW_ERROR(cx, "Invalid parameter passed to getArea!");
+
+        if (nArea < 0)
+            THROW_ERROR(cx, "Invalid parameter passed to getArea!");
     }
 
-    if (nArea < 0)
-        THROW_ERROR(cx, "Invalid parameter passed to getArea!");
+    // Without an id the player's area is read under the same hold as the level lookup, so both come from one state.
+    bool bFound = false;
+    while (!bFound && wait.Ready()) {
+        AutoCriticalRoom cRoom;
+        if (argc != 1)
+            nArea = GetPlayerAreaLocked();
+        if (GetLevel(nArea))
+            bFound = true;
+        else if (!wait.RetryIfBusy())
+            break;
+    }
 
-    Level* pLevel = GetLevel(nArea);
-
-    if (!pLevel) {
+    if (!bFound) {
         JS_SET_RVAL(cx, vp, JSVAL_FALSE);
         return JS_TRUE;
     }

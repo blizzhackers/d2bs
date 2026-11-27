@@ -1,0 +1,1 @@
+- **Map lookups through loads.** `getPath()`, `getCollision()`, `getRoom()`, `getArea()`, `getPresetUnit()` and `getPresetUnits()` also wait out an area or act load that begins before they look the area up, as they already wait out one under way, so a lookup that comes up empty while the game is busy looks again once the load is done, within the call's usual wait.

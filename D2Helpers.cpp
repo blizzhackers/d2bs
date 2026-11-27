@@ -202,17 +202,18 @@ BlockingListenerScope::~BlockingListenerScope() {
     SetInBlockingListener(previous);
 }
 
-bool GameReadyTimedOut(DWORD start) {
+// True once GameReadyTimeout has passed since start; never while it is 0, which waits without a limit.
+static bool GameReadyTimedOut(DWORD start) {
     return Vars.dwGameTimeout > 0 && (GetTickCount() - start) >= Vars.dwGameTimeout;
 }
 
 // A blocking listener gets "not ready" at once by policy: the thread waiting for its verdict is usually the game
 // thread, the only one that can end Busy. A thread that holds the game lock keeps the game thread waiting on that lock.
-bool MayWaitForGame(void) {
+static bool MayWaitForGame(void) {
     return !InBlockingListener() && !HoldsGameLock();
 }
 
-bool WaitForGameReadySince(DWORD start) {
+static bool WaitForGameReadySince(DWORD start) {
     do {
         switch (ClientState()) {
         case ClientStateNull:
@@ -232,6 +233,32 @@ bool WaitForGameReady(void) {
     return WaitForGameReadySince(GetTickCount());
 }
 
+GameWait::GameWait() : mayWait(MayWaitForGame()), ready(false), retry(false), start(GetTickCount()) {
+}
+
+bool GameWait::Ready(void) {
+    // A busy game seen under the lock gets one poll's pause before the next wait, with the deadline checked on both
+    // sides of it, so a retry never starts after the deadline.
+    if (retry) {
+        retry = false;
+        ready = false;
+        if (GameReadyTimedOut(start))
+            return false;
+        Sleep(10);
+        if (GameReadyTimedOut(start))
+            return false;
+    } else if (ready) {
+        return true;
+    }
+    ready = WaitForGameReadySince(start);
+    return ready;
+}
+
+bool GameWait::RetryIfBusy(void) {
+    retry = mayWait && ClientState() == ClientStateBusy;
+    return retry;
+}
+
 DWORD GetPlayerAreaLocked(void) {
     if (ClientState() != ClientStateInGame)
         return 0;
@@ -240,12 +267,6 @@ DWORD GetPlayerAreaLocked(void) {
         !player->pPath->pRoom1->pRoom2->pLevel)
         return 0;
     return player->pPath->pRoom1->pRoom2->pLevel->dwLevelNo;
-}
-
-DWORD GetPlayerArea(void) {
-    // Under the game lock: the game frees rooms only while it holds it, so the walk reads live links.
-    AutoCriticalRoom cRoom;
-    return GetPlayerAreaLocked();
 }
 
 Level* GetLevel(DWORD dwLevelNo) {
@@ -276,6 +297,23 @@ Level* GetLevel(DWORD dwLevelNo) {
     }
 
     return nullptr;
+}
+
+Level* WaitForLevel(DWORD dwLevelNo, GameWait& wait, AutoCriticalRoom*& cRoom) {
+    cRoom = NULL;
+    while (wait.Ready()) {
+        cRoom = new AutoCriticalRoom;
+        Level* pLevel = GetLevel(dwLevelNo);
+        if (pLevel)
+            return pLevel;
+        // Asked before the lock is released: the state it reads is the one the lookup failed on.
+        const bool bRetry = wait.RetryIfBusy();
+        delete cRoom;
+        cRoom = NULL;
+        if (!bRetry)
+            break;
+    }
+    return NULL;
 }
 
 static bool SamePresetUnit(const PresetUnit* a, const PresetUnit* b) {

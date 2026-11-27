@@ -623,7 +623,8 @@ JSAPI_FUNC(room_reveal) {
 JSAPI_FUNC(my_getRoom) {
     JS_SET_RVAL(cx, vp, JSVAL_VOID);
 
-    if (!WaitForGameReady())
+    GameWait wait;
+    if (!wait.Ready())
         THROW_ERROR(cx, "Get Room Game not ready");
 
     // Every argument converts before the game lock is taken: a conversion can run script code (valueOf), and script code
@@ -648,71 +649,59 @@ JSAPI_FUNC(my_getRoom) {
     if (!bConverted)
         return JS_FALSE;
 
-    // A game being left has closed its session while its player and rooms still exist, and finds no room. In an open
-    // session, which the room lock keeps open, a NULL BuildRoomObject below is an engine failure (out of memory) and goes
-    // back to the engine as one.
-    AutoCriticalRoom* cRoom = new AutoCriticalRoom;
-    if (!OpenGameSession()) {
-        delete cRoom;
-        return JS_TRUE;
-    }
-
-    if (bByArea) {
-        if (levelId != 0) // 1 Parameter, AreaId
-        {
-            Level* pLevel = GetLevel(levelId);
-
-            if (!pLevel || !pLevel->pRoom2First) {
-                delete cRoom;
-                return JS_TRUE;
-            }
-
-            JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
+    // The room is looked up and built under one hold of the game lock. A game being left has closed its session while
+    // its player and rooms still exist, and finds no room. In an open session, which the room lock keeps open, a NULL
+    // BuildRoomObject below is an engine failure (out of memory) and goes back to the engine as one. A room or level
+    // missing while the game is busy under the lock sends the call back to wait.
+    const bool bPlayerRoom = bByArea && levelId == 0;
+    // A point with a zero coordinate names no room. It still opens the session and looks its level up, as other calls
+    // do, but never waits again for a load that begins after the call's first wait.
+    const bool bNoPoint = bByPoint && (!nX || !nY);
+    AutoCriticalRoom* cRoom = NULL;
+    Room2* pPlayerRoom = NULL;
+    Level* pLevel = NULL;
+    // A retry happens with the lock released, so a later pass can find the next game: it finds no room, as a pass in a
+    // closed session does, and is checked first so it never opens that game's session.
+    DWORD dwSession = 0;
+    while (wait.Ready()) {
+        cRoom = new AutoCriticalRoom;
+        if ((dwSession && Vars.dwGameSession != dwSession) || !OpenGameSession()) {
             delete cRoom;
-            if (!jsroom)
-                return JS_FALSE;
-
-            JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
             return JS_TRUE;
-        } else if (levelId == 0) {
+        }
+        dwSession = Vars.dwGameSession;
+
+        if ((bByArea && !bPlayerRoom) || argc == 3) {
+            pLevel = GetLevel(levelId);
+        } else {
             // The player's own chain is read only while its act is the loaded one: an act change frees the old act before
             // the player's pointer moves on, and this lock can be handed to other threads in between.
             UnitAny* pPlayer = PlayerActLoaded() ? D2CLIENT_GetPlayerUnit() : NULL;
             Room1* pRoom1 = pPlayer && pPlayer->pPath ? pPlayer->pPath->pRoom1 : NULL;
-
-            if (!pRoom1 || !pRoom1->pRoom2) {
-                delete cRoom;
-                return JS_TRUE;
-            }
-
-            JSObject* jsroom = BuildRoomObject(cx, pRoom1->pRoom2);
-            delete cRoom;
-            if (!jsroom)
-                return JS_FALSE;
-
-            JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
-            return JS_TRUE;
+            if (bPlayerRoom)
+                pPlayerRoom = pRoom1 ? pRoom1->pRoom2 : NULL;
+            else
+                pLevel = pRoom1 && pRoom1->pRoom2 ? pRoom1->pRoom2->pLevel : NULL;
         }
-    } else if (bByPoint) {
-        Level* pLevel = NULL;
+        if (bNoPoint || pPlayerRoom || (pLevel && pLevel->pRoom2First))
+            break;
 
-        if (argc == 3)
-            pLevel = GetLevel(levelId);
-        else if (PlayerActLoaded() && D2CLIENT_GetPlayerUnit()->pPath && D2CLIENT_GetPlayerUnit()->pPath->pRoom1 &&
-                 D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2)
-            pLevel = D2CLIENT_GetPlayerUnit()->pPath->pRoom1->pRoom2->pLevel;
+        const bool bRetry = wait.RetryIfBusy();
+        delete cRoom;
+        cRoom = NULL;
+        if (!bRetry)
+            break;
+    }
+    if (!cRoom)
+        return JS_TRUE;
+    if (bNoPoint) {
+        delete cRoom;
+        return JS_TRUE;
+    }
 
-        if (!pLevel || !pLevel->pRoom2First) {
-            delete cRoom;
-            return JS_TRUE;
-        }
-
-        if (!nX || !nY) {
-            delete cRoom;
-            return JS_TRUE;
-        }
-
-        // Scan for the room with the matching x,y coordinates.
+    Room2* pFound = bPlayerRoom ? pPlayerRoom : pLevel->pRoom2First;
+    if (bByPoint) {
+        // Scan for the room with the matching x,y coordinates; none holding it leaves the level's first room.
         for (Room2* pRoom = pLevel->pRoom2First; pRoom; pRoom = pRoom->pRoom2Next) {
             bool bAdded = FALSE;
             if (!pRoom->pRoom1) {
@@ -721,47 +710,23 @@ JSAPI_FUNC(my_getRoom) {
             }
 
             CollMap* map = pRoom->pRoom1 ? pRoom->pRoom1->Coll : NULL;
-            if (map && nX >= map->dwPosGameX && nY >= map->dwPosGameY && nX < (map->dwPosGameX + map->dwSizeGameX) && nY < (map->dwPosGameY + map->dwSizeGameY)) {
-                if (bAdded)
-                    D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
-
-                JSObject* jsroom = BuildRoomObject(cx, pRoom);
-                delete cRoom;
-                if (!jsroom)
-                    return JS_FALSE;
-
-                JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
-                return JS_TRUE;
-            }
+            bool bHolds = map && nX >= map->dwPosGameX && nY >= map->dwPosGameY && nX < (map->dwPosGameX + map->dwSizeGameX) && nY < (map->dwPosGameY + map->dwSizeGameY);
 
             if (bAdded)
                 D2COMMON_RemoveRoomData(D2CLIENT_GetPlayerUnit()->pAct, pLevel->dwLevelNo, pRoom->dwPosX, pRoom->dwPosY, D2CLIENT_GetPlayerUnit()->pPath->pRoom1);
+
+            if (bHolds) {
+                pFound = pRoom;
+                break;
+            }
         }
-
-        JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
-        delete cRoom;
-        if (!jsroom)
-            return JS_FALSE;
-
-        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
-        return JS_TRUE;
-    } else {
-        UnitAny* pPlayer = PlayerActLoaded() ? D2CLIENT_GetPlayerUnit() : NULL;
-        Room1* pRoom1 = pPlayer && pPlayer->pPath ? pPlayer->pPath->pRoom1 : NULL;
-        Level* pLevel = pRoom1 && pRoom1->pRoom2 ? pRoom1->pRoom2->pLevel : NULL;
-        if (!pLevel || !pLevel->pRoom2First) {
-            delete cRoom;
-            return JS_TRUE;
-        }
-
-        JSObject* jsroom = BuildRoomObject(cx, pLevel->pRoom2First);
-        delete cRoom;
-        if (!jsroom)
-            return JS_FALSE;
-
-        JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
-        return JS_TRUE;
     }
+
+    JSObject* jsroom = BuildRoomObject(cx, pFound);
     delete cRoom;
+    if (!jsroom)
+        return JS_FALSE;
+
+    JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(jsroom));
     return JS_TRUE;
 }

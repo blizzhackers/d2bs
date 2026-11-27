@@ -146,9 +146,10 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  *
  * \param nY The y coordinate of the point in question.
  *
- * \return The collision flags. For details see:
- * http://forums.d2botnet.org/viewtopic.php?f=18&t=1212 .
- * Throws an error when the area is not in the act the player is in.
+ * \return The collision flags. See \ref reference_collision.
+ * Throws an error when the area is not in the act the player is in. Returns
+ * 65535 (all bits set) for a point that lies in no loaded room of the area, and
+ * for barricade-tower spots in areas 74, 111, 112 and 117.
  */
 unsigned short getCollision(uint32_t nLevelId, int32_t nX, int32_t nY);
 
@@ -161,27 +162,65 @@ unsigned short getCollision(uint32_t nLevelId, int32_t nX, int32_t nY);
  */
 int getMercHP();
 
-/** Get the cursor type from p_D2CLIENT_RegularCursorType.
+/** Get the state of the in-game hand cursor.
+ *
+ * The value is the cursor's animation state, not a cursor image id:
+ *
+ * | Value | Meaning |
+ * |---|---|
+ * | 1 | Normal pointer. |
+ * | 2 | The hand opening after 5 seconds without a mouse move or click. |
+ * | 3 | The hand closing again. While an item is held, a mouse move gives 3, and a click can then give 5 and then 1. |
+ * | 4 | The open hand idling. Also set when an item is put on the cursor, until the mouse moves. |
+ * | 5 | The click animation while the mouse button is down (hand cursor only, not in states 6 and 7). |
+ * | 6 | Item-target cursor, for example after using an identify scroll or tome. |
+ * | 7 | Shop action cursor, after the NPC shop's Buy, Sell or Repair button is clicked. |
+ *
+ * The value does not reliably tell whether an item is held: use me.itemoncursor
+ * for that. There is no game-ready check, so outside a game the call returns
+ * whatever value the game last held.
  *
  * \ingroup globalFunctions
  *
- * \todo Determine what the return value means.
- *
- * \return The regular cursor type.
+ * \return The hand-cursor state.
  */
 int getCursorType();
 
-/** Get the cursor type from p_D2CLIENT_RegularCursorType if nType != 1, from
- * p_D2CLIENT_ShopCursorType if nType == 1.
+/** Get the hand-cursor state, or the item-panel mode when nType is 1.
+ *
+ * With nType 1 the call returns the mode shared by the NPC shop, player trade,
+ * stash, Horadric Cube and submit-item panels. With any other value it returns
+ * the hand-cursor state described for getCursorType(). The argument is
+ * converted to an integer first, so "1" and 1.9 count as 1; a conversion that
+ * throws ends the call with that exception. There is no game-ready check, so
+ * outside a game the call returns whatever value the game last held.
+ *
+ * Item-panel modes (nType 1). Values 0, 1, 12 and 14 were seen in a live
+ * game; the meanings of 5, 6, 7 and 19 are less certain than the others:
+ *
+ * | Value | Meaning |
+ * |---|---|
+ * | 0 | No item panel mode (cleared when a panel closes). |
+ * | 1 | NPC shop open, no action selected. |
+ * | 2 | Buy button active. |
+ * | 3 | Sell button active. |
+ * | 4 | Repair button active. |
+ * | 5 | A buy, sell or repair of an item has been requested. |
+ * | 6 | The transaction was sent; waiting for the server. |
+ * | 7 | The NPC answered with a transaction result message; the mode then returns to 1. |
+ * | 10 | Player trade: the trade request prompt is open. |
+ * | 11 | Player trade: the trade window is open. |
+ * | 12 | Stash open. |
+ * | 13 | A stash sub-state; meaning unknown. It turns back to 12 when a gold-amount dialog opens. |
+ * | 14 | Horadric Cube open. |
+ * | 19 | Submit-item panel open for the Horadric Staff orifice (other uses of the submit-item panel were not checked). |
  *
  * \ingroup globalFunctions
  *
- * \param nType What type of cursor to get. 1 - ShopCursorType, other -
- * RegularCursorType.
+ * \param nType 1 - the item-panel mode, any other value - the hand-cursor
+ * state.
  *
- * \todo Determine what the return value means.
- *
- * \return The cursor type.
+ * \return The item-panel mode or the hand-cursor state.
  */
 int getCursorType(int nType);
 
@@ -255,35 +294,54 @@ int getThreadPriority();
  *
  * \ingroup globalFunctions
  *
- * \todo Get a reference for the UI IDs.
+ * Valid ids are 0 to 37. See \ref reference_uiflags for what each id tracks.
  *
- * \param nUIId The ID of the UI in question.
+ * \warning Any other id (38 or more, or a negative id) makes the game exit
+ * immediately. D2BS does not check the range.
  *
- * \return Whether or not the flag is set.
+ * \param nUIId The ID of the UI in question, 0 to 37.
+ *
+ * \return true when the panel or state is open or active, false when it is not.
+ * Returns undefined when the argument is missing or is not an integer (1.5 or a
+ * string), and false (with a 'Game not ready' warning) outside a ready game.
+ * While a game is loading the call can first wait for it to become ready.
  */
 bool getUIFlag(int nUIId);
 
-/** Get the TradeFlag or RecentTradeId.
+/** Get the current player-trade state.
+ *
+ * Modes 0 and 2 return the same number:
+ *
+ * | Value | Meaning |
+ * |---|---|
+ * | 0 | No trade. |
+ * | 1 | You asked another player to trade and are waiting for the answer (a box with only a Cancel button shows). |
+ * | 2 | Another player asked to trade with you and the accept/decline prompt is showing. |
+ * | 3 | The trade window is open, or about to open, and you have not accepted. |
+ * | 5 | The trade window is open and the other player has accepted; you have not. |
+ * | 7 | You have accepted. Also used for 30 seconds after a trade request was declined or cancelled (by you, or automatically by the game), with no trade window open; the state then returns to 0. |
+ *
+ * The game declines new trade requests on its own whenever the state is not 0.
  *
  * \ingroup globalFunctions
  *
- * \todo Determine what this means.
+ * \param nMode 0 or 2 - the trade state. Both return the same value.
  *
- * \param nMode What to return. 0 - TradeFlag, 2 - RecentTradeId.
- *
- * \return The TradeFlag or RecentTradeId.
+ * \return The trade state. An integer mode other than 0, 1 and 2 returns false.
+ * With no argument the call returns false at once; with a non-integer argument
+ * it waits for the game, then returns false. Outside a ready game it returns
+ * false (with a 'Game not ready' warning).
  */
 int getTradeInfo(int nMode);
 
-/** Get the RecentTradeName. Currently broken, returns null.
+/** With nMode 1, meant to get the name of the player you are trading with; it
+ * always returns null.
  *
  * \ingroup globalFunctions
  *
- * \todo Determine what these are.
+ * \param nMode 1.
  *
- * \param nMode What to return. 1 - RecentTradeName.
- *
- * \return The RecentTradeName.
+ * \return null.
  */
 String getTradeInfo(int nMode);
 
@@ -921,21 +979,46 @@ double getBaseStat(int32_t nBaseStat, int32_t nClassId, int32_t nStat);
 /** Get the control specified by type, location and size. -1 indicates parameter
  * not to be matched against.
  *
+ * Any negative value, and any argument that is not an integer (such as the
+ * string "6" or 6.5), also skips that field silently. Leaving out trailing
+ * arguments skips them too, so with no arguments the call returns the first
+ * control on the screen. Controls exist only at the out-of-game menus. Pass at
+ * most five arguments: an integer in a sixth or later argument is written past
+ * the end of D2BS's argument storage and can crash the game.
+ *
+ * nType is the control's type, the same value Control.type returns:
+ *
+ * | Type | Name (D2BS source) | Control |
+ * |---|---|---|
+ * | 1 | CONTROL_EDITBOX | Single-line text input (account, password, game name). |
+ * | 2 | CONTROL_IMAGE | Image. |
+ * | 3 | CONTROL_UNUSED | Never constructed in 1.14d; matches nothing. |
+ * | 4 | CONTROL_TEXTBOX | Multi-line text box or label (read with getText). |
+ * | 5 | CONTROL_SCROLLBAR | Scroll bar. |
+ * | 6 | CONTROL_BUTTON | Button. |
+ * | 7 | CONTROL_LIST | List box. |
+ * | 8 | CONTROL_TIMER | Timer (invisible). |
+ * | 9 | CONTROL_SMACK | Video player. |
+ * | 10 | CONTROL_PROGRESSBAR | Progress bar. |
+ * | 11 | CONTROL_POPUP | Popup. |
+ * | 12 | CONTROL_ACCOUNTLIST | Account list. |
+ *
  * \ingroup globalFunctions
  *
- * \param nType The type of control (button, text box, etc.)
+ * \param nType The type of control (see the table above).
  *
- * \param nX The x coordinate of the control of the control to find.
+ * \param nX The x coordinate of the control to find.
  *
- * \param nY The y coordinate of the control of the control to find.
+ * \param nY The y coordinate of the control to find.
  *
  * \param nXSize The width of the control.
  *
  * \param nYSize The height of the control.
  *
- * \todo Get a reference for nType
- *
- * \return A Control object representing the Control found.
+ * \return A Control object for the first control that matches every given
+ * field, or undefined when none matches or when the client is not at the
+ * out-of-game menus. Throws 'Failed to build control!' only when the Control
+ * object cannot be created.
  */
 Control getControl(int32_t nType = -1, int32_t nX = -1, int32_t nY = -1,
 	int32_t nXSize = -1, int32_t nYSize = -1);
@@ -945,15 +1028,28 @@ Control getControl(int32_t nType = -1, int32_t nX = -1, int32_t nY = -1,
  *
  * \ingroup globalFunctions
  *
- * \param nFirstUnitId The unit id for the unit making the relationship.
+ * nFlag is a bit mask; combine bits with | to test several at once. The bits are the party screen's per-player
+ * buttons, set by clicking them (or with clickParty) and also by the server's relation updates:
  *
- * \param nSecondUnitId The unit id for the unit receiving the relationship.
+ * | Bit | Name | Meaning |
+ * |---|---|---|
+ * | 1 | loot | The loot button (allow corpse looting); available only in hardcore games (clickParty mode 0). |
+ * | 2 | ignore | The ignore toggle next to squelch, as kolbot names it (clickParty mode 4). |
+ * | 4 | squelch | The squelch toggle (clickParty mode 5). |
+ * | 8 | hostile | Hostile (clickParty mode 1). The game lets you declare hostility only toward a player of level 9 or more. |
  *
- * \param nFlag The relationship.
+ * The flags read are the ones the first player holds toward the second. Do not rely on
+ * getPlayerFlag(me.gid, other.gid, 8) to tell whether the other player has declared hostility toward you.
  *
- * \todo Determine what the flags are.
+ * \param nFirstUnitId The party-roster id (me.gid or a Party's gid) of the player holding the relation.
  *
- * \return true when the relationship is of the type specified, otherwise false (also when the game closes meanwhile).
+ * \param nSecondUnitId The party-roster id of the player the relation is toward.
+ *
+ * \param nFlag The relation bits to test (see the table above).
+ *
+ * \return true when any bit of nFlag is set, otherwise false: also when both ids are the same, when the first
+ * player is not in the party roster, when not exactly three numbers are passed, and when the game closes meanwhile.
+ * Outside a ready game it returns false (with a 'Game not ready' warning).
  */
 bool getPlayerFlag(int nFirstUnitId, int nSecondUnitId, int nFlag);
 
@@ -1266,8 +1362,8 @@ bool keystate(int vKey);
  * 0x0a - "%Name1 has items in his box."
  *    if %Name1 = 0x00, "You have items in your box."
  * 
- * 0x0b - <Unknown>
- * 0x0c - <Unknown>
+ * 0x0b - Guild master kicked, from an unused guild feature (the English text is blank). No known server sends it.
+ * 0x0c - Not handled by the game client; meaning unknown. No known server sends it.
  * 0x0d - "%Name1 is not listening to you."
  * 0x0e - Received on 'Not enough mana' speech.
  * 0x0f - "Realm going down in %Param1 minutes."
@@ -1703,11 +1799,16 @@ void addProfile(String profile, String mode, String gateway, String username,
 
 /** Get the current OOG location.
  *
+ * D2BS detects the out-of-game screen by the buttons and text boxes it shows.
+ * The values (0 to 44) are listed in \ref reference_locations. A popup the
+ * detection knows reports the popup; an unknown popup can report the screen
+ * under it, or 0.
+ *
  * \ingroup globalFunctions
  *
- * \todo Create a reference for the return values.
- *
- * \return The current OOG location.
+ * \return The current OOG location, 0 when on the menus but no known screen
+ * matched, or null while not on the out-of-game menus: in a game, while a game
+ * loads, and in the moments between screens when no controls exist.
  */
 int getLocation();
 
@@ -1759,111 +1860,198 @@ Object getMouseCoords(bool nFlag, bool nReturn);
 /** Copy the cached data associated with given unit. This is things like type
  * and unit id.
  *
+ * The copy is a new Unit object for the same game unit. It holds other's unit
+ * id, type and getUnit/getNext search filters (and, for an item reached through
+ * getItem, its owner). It is not a snapshot: like the original, it reads live
+ * game data on every access and returns false or undefined once the unit has
+ * left the game. The difference is that getNext() moves only the object it is
+ * called on, so a copy stays on its unit while the original keeps iterating.
+ *
+ * Use it to keep the units found in a getUnit/getNext loop, for example
+ * list.push(copyUnit(unit)). Pushing unit itself stores the same object every
+ * time, so every entry ends up on the unit the loop finished on.
+ *
  * \ingroup globalFunctions
  *
- * \todo Figure out why anyone would want to copy a unit.
+ * \param other The Unit to copy.
  *
- * \return The new copy of the unit.
+ * \return The new copy of the unit, or undefined when other is missing or is
+ * not a Unit. Throws 'Couldn't copy unit' only when the new object cannot be
+ * created.
  */
 Unit copyUnit(Unit other);
 
-/** Click on the map with the given click type and possibly shift at the given
- * unit.
+/** Click on the map with the given click type, with or without Shift held, at
+ * the given unit.
+ *
+ * nClickType picks the mouse button and phase; a normal click is a down
+ * followed by an up:
+ *
+ * 0 - Left button down
+ *
+ * 1 - Left button held
+ *
+ * 2 - Left button up
+ *
+ * 3 - Right button down
+ *
+ * 4 - Right button held
+ *
+ * 5 - Right button up
+ *
+ * Any other value (a negative one wraps to a large value) does nothing.
+ *
+ * The click lands on the unit's position and targets that unit, for example to
+ * attack it, talk to it or pick it up. The game ignores the click while UI flag
+ * 0x09 (the Esc menu) is set.
  *
  * \ingroup globalFunctions
  *
- * \param nClickType The click type to do.
+ * \param nClickType The click type to do (see above).
  *
  * \param nShift Whether or not to be holding down shift. 0 - Don't hold shift,
- * 1 - hold shift.
+ * any other integer - hold shift. With shift held, D2BS also adds the flag that
+ * the game's Always Run setting adds; the game applies it only while the
+ * character has stamina.
  *
  * \param toClick The unit to click on.
  *
- * \todo Get a reference for nClickType.
- *
- * \return Whether or not the click was successful.
+ * \return true once the click is handed to the game, even when the game ignores
+ * it (a click type above 5, the Esc menu open, or a click the game is still
+ * handling). false when fewer than three arguments are given, the arguments
+ * match neither form (a non-integer number such as 1.5 included), toClick is
+ * not a Unit or no longer exists, or the player is not in a game or the game
+ * does not become ready in time (with a 'Game not ready' warning). It does not
+ * throw.
  */
 bool clickMap(uint16_t nClickType, uint16_t nShift, Unit toClick);
 
-/** Click on the map with the given click type and possibly shift at the given
- * unit.
+/** Click on the map with the given click type, with or without Shift held, at
+ * the given unit.
+ *
+ * nClickType and the click itself work as in the first clickMap overload.
  *
  * \ingroup globalFunctions
  *
- * \param nClickType The click type to do.
+ * \param nClickType The click type to do: 0 left down, 1 left held, 2 left up,
+ * 3 right down, 4 right held, 5 right up.
  *
- * \param nShift Whether or not to be holding down shift.
+ * \param nShift Whether or not to be holding down shift. With shift held, D2BS
+ * also adds the flag that the game's Always Run setting adds; the game applies
+ * it only while the character has stamina.
  *
  * \param toClick The unit to click on.
  *
- * \todo Get a reference for nClickType.
- *
- * \return Whether or not the click was successful.
+ * \return true once the click is handed to the game, even when the game ignores
+ * it. false when the arguments are invalid, toClick is not a Unit or no longer
+ * exists, or the player is not in a game (with a 'Game not ready' warning). It
+ * does not throw.
  */
 bool clickMap(uint16_t nClickType, bool nShift, Unit toClick);
 
-/** Click on the map with the given click type and possibly shift at the given
- * point.
+/** Click on the map with the given click type, with or without Shift held, at
+ * the given point.
+ *
+ * nClickType works as in the first clickMap overload. nX and nY are game map
+ * coordinates (the same as unit.x and unit.y), not screen pixels, and the point
+ * does not need to be on screen. Use the Unit form to interact with a unit.
  *
  * \ingroup globalFunctions
  *
- * \param nClickType The click type to do.
+ * \param nClickType The click type to do: 0 left down, 1 left held, 2 left up,
+ * 3 right down, 4 right held, 5 right up.
  *
  * \param nShift Whether or not to be holding down shift. 0 - Don't hold shift,
- * 1 - hold shift.
+ * any other integer - hold shift. With shift held, D2BS also adds the flag that
+ * the game's Always Run setting adds; the game applies it only while the
+ * character has stamina.
  *
- * \param nX The x coordinate to click at.
+ * \param nX The x coordinate to click at (map coordinates; negative values
+ * wrap).
  *
- * \param nY The y coordinate to click at.
+ * \param nY The y coordinate to click at (map coordinates; negative values
+ * wrap).
  *
- * \todo Get a reference for nClickType.
- *
- * \return Whether or not the click was successful.
+ * \return true once the click is handed to the game, even when the game ignores
+ * it (a click type above 5, the Esc menu open, or a click the game is still
+ * handling). false when fewer than three arguments are given, the arguments
+ * match neither form (a non-integer number such as 1.5 included), or the player
+ * is not in a game or the game does not become ready in time (with a 'Game not
+ * ready' warning). It does not throw.
  */
 bool clickMap(uint16_t nClickType, uint16_t nShift, uint16_t nX, uint16_t nY);
 
-/** Click on the map with the given click type and possibly shift at the given
- * point.
+/** Click on the map with the given click type, with or without Shift held, at
+ * the given point.
+ *
+ * nClickType works as in the first clickMap overload, and nX and nY as in the
+ * third.
  *
  * \ingroup globalFunctions
  *
- * \param nClickType The click type to do.
+ * \param nClickType The click type to do: 0 left down, 1 left held, 2 left up,
+ * 3 right down, 4 right held, 5 right up.
  *
- * \param nShift Whether or not to be holding down shift.
+ * \param nShift Whether or not to be holding down shift. With shift held, D2BS
+ * also adds the flag that the game's Always Run setting adds; the game applies
+ * it only while the character has stamina.
  *
- * \param nX The x coordinate to click at.
+ * \param nX The x coordinate to click at (map coordinates).
  *
- * \param nY The y coordinate to click at.
+ * \param nY The y coordinate to click at (map coordinates).
  *
- * \todo Get a reference for nClickType.
- *
- * \return Whether or not the click was successful.
+ * \return true once the click is handed to the game, even when the game ignores
+ * it. false when the arguments are invalid or the player is not in a game (with
+ * a 'Game not ready' warning). It does not throw.
  */
 bool clickMap(uint16_t nClickType, bool nShift, uint16_t nX, uint16_t nY);
 
-/** Get or do something to do with accepting trade.
+/** Read the state of the player-trade Accept button, or press it.
+ *
+ * action is converted to a number first, so "2" counts as 2 and true as 1. A
+ * value that converts to NaN (a non-numeric string, undefined), 0, or any
+ * number other than 1, 2 and 3 presses the button exactly as acceptTrade()
+ * does.
  *
  * \ingroup globalFunctions
  *
  * \param action What action to perform.
  *
- * 1 - Get whether trade we've accepted trade already or not.
+ * 1 - Get whether you have pressed Accept (the trade screen's own Accept flag).
  *
- * 2 - Get the trade flag ...
- * 
- * 3 - Get whether the check is red or not.
+ * 2 - Get the trade state number (the same value as getTradeInfo(0)).
  *
- * \return The flag specified by action.
+ * 3 - Get whether the accept check is red (the server has disabled the Accept
+ * button).
+ *
+ * \return The value specified by action: true or false for 1 and 3, a number
+ * for 2. Outside a ready game it returns false (with a 'Game not ready'
+ * warning). A value whose conversion throws ends the call with that exception.
  */
 bool acceptTrade(int action);
 
-/** Accept a trade if not already accepted, cancel a trade if already accepted.
+/** Press your Accept button in a player trade: accept the trade, or withdraw
+ * your acceptance if you have already accepted.
+ *
+ * It acts like a click on the trade screen's Accept button. When acceptTrade(1)
+ * is false it accepts (getTradeInfo(0) becomes 7). Otherwise it withdraws your
+ * acceptance: the state returns to 3 and the trade window stays open; it does
+ * not cancel the trade.
+ *
+ * It acts only when getTradeInfo(0) is 3, 5 or 7. State 7 is also the
+ * 30-second pause after a trade request was declined or cancelled, with no
+ * trade window open. A call in that pause sends an accept (or an un-accept, if
+ * acceptTrade(1) is still true) with no trade open; the state then stays at 7
+ * (or 3) instead of returning to 0, so the game keeps declining new trade
+ * requests until the server ends the trade. Check that the trade window is open before calling it.
  *
  * \ingroup globalFunctions
  *
- * \todo Verify that I understand this correctly.
- *
- * \return Whether or not trade was accepted.
+ * \return true when the button was pressed or released; false, with nothing
+ * done, while the accept check is red (acceptTrade(3) is true). Throws
+ * "Invalid parameter passed to acceptTrade!" when getTradeInfo(0) is not 3, 5
+ * or 7, although the call has no parameter at fault. Outside a ready game it
+ * returns false (with a 'Game not ready' warning).
  */
 bool acceptTrade();
 
@@ -2055,15 +2243,33 @@ double getDistance(int32_t ax, int32_t ay, Unit b);
  */
 double getDistance(int32_t ax, int32_t ay, int32_t bx, int32_t by);
 
-/** Do something with some gold.
+/** Drop, offer in a trade, deposit or withdraw gold.
+ *
+ * nMode picks what happens to nGold:
+ *
+ * | Mode | Action |
+ * |---|---|
+ * | 0, 1 | Drop nGold gold on the ground (1 is the default). |
+ * | 2 | Set the gold you offer in the trade window, capped at the gold you carry; a negative nGold offers all of it. If the other player has already accepted, the offer is not changed: the call sends the same request as un-pressing Accept instead, and the trade state returns to 3. |
+ * | 3 | Move nGold from your inventory into the stash (with the stash open). |
+ * | 4 | Move nGold from the stash into your inventory (with the stash open). |
+ *
+ * Any other mode does nothing, and an amount of 0 does nothing except in mode
+ * 2. The call checks neither that a trade or the stash is open nor the amount
+ * in modes 0, 3 and 4. It first closes the game's own gold dialog; if one was
+ * open, the amount typed in it is used instead of nGold.
+ *
+ * It returns undefined; outside a ready game it returns false (with a 'Game not
+ * ready' warning).
  *
  * \ingroup globalFunctions
  *
- * \todo Determine what the values for nMode are.
+ * \param nGold The amount of gold to move around. Must be an integer in the
+ * 32-bit range; any other value (1.5, 1e10, the string "100") is replaced by
+ * 0.
  *
- * \param nGold The amount of gold to move around.
- *
- * \param nMode What to do with the gold.
+ * \param nMode What to do with the gold (see the table above). Must be an
+ * integer; any other value is replaced by 1.
  */
 void gold(int nGold = 0, int nMode = 1);
 
@@ -2159,15 +2365,24 @@ void transmute();
 
 /** Use a stat point.
  *
- * BE CAREFUL! This function directly sends packets without checks. If you
- * call this function and do not have the points, or specify an invalid stat,
- * you might get flagged/banned.
+ * The points are spent one at a time, half a second apart, and the script
+ * waits meanwhile. If you have fewer unspent stat points than count, nothing is
+ * spent; count 0 (or a negative count) spends nothing.
+ *
+ * BE CAREFUL! The call does not check that statType is valid. statType is
+ * converted to a 16-bit number, so a non-numeric value such as "dexterity"
+ * becomes 0 (strength) and -1 becomes 65535. The game's own stat button uses
+ * the high byte of this value to spend extra points in one packet, so a value
+ * above 255 asks for more points than count. Use only 0 to 3; an invalid stat
+ * might get you flagged/banned.
+ *
+ * It returns undefined; outside a ready game it returns false (with a 'Game not
+ * ready' warning).
  *
  * \ingroup globalFunctions
  *
- * \todo Come up with a reference for the statType values
- *
- * \param statType The type of stat to add the points to
+ * \param statType The type of stat to add the points to: 0 - strength, 1 -
+ * energy, 2 - dexterity, 3 - vitality (the same ids getStat uses).
  *
  * \param count The number of points to add
  */
@@ -2175,15 +2390,25 @@ void useStatPoint(uint16_t statType, uint32_t count = 1);
 
 /** Use a skill point
  *
- * BE CAREFUL! This function directly sends packets without checks. If you
- * call this function and do not have the points, or specify an invalid skill,
- * you might get flagged/banned.
+ * The points are spent one at a time, half a second apart, and the script
+ * waits meanwhile. If you have fewer unspent skill points than count, nothing
+ * is spent; count 0 (or a negative count) spends nothing.
+ *
+ * BE CAREFUL! The call does not check that your character can learn the skill.
+ * The game's own skill tree checks the required level and the prerequisite
+ * skills before it spends a point; this call skips those checks.
+ * skill is converted to a 16-bit number, so a non-numeric value becomes 0
+ * (Attack). An invalid skill might get you flagged/banned.
+ *
+ * It returns undefined; outside a ready game it returns false (with a 'Game not
+ * ready' warning).
  *
  * \ingroup globalFunctions
  *
- * \todo Come up with a reference for the skill values
- *
- * \param skill The skill to add the points to
+ * \param skill The skill to add the points to: a skill id, the same number
+ * getSkill uses. See \ref reference_skills. Only class skills can be learned:
+ * Amazon 6-35, Sorceress 36-65, Necromancer 66-95, Paladin 96-125, Barbarian
+ * 126-155, Druid 221-250, Assassin 251-280, each only by its own class.
  *
  * \param count The number points to spend
  */

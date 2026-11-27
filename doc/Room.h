@@ -42,11 +42,22 @@ public:
 
 	/** Get the collision data for the Room.
 	 *
-	 * \todo Verify that the array does actually have reverse of usual
-	 * dimensions.
+	 * The array holds one entry per map row, each an array with one value per
+	 * map column: result[dy][dx] is the subtile at map offset dx in x and dy in
+	 * y from the room's corner (the corner with the smallest x and y). That is
+	 * the subtile at map coordinates (x * 5 + dx, y * 5 + dy), where x and y
+	 * are this Room's x and y. A room whose data is not loaded is loaded for
+	 * the call and unloaded again.
+	 *
+	 * Each value is the game's 16-bit collision mask for that subtile, a set of
+	 * flag bits. D2BS's own pathing treats 0x1 as blocking walking and 0x2 as
+	 * blocking line of sight; the names of the other bits are conventional
+	 * names, not verified behavior. See \ref reference_collision.
 	 *
 	 * \return An array with the collision data. The first dimension is the y
-	 * coordinate, the second is the x coordinate.
+	 * coordinate, the second is the x coordinate. Returns undefined when the
+	 * game is not ready, when the room is no longer in your current act or
+	 * game, or when it has no collision data.
 	 */
 	int[][] getCollision();
 
@@ -113,9 +124,14 @@ public:
 	 */
 	bool unitInRoom(Unit unit);
 
-	/** Get the Room number.
+	/** The LvlPrest.txt row (Def column) of the preset map the Room was built
+	 * from.
 	 *
-	 * \todo Determine what a "room number" is.
+	 * This includes the pieces of randomly generated dungeons and caves. A large
+	 * preset map is cut into several rooms, which all read the same number. It
+	 * is -1 for rooms of outdoor areas that were not built from a preset map;
+	 * an outdoor area can also hold rooms built from a preset map, so not every
+	 * room of an outdoor area reads -1.
 	 */
 	int number;
 
@@ -147,11 +163,12 @@ public:
 	 */
 	int level;
 
-	/** Get the correct tomb.
+	/** The Area ID (66 to 72) of the true Tal Rasha's Tomb in the current game,
+	 * the one with the Orifice leading to Duriel's Lair.
 	 *
-	 * \todo Determine if this is the Area ID of the correct tomb.
-	 *
-	 * \todo Determine what Room s this is valid on.
+	 * The game picks it from the act's map seed, so every Room in Act II reads
+	 * the same value. It is undefined on rooms in other acts. See
+	 * \ref reference_areas.
 	 */
 	int correcttomb;
 };

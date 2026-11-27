@@ -163,7 +163,7 @@ public:
 	int level;
 
 	/** The Area ID (66 to 72) of the true Tal Rasha's Tomb in the current game,
-	 * the one with the Orifice leading to Duriel's Lair.
+	 * the one with the Orifice leading to Tal Rasha's Chamber (area 73).
 	 *
 	 * The game picks it from the act's map seed, so every Room in Act II reads
 	 * the same value. It is undefined on rooms in other acts. See

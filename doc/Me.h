@@ -661,7 +661,7 @@ public:
 	/** The id of the area (level) the unit is located in.
 	 *
 	 * The value is the Id column of Levels.txt, for example 1 = Rogue
-	 * Encampment, 108 = Chaos Sanctuary (Chaos Sanctum in Levels.txt),
+	 * Encampment, 108 = The Chaos Sanctuary (Chaos Sanctum in Levels.txt),
 	 * 109 = Harrogath. See \ref reference_areas.
 	 *
 	 * Undefined when the game has no room for the unit.

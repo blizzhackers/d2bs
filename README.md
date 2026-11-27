@@ -3685,7 +3685,7 @@ Where the game is taking the unit.
 
 The id of the area (level) the unit is located in.
 
-The value is the Id column of Levels.txt, for example 1 = Rogue Encampment, 108 = Chaos Sanctuary (Chaos Sanctum in Levels.txt), 109 = Harrogath. See [Area ids](#area-ids) in the reference tables.
+The value is the Id column of Levels.txt, for example 1 = Rogue Encampment, 108 = The Chaos Sanctuary (Chaos Sanctum in Levels.txt), 109 = Harrogath. See [Area ids](#area-ids) in the reference tables.
 
 Undefined when the game has no room for the unit.
 
@@ -4854,7 +4854,7 @@ A [Room](#classRoom) keeps its area, position and size, so its properties keep t
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`subnumber`](#classRoom_1adf03f03ffb94895c18f291a325e51fb2) | No implementation.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`area`](#classRoom_1a0e12c557e6658e021fc94dfe950ace67) | Get the [Area](#classArea) ID for the area which the [Room](#classRoom) is in.
 `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`level`](#classRoom_1a5d8cf5f2d71723e3244654603a5ae84f) | Get the [Area](#classArea) ID for the area which the [Room](#classRoom) is in.
-`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`correcttomb`](#classRoom_1af1e1126e1534f1653ce6b5fcd77026a4) | The [Area](#classArea) ID (66 to 72) of the true Tal Rasha's Tomb in the current game, the one with the Orifice leading to Duriel's Lair.
+`public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`correcttomb`](#classRoom_1af1e1126e1534f1653ce6b5fcd77026a4) | The [Area](#classArea) ID (66 to 72) of the true Tal Rasha's Tomb in the current game, the one with the Orifice leading to Tal Rasha's Chamber (area 73).
 `public bool `[`getNext`](#classRoom_1a3dc890fc3d954ae8bd4c6da5721ed0ac)`()` | Move to the next [Room](#classRoom).
 `public bool `[`reveal`](#classRoom_1a8b1a054e31adb584622cafc321e9e064)`()` | Reveal the [Room](#classRoom) on the map.
 `public `[`PresetUnit`](#classPresetUnit)` `[`getPresetUnits`](#classRoom_1a0ddb9c16273a4e9d11365b9f927e74aa)`(`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nType,`[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` nClass)` | Get the [PresetUnit](#classPresetUnit) s from the current [Room](#classRoom).
@@ -4902,7 +4902,7 @@ Get the [Area](#classArea) ID for the area which the [Room](#classRoom) is in.
 
 #### `public `[`int`](#group__handlers_1gad45ee50356f6b4f157faf0c8e44217ac)` `[`correcttomb`](#classRoom_1af1e1126e1534f1653ce6b5fcd77026a4) 
 
-The [Area](#classArea) ID (66 to 72) of the true Tal Rasha's Tomb in the current game, the one with the Orifice leading to Duriel's Lair.
+The [Area](#classArea) ID (66 to 72) of the true Tal Rasha's Tomb in the current game, the one with the Orifice leading to Tal Rasha's Chamber (area 73).
 
 The game picks it from the act's map seed, so every [Room](#classRoom) in Act II reads the same value. It is undefined on rooms in other acts. See [Area ids](#area-ids) in the reference tables.
 
@@ -5417,7 +5417,7 @@ Where the game is taking the unit.
 
 The id of the area (level) the unit is located in.
 
-The value is the Id column of Levels.txt, for example 1 = Rogue Encampment, 108 = Chaos Sanctuary (Chaos Sanctum in Levels.txt), 109 = Harrogath. See [Area ids](#area-ids) in the reference tables.
+The value is the Id column of Levels.txt, for example 1 = Rogue Encampment, 108 = The Chaos Sanctuary (Chaos Sanctum in Levels.txt), 109 = Harrogath. See [Area ids](#area-ids) in the reference tables.
 
 Undefined when the game has no room for the unit.
 
@@ -6218,147 +6218,147 @@ These tables list the ids and flag values that the script API takes and returns.
 
 ## Area ids
 
-Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index instead (the Levels.txt Waypoint column). An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one that holds Tal Rasha's chamber in the current game. Act is the act the area belongs to (1-5; - for id 0). The calls that look up an area know only the areas the client has created for the player's act. In a new game some are missing at first (in a new Act 1 game, 21-25 and 29-38 were still missing 5 seconds after the game was ready), and such an area counts as not in the player's act.
+Area (level) ids, as `unit.area`, `me.area`, `getArea()`, `getRoom()`, `getPresetUnit()`, `getPresetUnits()`, `getPath()`, `getCollision()` and a waypoint's `interact()` use them. `getWaypoint()` takes a waypoint index instead (the Levels.txt Waypoint column). An area id is the `Id` column of the game's Levels.txt; the table lists every 1.14d area. Name is the name the game shows, from its English string tables; Levels.txt LevelName is the key it is looked up by, which differs for 25 areas (120 Rocky Summit is the in-game Arreat Summit, and 125-127 Hell1-3 are Abaddon, Pit of Acheron and Infernal Pit). The seven Tal Rasha's Tomb areas share one name; the internal name tells them apart, and `correcttomb` of any Act II room gives the id of the one that holds Tal Rasha's chamber in the current game. Act is the act the area belongs to (1-5; - for id 0). The calls that look up an area know only the areas the client has created for the player's act. In a new game some are missing at first (in a new Act 1 game, 21-25 and 29-38 were still missing 5 seconds after the game was ready), and such an area counts as not in the player's act.
 
-Id | Name | Internal name (Levels.txt Name) | Act
----|---|---|---
-0 | (none) | Null | -
-1 | Rogue Encampment | Act 1 - Town | 1
-2 | Blood Moor | Act 1 - Wilderness 1 | 1
-3 | Cold Plains | Act 1 - Wilderness 2 | 1
-4 | Stony Field | Act 1 - Wilderness 3 | 1
-5 | Dark Wood | Act 1 - Wilderness 4 | 1
-6 | Black Marsh | Act 1 - Wilderness 5 | 1
-7 | Tamoe Highland | Act 1 - Wilderness 6 | 1
-8 | Den of Evil | Act 1 - Cave 1 | 1
-9 | Cave Level 1 | Act 1 - Cave 2 | 1
-10 | Underground Passage Level 1 | Act 1 - Cave 3 | 1
-11 | Hole Level 1 | Act 1 - Cave 4 | 1
-12 | Pit Level 1 | Act 1 - Cave 5 | 1
-13 | Cave Level 2 | Act 1 - Cave 2 Treasure | 1
-14 | Underground Passage Level 2 | Act 1 - Cave 3 Treasure | 1
-15 | Hole Level 2 | Act 1 - Cave 4 Treasure | 1
-16 | Pit Level 2 | Act 1 - Cave 5 Treasure | 1
-17 | Burial Grounds | Act 1 - Graveyard | 1
-18 | Crypt | Act 1 - Crypt 1 A | 1
-19 | Mausoleum | Act 1 - Crypt 2 A | 1
-20 | Forgotten Tower | Act 1 - Tower 2 | 1
-21 | Tower Cellar Level 1 | Act 1 - Crypt 3 A | 1
-22 | Tower Cellar Level 2 | Act 1 - Crypt 3 B | 1
-23 | Tower Cellar Level 3 | Act 1 - Crypt 3 C | 1
-24 | Tower Cellar Level 4 | Act 1 - Crypt 3 D | 1
-25 | Tower Cellar Level 5 | Act 1 - Crypt 3 E | 1
-26 | Monastery Gate | Act 1 - Monastery | 1
-27 | Outer Cloister | Act 1 - Courtyard 1 | 1
-28 | Barracks | Act 1 - Barracks | 1
-29 | Jail Level 1 | Act 1 - Jail 1 | 1
-30 | Jail Level 2 | Act 1 - Jail 2 | 1
-31 | Jail Level 3 | Act 1 - Jail 3 | 1
-32 | Inner Cloister | Act 1 - Courtyard 2 | 1
-33 | Cathedral | Act 1 - Cathedral | 1
-34 | Catacombs Level 1 | Act 1 - Catacombs 1 | 1
-35 | Catacombs Level 2 | Act 1 - Catacombs 2 | 1
-36 | Catacombs Level 3 | Act 1 - Catacombs 3 | 1
-37 | Catacombs Level 4 | Act 1 - Catacombs 4 | 1
-38 | Tristram | Act 1 - Tristram | 1
-39 | Moo Moo Farm | Act 1 - Moo Moo Farm | 1
-40 | Lut Gholein | Act 2 - Town | 2
-41 | Rocky Waste | Act 2 - Desert 1 | 2
-42 | Dry Hills | Act 2 - Desert 2 | 2
-43 | Far Oasis | Act 2 - Desert 3 | 2
-44 | Lost City | Act 2 - Desert 4 | 2
-45 | Valley of Snakes | Act 2 - Desert 5 | 2
-46 | Canyon of the Magi | Act 2 - Valley of the Kings | 2
-47 | Sewers Level 1 | Act 2 - Sewer 1 A | 2
-48 | Sewers Level 2 | Act 2 - Sewer 1 B | 2
-49 | Sewers Level 3 | Act 2 - Sewer 1 C | 2
-50 | Harem Level 1 | Act 2 - Harem | 2
-51 | Harem Level 2 | Act 2 - Corrupt Harem 1 | 2
-52 | Palace Cellar Level 1 | Act 2 - Basement 1 | 2
-53 | Palace Cellar Level 2 | Act 2 - Basement 2 | 2
-54 | Palace Cellar Level 3 | Act 2 - Basement 3 | 2
-55 | Stony Tomb Level 1 | Act 2 - Tomb 1 A | 2
-56 | Halls of the Dead Level 1 | Act 2 - Tomb 2 A | 2
-57 | Halls of the Dead Level 2 | Act 2 - Tomb 2 B | 2
-58 | Claw Viper Temple Level 1 | Act 2 - Tomb 3 A | 2
-59 | Stony Tomb Level 2 | Act 2 - Tomb 1 Treasure | 2
-60 | Halls of the Dead Level 3 | Act 2 - Tomb 2 Treasure | 2
-61 | Claw Viper Temple Level 2 | Act 2 - Tomb 3 Treasure | 2
-62 | Maggot Lair Level 1 | Act 2 - Lair 1 A | 2
-63 | Maggot Lair Level 2 | Act 2 - Lair 1 B | 2
-64 | Maggot Lair Level 3 | Act 2 - Lair 1 Treasure | 2
-65 | Ancient Tunnels | Act 2 - Sewer 2 A | 2
-66 | Tal Rasha's Tomb | Act 2 - Tomb Tal 1 | 2
-67 | Tal Rasha's Tomb | Act 2 - Tomb Tal 2 | 2
-68 | Tal Rasha's Tomb | Act 2 - Tomb Tal 3 | 2
-69 | Tal Rasha's Tomb | Act 2 - Tomb Tal 4 | 2
-70 | Tal Rasha's Tomb | Act 2 - Tomb Tal 5 | 2
-71 | Tal Rasha's Tomb | Act 2 - Tomb Tal 6 | 2
-72 | Tal Rasha's Tomb | Act 2 - Tomb Tal 7 | 2
-73 | Duriel's Lair | Act 2 - Duriel's Lair | 2
-74 | Arcane Sanctuary | Act 2 - Arcane | 2
-75 | Kurast Docktown | Act 3 - Town | 3
-76 | Spider Forest | Act 3 - Jungle 1 | 3
-77 | Great Marsh | Act 3 - Jungle 2 | 3
-78 | Flayer Jungle | Act 3 - Jungle 3 | 3
-79 | Lower Kurast | Act 3 - Kurast 1 | 3
-80 | Kurast Bazaar | Act 3 - Kurast 2 | 3
-81 | Upper Kurast | Act 3 - Kurast 3 | 3
-82 | Kurast Causeway | Act 3 - Kurast 4 | 3
-83 | Travincal | Act 3 - Travincal | 3
-84 | Spider Cave | Act 3 - Spider 1 | 3
-85 | Spider Cavern | Act 3 - Spider 2 | 3
-86 | Swampy Pit Level 1 | Act 3 - Dungeon 1 A | 3
-87 | Swampy Pit Level 2 | Act 3 - Dungeon 1 B | 3
-88 | Flayer Dungeon Level 1 | Act 3 - Dungeon 2 A | 3
-89 | Flayer Dungeon Level 2 | Act 3 - Dungeon 2 B | 3
-90 | Swampy Pit Level 3 | Act 3 - Dungeon 1 Treasure | 3
-91 | Flayer Dungeon Level 3 | Act 3 - Dungeon 2 Treasure | 3
-92 | Sewers Level 1 | Act 3 - Sewer 1 | 3
-93 | Sewers Level 2 | Act 3 - Sewer 2 | 3
-94 | Ruined Temple | Act 3 - Temple 1 | 3
-95 | Disused Fane | Act 3 - Temple 2 | 3
-96 | Forgotten Reliquary | Act 3 - Temple 3 | 3
-97 | Forgotten Temple | Act 3 - Temple 4 | 3
-98 | Ruined Fane | Act 3 - Temple 5 | 3
-99 | Disused Reliquary | Act 3 - Temple 6 | 3
-100 | Durance of Hate Level 1 | Act 3 - Mephisto 1 | 3
-101 | Durance of Hate Level 2 | Act 3 - Mephisto 2 | 3
-102 | Durance of Hate Level 3 | Act 3 - Mephisto 3 | 3
-103 | The Pandemonium Fortress | Act 4 - Town | 4
-104 | Outer Steppes | Act 4 - Mesa 1 | 4
-105 | Plains of Despair | Act 4 - Mesa 2 | 4
-106 | City of the Damned | Act 4 - Mesa 3 | 4
-107 | River of Flame | Act 4 - Lava 1 | 4
-108 | Chaos Sanctum | Act 4 - Diablo 1 | 4
-109 | Harrogath | Act 5 - Town | 5
-110 | Bloody Foothills | Act 5 - Siege 1 | 5
-111 | Rigid Highlands | Act 5 - Barricade 1 | 5
-112 | Arreat Plateau | Act 5 - Barricade 2 | 5
-113 | Crystalized Cavern Level 1 | Act 5 - Ice Cave 1 | 5
-114 | Cellar of Pity | Act 5 - Ice Cave 1A | 5
-115 | Crystalized Cavern Level 2 | Act 5 - Ice Cave 2 | 5
-116 | Echo Chamber | Act 5 - Ice Cave 2A | 5
-117 | Tundra Wastelands | Act 5 - Barricade Snow | 5
-118 | Glacial Caves Level 1 | Act 5 - Ice Cave 3 | 5
-119 | Glacial Caves Level 2 | Act 5 - Ice Cave 3A | 5
-120 | Rocky Summit | Act 5 - Mountain Top | 5
-121 | Nihlathaks Temple | Act 5 - Temple Entrance | 5
-122 | Halls of Anguish | Act 5 - Temple 1 | 5
-123 | Halls of Death's Calling | Act 5 - Temple 2 | 5
-124 | Halls of Vaught | Act 5 - Temple Boss | 5
-125 | Hell1 | Act 5 - Hell 1 | 5
-126 | Hell2 | Act 5 - Hell 2 | 5
-127 | Hell3 | Act 5 - Hell 3 | 5
-128 | The Worldstone Keep Level 1 | Act 5 - Baal Temple 1 | 5
-129 | The Worldstone Keep Level 2 | Act 5 - Baal Temple 2 | 5
-130 | The Worldstone Keep Level 3 | Act 5 - Baal Temple 3 | 5
-131 | Throne of Destruction | Act 5 - Throne Room | 5
-132 | The Worldstone Chamber | Act 5 - World Stone | 5
-133 | Pandemonium Run 1 | Act 5 - Pandemonium 1 | 5
-134 | Pandemonium Run 2 | Act 5 - Pandemonium 2 | 5
-135 | Pandemonium Run 3 | Act 5 - Pandemonium 3 | 5
-136 | Tristram | Act 5 - Pandemonium Finale | 5
+Id | Name | Levels.txt LevelName | Internal name (Levels.txt Name) | Act
+---|---|---|---|---
+0 | (none) | - | Null | -
+1 | Rogue Encampment | Rogue Encampment | Act 1 - Town | 1
+2 | Blood Moor | Blood Moor | Act 1 - Wilderness 1 | 1
+3 | Cold Plains | Cold Plains | Act 1 - Wilderness 2 | 1
+4 | Stony Field | Stony Field | Act 1 - Wilderness 3 | 1
+5 | Dark Wood | Dark Wood | Act 1 - Wilderness 4 | 1
+6 | Black Marsh | Black Marsh | Act 1 - Wilderness 5 | 1
+7 | Tamoe Highland | Tamoe Highland | Act 1 - Wilderness 6 | 1
+8 | Den of Evil | Den of Evil | Act 1 - Cave 1 | 1
+9 | Cave Level 1 | Cave Level 1 | Act 1 - Cave 2 | 1
+10 | Underground Passage Level 1 | Underground Passage Level 1 | Act 1 - Cave 3 | 1
+11 | Hole Level 1 | Hole Level 1 | Act 1 - Cave 4 | 1
+12 | Pit Level 1 | Pit Level 1 | Act 1 - Cave 5 | 1
+13 | Cave Level 2 | Cave Level 2 | Act 1 - Cave 2 Treasure | 1
+14 | Underground Passage Level 2 | Underground Passage Level 2 | Act 1 - Cave 3 Treasure | 1
+15 | Hole Level 2 | Hole Level 2 | Act 1 - Cave 4 Treasure | 1
+16 | Pit Level 2 | Pit Level 2 | Act 1 - Cave 5 Treasure | 1
+17 | Burial Grounds | Burial Grounds | Act 1 - Graveyard | 1
+18 | Crypt | Crypt | Act 1 - Crypt 1 A | 1
+19 | Mausoleum | Mausoleum | Act 1 - Crypt 2 A | 1
+20 | Forgotten Tower | Forgotten Tower | Act 1 - Tower 2 | 1
+21 | Tower Cellar Level 1 | Tower Cellar Level 1 | Act 1 - Crypt 3 A | 1
+22 | Tower Cellar Level 2 | Tower Cellar Level 2 | Act 1 - Crypt 3 B | 1
+23 | Tower Cellar Level 3 | Tower Cellar Level 3 | Act 1 - Crypt 3 C | 1
+24 | Tower Cellar Level 4 | Tower Cellar Level 4 | Act 1 - Crypt 3 D | 1
+25 | Tower Cellar Level 5 | Tower Cellar Level 5 | Act 1 - Crypt 3 E | 1
+26 | Monastery Gate | Monastery Gate | Act 1 - Monastery | 1
+27 | Outer Cloister | Outer Cloister | Act 1 - Courtyard 1 | 1
+28 | Barracks | Barracks | Act 1 - Barracks | 1
+29 | Jail Level 1 | Jail Level 1 | Act 1 - Jail 1 | 1
+30 | Jail Level 2 | Jail Level 2 | Act 1 - Jail 2 | 1
+31 | Jail Level 3 | Jail Level 3 | Act 1 - Jail 3 | 1
+32 | Inner Cloister | Inner Cloister | Act 1 - Courtyard 2 | 1
+33 | Cathedral | Cathedral | Act 1 - Cathedral | 1
+34 | Catacombs Level 1 | Catacombs Level 1 | Act 1 - Catacombs 1 | 1
+35 | Catacombs Level 2 | Catacombs Level 2 | Act 1 - Catacombs 2 | 1
+36 | Catacombs Level 3 | Catacombs Level 3 | Act 1 - Catacombs 3 | 1
+37 | Catacombs Level 4 | Catacombs Level 4 | Act 1 - Catacombs 4 | 1
+38 | Tristram | Tristram | Act 1 - Tristram | 1
+39 | The Secret Cow Level | Moo Moo Farm | Act 1 - Moo Moo Farm | 1
+40 | Lut Gholein | Lut Gholein | Act 2 - Town | 2
+41 | Rocky Waste | Rocky Waste | Act 2 - Desert 1 | 2
+42 | Dry Hills | Dry Hills | Act 2 - Desert 2 | 2
+43 | Far Oasis | Far Oasis | Act 2 - Desert 3 | 2
+44 | Lost City | Lost City | Act 2 - Desert 4 | 2
+45 | Valley of Snakes | Valley of Snakes | Act 2 - Desert 5 | 2
+46 | Canyon of the Magi | Canyon of the Magi | Act 2 - Valley of the Kings | 2
+47 | Sewers Level 1 | Sewers Level 1 | Act 2 - Sewer 1 A | 2
+48 | Sewers Level 2 | Sewers Level 2 | Act 2 - Sewer 1 B | 2
+49 | Sewers Level 3 | Sewers Level 3 | Act 2 - Sewer 1 C | 2
+50 | Harem Level 1 | Harem Level 1 | Act 2 - Harem | 2
+51 | Harem Level 2 | Harem Level 2 | Act 2 - Corrupt Harem 1 | 2
+52 | Palace Cellar Level 1 | Palace Cellar Level 1 | Act 2 - Basement 1 | 2
+53 | Palace Cellar Level 2 | Palace Cellar Level 2 | Act 2 - Basement 2 | 2
+54 | Palace Cellar Level 3 | Palace Cellar Level 3 | Act 2 - Basement 3 | 2
+55 | Stony Tomb Level 1 | Stony Tomb Level 1 | Act 2 - Tomb 1 A | 2
+56 | Halls of the Dead Level 1 | Halls of the Dead Level 1 | Act 2 - Tomb 2 A | 2
+57 | Halls of the Dead Level 2 | Halls of the Dead Level 2 | Act 2 - Tomb 2 B | 2
+58 | Claw Viper Temple Level 1 | Claw Viper Temple Level 1 | Act 2 - Tomb 3 A | 2
+59 | Stony Tomb Level 2 | Stony Tomb Level 2 | Act 2 - Tomb 1 Treasure | 2
+60 | Halls of the Dead Level 3 | Halls of the Dead Level 3 | Act 2 - Tomb 2 Treasure | 2
+61 | Claw Viper Temple Level 2 | Claw Viper Temple Level 2 | Act 2 - Tomb 3 Treasure | 2
+62 | Maggot Lair Level 1 | Maggot Lair Level 1 | Act 2 - Lair 1 A | 2
+63 | Maggot Lair Level 2 | Maggot Lair Level 2 | Act 2 - Lair 1 B | 2
+64 | Maggot Lair Level 3 | Maggot Lair Level 3 | Act 2 - Lair 1 Treasure | 2
+65 | Ancient Tunnels | Ancient Tunnels | Act 2 - Sewer 2 A | 2
+66 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 1 | 2
+67 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 2 | 2
+68 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 3 | 2
+69 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 4 | 2
+70 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 5 | 2
+71 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 6 | 2
+72 | Tal Rasha's Tomb | Tal Rasha's Tomb | Act 2 - Tomb Tal 7 | 2
+73 | Tal Rasha's Chamber | Duriel's Lair | Act 2 - Duriel's Lair | 2
+74 | Arcane Sanctuary | Arcane Sanctuary | Act 2 - Arcane | 2
+75 | Kurast Docks | Kurast Docktown | Act 3 - Town | 3
+76 | Spider Forest | Spider Forest | Act 3 - Jungle 1 | 3
+77 | Great Marsh | Great Marsh | Act 3 - Jungle 2 | 3
+78 | Flayer Jungle | Flayer Jungle | Act 3 - Jungle 3 | 3
+79 | Lower Kurast | Lower Kurast | Act 3 - Kurast 1 | 3
+80 | Kurast Bazaar | Kurast Bazaar | Act 3 - Kurast 2 | 3
+81 | Upper Kurast | Upper Kurast | Act 3 - Kurast 3 | 3
+82 | Kurast Causeway | Kurast Causeway | Act 3 - Kurast 4 | 3
+83 | Travincal | Travincal | Act 3 - Travincal | 3
+84 | Arachnid Lair | Spider Cave | Act 3 - Spider 1 | 3
+85 | Spider Cavern | Spider Cavern | Act 3 - Spider 2 | 3
+86 | Swampy Pit Level 1 | Swampy Pit Level 1 | Act 3 - Dungeon 1 A | 3
+87 | Swampy Pit Level 2 | Swampy Pit Level 2 | Act 3 - Dungeon 1 B | 3
+88 | Flayer Dungeon Level 1 | Flayer Dungeon Level 1 | Act 3 - Dungeon 2 A | 3
+89 | Flayer Dungeon Level 2 | Flayer Dungeon Level 2 | Act 3 - Dungeon 2 B | 3
+90 | Swampy Pit Level 3 | Swampy Pit Level 3 | Act 3 - Dungeon 1 Treasure | 3
+91 | Flayer Dungeon Level 3 | Flayer Dungeon Level 3 | Act 3 - Dungeon 2 Treasure | 3
+92 | Sewers Level 1 | Sewers Level 1 | Act 3 - Sewer 1 | 3
+93 | Sewers Level 2 | Sewers Level 2 | Act 3 - Sewer 2 | 3
+94 | Ruined Temple | Ruined Temple | Act 3 - Temple 1 | 3
+95 | Disused Fane | Disused Fane | Act 3 - Temple 2 | 3
+96 | Forgotten Reliquary | Forgotten Reliquary | Act 3 - Temple 3 | 3
+97 | Forgotten Temple | Forgotten Temple | Act 3 - Temple 4 | 3
+98 | Ruined Fane | Ruined Fane | Act 3 - Temple 5 | 3
+99 | Disused Reliquary | Disused Reliquary | Act 3 - Temple 6 | 3
+100 | Durance of Hate Level 1 | Durance of Hate Level 1 | Act 3 - Mephisto 1 | 3
+101 | Durance of Hate Level 2 | Durance of Hate Level 2 | Act 3 - Mephisto 2 | 3
+102 | Durance of Hate Level 3 | Durance of Hate Level 3 | Act 3 - Mephisto 3 | 3
+103 | The Pandemonium Fortress | The Pandemonium Fortress | Act 4 - Town | 4
+104 | Outer Steppes | Outer Steppes | Act 4 - Mesa 1 | 4
+105 | Plains of Despair | Plains of Despair | Act 4 - Mesa 2 | 4
+106 | City of the Damned | City of the Damned | Act 4 - Mesa 3 | 4
+107 | River of Flame | River of Flame | Act 4 - Lava 1 | 4
+108 | The Chaos Sanctuary | Chaos Sanctum | Act 4 - Diablo 1 | 4
+109 | Harrogath | Harrogath | Act 5 - Town | 5
+110 | Bloody Foothills | Bloody Foothills | Act 5 - Siege 1 | 5
+111 | Frigid Highlands | Rigid Highlands | Act 5 - Barricade 1 | 5
+112 | Arreat Plateau | Arreat Plateau | Act 5 - Barricade 2 | 5
+113 | Crystalline Passage | Crystalized Cavern Level 1 | Act 5 - Ice Cave 1 | 5
+114 | Frozen River | Cellar of Pity | Act 5 - Ice Cave 1A | 5
+115 | Glacial Trail | Crystalized Cavern Level 2 | Act 5 - Ice Cave 2 | 5
+116 | Drifter Cavern | Echo Chamber | Act 5 - Ice Cave 2A | 5
+117 | Frozen Tundra | Tundra Wastelands | Act 5 - Barricade Snow | 5
+118 | The Ancients' Way | Glacial Caves Level 1 | Act 5 - Ice Cave 3 | 5
+119 | Icy Cellar | Glacial Caves Level 2 | Act 5 - Ice Cave 3A | 5
+120 | Arreat Summit | Rocky Summit | Act 5 - Mountain Top | 5
+121 | Nihlathak's Temple | Nihlathaks Temple | Act 5 - Temple Entrance | 5
+122 | Halls of Anguish | Halls of Anguish | Act 5 - Temple 1 | 5
+123 | Halls of Pain | Halls of Death's Calling | Act 5 - Temple 2 | 5
+124 | Halls of Vaught | Halls of Vaught | Act 5 - Temple Boss | 5
+125 | Abaddon | Hell1 | Act 5 - Hell 1 | 5
+126 | Pit of Acheron | Hell2 | Act 5 - Hell 2 | 5
+127 | Infernal Pit | Hell3 | Act 5 - Hell 3 | 5
+128 | Worldstone Keep Level 1 | The Worldstone Keep Level 1 | Act 5 - Baal Temple 1 | 5
+129 | Worldstone Keep Level 2 | The Worldstone Keep Level 2 | Act 5 - Baal Temple 2 | 5
+130 | Worldstone Keep Level 3 | The Worldstone Keep Level 3 | Act 5 - Baal Temple 3 | 5
+131 | Throne of Destruction | Throne of Destruction | Act 5 - Throne Room | 5
+132 | The Worldstone Chamber | The Worldstone Chamber | Act 5 - World Stone | 5
+133 | Matron's Den | Pandemonium Run 1 | Act 5 - Pandemonium 1 | 5
+134 | Forgotten Sands | Pandemonium Run 2 | Act 5 - Pandemonium 2 | 5
+135 | Furnace of Pain | Pandemonium Run 3 | Act 5 - Pandemonium 3 | 5
+136 | Tristram | Tristram | Act 5 - Pandemonium Finale | 5
 
 ## Skill ids
 

@@ -62,11 +62,12 @@ Unit getUnit(int type = -1, uint32_t classId = (uint32_t)-1,
  * \param Radius The distance between each point.
  *
  * \return The path as an array of objects with x and y properties.
- * Waits while an area or act loads, also one that begins before it looks the area up, except in a
- * blocking listener or while your script holds the game lock.
- * Throws an error when the area is not in the act the player is in, or when a load that begins as the
- * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
- * holds the game lock).
+ * Waits while an area or act loads, also one that begins before it looks the
+ * area up, except in a blocking listener or while your script holds the game
+ * lock. Throws an error when the area is not in the act the player is in, or
+ * when a load that begins as the call runs leaves its lookup empty past the
+ * wait (at once in a blocking listener or while your script holds the game
+ * lock).
  */
 object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
 	int dstY, uint32_t reductionType = 0, uint32_t Radius = 20);
@@ -132,11 +133,12 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  * returned.
  *
  * \return The path as an array of objects with x and y properties.
- * Waits while an area or act loads, also one that begins before it looks the area up, except in a
- * blocking listener or while your script holds the game lock.
- * Throws an error when the area is not in the act the player is in, or when a load that begins as the
- * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
- * holds the game lock).
+ * Waits while an area or act loads, also one that begins before it looks the
+ * area up, except in a blocking listener or while your script holds the game
+ * lock. Throws an error when the area is not in the act the player is in, or
+ * when a load that begins as the call runs leaves its lookup empty past the
+ * wait (at once in a blocking listener or while your script holds the game
+ * lock).
  */
 object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
 	int dstY, uint32_t reductionType, uint32_t Radius,
@@ -156,11 +158,12 @@ object[] getPath(uint32_t Area, uint32_t srcX, uint32_t srcY, uint32_t dstX,
  *
  * \return The collision flags. For details see:
  * http://forums.d2botnet.org/viewtopic.php?f=18&t=1212 .
- * Waits while an area or act loads, also one that begins before it looks the area up, except in a
- * blocking listener or while your script holds the game lock.
- * Throws an error when the area is not in the act the player is in, or when a load that begins as the
- * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
- * holds the game lock).
+ * Waits while an area or act loads, also one that begins before it looks the
+ * area up, except in a blocking listener or while your script holds the game
+ * lock. Throws an error when the area is not in the act the player is in, or
+ * when a load that begins as the call runs leaves its lookup empty past the
+ * wait (at once in a blocking listener or while your script holds the game
+ * lock).
  */
 unsigned short getCollision(uint32_t nLevelId, int32_t nX, int32_t nY);
 
@@ -359,12 +362,12 @@ D2BSScript getScript();
  * \return The first room in the area, or the controlled unit's room for 0.
  * Waits while an area or act loads, and again when a load that begins as the
  * call runs leaves its lookup empty; undefined when the area is not in the
- * player's act, when the game ends as the
- * call runs, or when a load that begins as the call runs leaves its lookup empty
- * past the wait (at once in a blocking listener or while your script holds the
- * game lock). Throws "Get Room Game not ready" out of game, when a load under way
- * as the call starts outlasts the wait, or at once while the game is busy in a
- * blocking listener or while your script holds the game lock.
+ * player's act, when the game ends as the call runs, or when a load that begins
+ * as the call runs leaves its lookup empty past the wait (at once in a blocking
+ * listener or while your script holds the game lock). Throws "Get Room Game not
+ * ready" out of game, when a load under way as the call starts outlasts the
+ * wait, or at once while the game is busy in a blocking listener or while your
+ * script holds the game lock.
  */
 Room getRoom(uint32_t levelId);
 
@@ -383,10 +386,9 @@ Room getRoom(uint32_t levelId);
  * player's act, when the game ends as the call runs, or when a load that begins
  * as the call runs leaves its lookup empty past the wait (at once in a blocking
  * listener or while your script holds the game lock). Throws "Get Room Game not
- * ready" out of game,
- * when a load under way as the call starts outlasts the wait, or at once while
- * the game is busy in a blocking listener or while your script holds the game
- * lock.
+ * ready" out of game, when a load under way as the call starts outlasts the
+ * wait, or at once while the game is busy in a blocking listener or while your
+ * script holds the game lock.
  */
 Room getRoom(uint32_t levelId, int x, int y);
 
@@ -400,12 +402,11 @@ Room getRoom(uint32_t levelId, int x, int y);
  *
  * \return The room at the given point, or the current area's first room when no
  * room holds it; undefined when a coordinate is 0, when the game ends as the
- * call runs, or when a load that begins as the call runs leaves its lookup empty
- * past the wait (at once in a blocking listener or while your script holds the
- * game lock). Throws "Get
- * Room Game not ready" out of game, when a load under way as the call starts
- * outlasts the wait, or at once while the game is busy in a blocking listener or
- * while your script holds the game lock.
+ * call runs, or when a load that begins as the call runs leaves its lookup
+ * empty past the wait (at once in a blocking listener or while your script
+ * holds the game lock). Throws "Get Room Game not ready" out of game, when a
+ * load under way as the call starts outlasts the wait, or at once while the
+ * game is busy in a blocking listener or while your script holds the game lock.
  */
 Room getRoom(int x, int y);
 
@@ -415,10 +416,10 @@ Room getRoom(int x, int y);
  *
  * \return The first room in the current area; undefined when the game ends as
  * the call runs, or when a load that begins as the call runs leaves its lookup
- * empty past the wait (at once in a blocking listener or while your script holds
- * the game lock). Throws "Get Room Game not ready" out of game, when a load under
- * way as the call starts outlasts the wait, or at once while the game is busy in
- * a blocking listener or while your script holds the game lock.
+ * empty past the wait (at once in a blocking listener or while your script
+ * holds the game lock). Throws "Get Room Game not ready" out of game, when a
+ * load under way as the call starts outlasts the wait, or at once while the
+ * game is busy in a blocking listener or while your script holds the game lock.
  */
 Room getRoom();
 
@@ -475,11 +476,12 @@ Party getParty(Unit player);
  * to NaN matches none.
  *
  * \return The first PresetUnit found of type nType and class ID nClassId.
- * Waits while an area or act loads, also one that begins before it looks the area up, except in a
- * blocking listener or while your script holds the game lock.
- * Throws an error when the area is not in the act the player is in, or when a load that begins as the
- * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
- * holds the game lock).
+ * Waits while an area or act loads, also one that begins before it looks the
+ * area up, except in a blocking listener or while your script holds the game
+ * lock. Throws an error when the area is not in the act the player is in, or
+ * when a load that begins as the call runs leaves its lookup empty past the
+ * wait (at once in a blocking listener or while your script holds the game
+ * lock).
  */
 PresetUnit getPresetUnit(uint32_t levelId, int nType = 0, int nClassId = 0);
 
@@ -498,11 +500,12 @@ PresetUnit getPresetUnit(uint32_t levelId, int nType = 0, int nClassId = 0);
  * to NaN matches none.
  *
  * \return An array of PresetUnit s found of type nType and class ID nClassId.
- * Waits while an area or act loads, also one that begins before it looks the area up, except in a
- * blocking listener or while your script holds the game lock.
- * Throws an error when the area is not in the act the player is in, or when a load that begins as the
- * call runs leaves its lookup empty past the wait (at once in a blocking listener or while your script
- * holds the game lock).
+ * Waits while an area or act loads, also one that begins before it looks the
+ * area up, except in a blocking listener or while your script holds the game
+ * lock. Throws an error when the area is not in the act the player is in, or
+ * when a load that begins as the call runs leaves its lookup empty past the
+ * wait (at once in a blocking listener or while your script holds the game
+ * lock).
  */
 PresetUnit[] getPresetUnits(uint32_t levelId, int nType = 0, int nClassId = 0);
 
@@ -511,10 +514,11 @@ PresetUnit[] getPresetUnits(uint32_t levelId, int nType = 0, int nClassId = 0);
  * \ingroup globalFunctions
  *
  * \return An Area object for the current object.
- * Waits while an area or act loads, also one that begins before it looks the area up, except in a
- * blocking listener or while your script holds the game lock.
- * False when a load that begins as the call runs leaves its lookup empty past the wait (at once in a
- * blocking listener or while your script holds the game lock).
+ * Waits while an area or act loads, also one that begins before it looks the
+ * area up, except in a blocking listener or while your script holds the game
+ * lock. False when a load that begins as the call runs leaves its lookup empty
+ * past the wait (at once in a blocking listener or while your script holds the
+ * game lock).
  */
 Area getArea();
 
@@ -525,11 +529,11 @@ Area getArea();
  * \param nArea The area ID.
  *
  * \return An Area object.
- * Waits while an area or act loads, also one that begins before it looks the area up, except in a
- * blocking listener or while your script holds the game lock.
- * False when the area is not in the act the player is in, or when a load that begins as the call runs
- * leaves its lookup empty past the wait (at once in a blocking listener or while your script holds the
- * game lock).
+ * Waits while an area or act loads, also one that begins before it looks the
+ * area up, except in a blocking listener or while your script holds the game
+ * lock. False when the area is not in the act the player is in, or when a load
+ * that begins as the call runs leaves its lookup empty past the wait (at once
+ * in a blocking listener or while your script holds the game lock).
  */
 Area getArea(int32_t nArea);
 
@@ -1332,10 +1336,10 @@ bool keystate(int vKey);
  * getCollision(), getRoom(), getArea(), getPresetUnit() and getPresetUnits()
  * give their not-found result at once when their lookup comes up empty because
  * the game turned busy after the call started. A gamepacketsent listener for a
- * packet its own script sent runs inside that send instead; its calls wait as usual
- * unless the send was made while the script holds the game lock or from inside
- * a listener whose result can block its event, when they get "Game not ready"
- * at once.
+ * packet its own script sent runs inside that send instead; its calls wait as
+ * usual unless the send was made while the script holds the game lock or from
+ * inside a listener whose result can block its event, when they get "Game not
+ * ready" at once.
  *
  * \param eventHandler A function with the signature listed above that handles
  * the event.

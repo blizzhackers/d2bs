@@ -108,7 +108,9 @@ jobs:
             ${{ runner.temp }}/out/release-notes.md
             ${{ runner.temp }}/out/D2BS-*.zip
           if-no-files-found: error
-          retention-days: ${{ github.ref_type == 'tag' && 90 || 30 }}
+          # Artifacts count against the organization's small storage quota, so only release builds are kept long.
+          # The scheduled builds upload too: they keep a current build of master downloadable between pushes.
+          retention-days: ${{ github.ref_type == 'tag' && 90 || github.event_name == 'pull_request' && 3 || 7 }}
           overwrite: true # a re-run replaces the earlier attempt's artifact
 
       # A failed build keeps its whole log (the job log shows only the failing tool's errors and last lines), under a

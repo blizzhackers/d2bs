@@ -1,2 +1,7 @@
 # build\Build-D2BS.ps1 output (objects, generated headers, the unpacked js_static.lib, D2BS.dll, D2BS.pdb, build.log)
 /build/out/
+
+# Visual Studio builds of D2BS.vcxproj (OutDir and IntDir are $(SolutionDir)$(Configuration)\)
+/Debug/
+/Release/
+/Packaging/

@@ -10,8 +10,9 @@ SP1 (v100) toolset. The scripts here use a copy of that toolset in a plain folde
 and on demand (Run workflow).
 
 - **Every build:** the run's artifact holds `D2BS.dll`, `D2BS.pdb` and `build.log` (a release tag's artifact also
-  holds `release-notes.md` and `D2BS-<tag>.zip`). It is named `D2BS-<commit>` and kept for 30 days (a release tag's:
-  see below). A pull request builds its own head commit, so that commit is the one in the name and in the DLL.
+  holds `release-notes.md` and `D2BS-<tag>.zip`). It is named `D2BS-<commit>` and kept for 7 days, or 3 for a pull
+  request (a release tag's: see below); the scheduled builds keep a build of the current `master` to download. A pull
+  request builds its own head commit, so that commit is the one in the name and in the DLL.
   A build that fails while compiling, linking or checking the DLL's version uploads its whole `build.log` alone, as
   `D2BS-build-log-<commit>` (or `-<tag>`); the job log shows the failing tool's first errors and last lines. A failure
   before that (a tag whose release notes fail their checks, fetching the toolset, a missing toolset, a tag that

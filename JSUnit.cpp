@@ -1793,11 +1793,9 @@ JSAPI_FUNC(unit_getParent) {
         if (dwOwnerId == -1)
             return JS_TRUE;
 
-        // The owner comes from the game's pet list (0x7BB5BC), a player's summon or mercenary, so only players and
-        // monsters are searched: a unit of another type can carry the same id.
+        // The game's pet list (0x7BB5BC) gives the owner's id without its type. Pets belong to players, and ids overlap
+        // across unit types, so only players are searched.
         UnitAny* pMonster = GetUnit(NULL, (DWORD)-1, UNIT_PLAYER, (DWORD)-1, dwOwnerId);
-        if (!pMonster)
-            pMonster = GetUnit(NULL, (DWORD)-1, UNIT_MONSTER, (DWORD)-1, dwOwnerId);
         if (!pMonster)
             return JS_TRUE;
 

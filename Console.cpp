@@ -109,9 +109,6 @@ void Console::AddLine(std::wstring line) {
     while (history.size() > 300) // set history cap at 300
         history.pop_front();
 
-    if (Vars.bLogConsole)
-        LogNoFormat(line.c_str());
-
     scrollIndex = history.size() < lineCount ? 0 : history.size() - lineCount;
     Console::UpdateLines();
 

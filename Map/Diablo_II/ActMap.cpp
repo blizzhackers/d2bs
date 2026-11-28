@@ -67,7 +67,9 @@ int ActMap::GetMapData(const Point& point, bool abs) const {
         }
     }
     if (!this->act || !this->act->pMisc || !this->act->pRoom1) {
-        Print(L"\u00FFc1ActMap Level Not Loaded");
+        // Droppable: script calls reach it, from getCollision() and an Area's exits to the repeated collision checks of a
+        // getPath() search.
+        PrintScriptMessage(L"\u00FFc1ActMap Level Not Loaded");
         return ActMap::Avoid;
     }
     if (!currLevel) {

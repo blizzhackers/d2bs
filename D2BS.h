@@ -115,6 +115,10 @@ struct Variables {
     DWORD dwMenuSession;
 
     std::queue<std::wstring> qPrintBuffer;
+    // Script messages dropped in the current backup of the queue, not yet reported (Core.cpp); guarded by cPrintSection
+    // like qPrintBuffer. 64 bits: rig floods dropped 1 to 3 million a second (PR 66), so 32 bits could wrap to "none
+    // dropped" within an hour.
+    ULONGLONG qwPrintsDropped;
     // Keyed by the exact path LoadCellFile loaded; guarded by cCellFileSection. Cells live until the process ends.
     std::map<std::wstring, CellFile*> mCachedCellFiles;
     std::vector<std::pair<DWORD, DWORD>> vUnitList;

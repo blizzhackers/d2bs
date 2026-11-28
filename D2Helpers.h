@@ -13,6 +13,9 @@ enum ClientGameState { ClientStateNull, ClientStateMenu, ClientStateInGame, Clie
 
 void Log(wchar_t* szFormat, ...);
 void LogNoFormat(const wchar_t* szString);
+// Appends the lines to today's log in one write (a DEBUG build prints them to stderr), all stamped with the time of
+// the call.
+void LogLines(const wchar_t* const* lines, size_t count);
 
 ClientGameState ClientState(void);
 bool GameReady(void);

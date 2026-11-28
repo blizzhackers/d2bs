@@ -48,6 +48,22 @@ bool SplitLines(const std::wstring& str, size_t maxWidth, const wchar_t delim, s
     return SplitLines(tmp, maxWidth, delim, lst);
 }
 
+// Threads queue their prints and the game thread shows a frame's share of them (FlushPrint). A script can queue faster
+// than that, so a message a script's call makes (PrintScriptMessage, one queue entry, which may hold several lines)
+// that finds this many waiting is dropped and counted, as is every such message after it until the game thread has the
+// queue down to half this many; then one notice gives the count. D2BS's other messages are never dropped: the "Script
+// X ended" of a flooding script can come while its flood still fills the queue.
+static const size_t kMaxQueuedPrints = 2000;
+
+// The caller holds cPrintSection.
+static void QueueDroppedNotice() {
+    wchar_t notice[160];
+    swprintf_s(notice, _countof(notice), L"\xFF" L"c2D2BS\xFF" L"c0 :: Script messages dropped while the print queue was backed up: %I64u",
+               Vars.qwPrintsDropped);
+    Vars.qPrintBuffer.push(std::wstring(notice));
+    Vars.qwPrintsDropped = 0;
+}
+
 void Print(const wchar_t* szFormat, ...) {
     va_list vaArgs;
     va_start(vaArgs, szFormat);
@@ -62,6 +78,43 @@ void Print(const wchar_t* szFormat, ...) {
     LeaveCriticalSection(&Vars.cPrintSection);
 
     delete[] str;
+}
+
+void PrintScriptMessage(const wchar_t* szFormat, ...) {
+    va_list vaArgs;
+    va_start(vaArgs, szFormat);
+
+    int len = _vscwprintf(szFormat, vaArgs);
+    wchar_t* str = new wchar_t[len + 1];
+    vswprintf_s(str, len + 1, szFormat, vaArgs);
+    va_end(vaArgs);
+
+    EnterCriticalSection(&Vars.cPrintSection);
+    if (Vars.qwPrintsDropped || Vars.qPrintBuffer.size() >= kMaxQueuedPrints)
+        Vars.qwPrintsDropped++;
+    else
+        Vars.qPrintBuffer.push(std::wstring(str));
+    LeaveCriticalSection(&Vars.cPrintSection);
+
+    delete[] str;
+}
+
+bool TakePrintBatch(std::vector<std::wstring>& batch, size_t max) {
+    batch.reserve(max);
+    if (!TryEnterCriticalSection(&Vars.cPrintSection))
+        return false;
+
+    while (batch.size() < max && !Vars.qPrintBuffer.empty()) {
+        batch.push_back(std::wstring());
+        batch.back().swap(Vars.qPrintBuffer.front());
+        Vars.qPrintBuffer.pop();
+    }
+    // Only the game thread, here, shortens the queue, so the backup ends here whichever thread prints next.
+    if (Vars.qwPrintsDropped && Vars.qPrintBuffer.size() <= kMaxQueuedPrints / 2)
+        QueueDroppedNotice();
+
+    LeaveCriticalSection(&Vars.cPrintSection);
+    return true;
 }
 
 void __declspec(naked) __fastcall Say_ASM(DWORD dwPtr) {

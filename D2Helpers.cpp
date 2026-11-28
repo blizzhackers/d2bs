@@ -33,6 +33,10 @@ void Log(wchar_t* szFormat, ...) {
 }
 
 void LogNoFormat(const wchar_t* szString) {
+    LogLines(&szString, 1);
+}
+
+void LogLines(const wchar_t* const* lines, size_t count) {
     time_t tTime;
     struct tm timestamp;
     char szTime[128] = "";
@@ -41,22 +45,39 @@ void LogNoFormat(const wchar_t* szString) {
     localtime_s(&timestamp, &tTime);
     strftime(szTime, sizeof(szTime), "%Y%m%d", &timestamp);
     swprintf_s(path, _countof(path), L"%sd2bs-%s-%S.log", Vars.szLogPath, Vars.szProfile, szTime);
-#ifdef DEBUG
-    FILE* log = stderr;
-#else
-    FILE* log = _wfsopen(path, L"a+", _SH_DENYNO);
-    // A log that can't be opened loses the line; fprintf on NULL would end the game.
-    if (!log)
-        return;
-#endif
     static DWORD id = GetProcessId(GetCurrentProcess());
-    char* sString = UnicodeToAnsi(szString);
     strftime(szTime, sizeof(szTime), "%x %X", &timestamp);
-    fprintf(log, "[%s] D2BS %d: %s\n", szTime, id, sString);
-    delete[] sString;
-#ifndef DEBUG
-    fflush(log);
-    fclose(log);
+#ifdef DEBUG
+    for (size_t i = 0; i < count; i++) {
+        char* sString = UnicodeToAnsi(lines[i]);
+        fprintf(stderr, "[%s] D2BS %d: %s\n", szTime, id, sString);
+        delete[] sString;
+    }
+#else
+    // One append for all the lines: Windows puts each FILE_APPEND_DATA write at the end of the file whole, so no other
+    // writer's line (Log on a script thread, the hang report) lands inside them. A log that can't be opened loses them.
+    // Read and write sharing only, as the CRT's _SH_DENYNO open had: the file can't be renamed or deleted mid-append.
+    HANDLE log = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (log == INVALID_HANDLE_VALUE)
+        return;
+    char prefix[160];
+    sprintf_s(prefix, sizeof(prefix), "[%s] D2BS %d: ", szTime, id);
+    // WriteFile writes the bytes as given, so each LF is written as CRLF here: the log's lines end in CRLF.
+    std::string text;
+    for (size_t i = 0; i < count; i++) {
+        char* sString = UnicodeToAnsi(lines[i]);
+        text += prefix;
+        for (const char* p = sString; *p; p++) {
+            if (*p == '\n')
+                text += '\r';
+            text += *p;
+        }
+        text += "\r\n";
+        delete[] sString;
+    }
+    DWORD written = 0;
+    WriteFile(log, text.data(), (DWORD)text.size(), &written, NULL);
+    CloseHandle(log);
 #endif
 }
 

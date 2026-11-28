@@ -1,0 +1,1 @@
+- **Steady printing.** A script that prints in a fast loop leaves the game window responsive: the console takes printed messages a frame's share at a time, and a message that finds 2000 waiting is dropped, as are later ones until 1000 or fewer wait, with one notice giving their count.

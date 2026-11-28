@@ -520,31 +520,68 @@ LRESULT CALLBACK MouseMove(int code, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(NULL, code, wParam, lParam);
 }
 
-void FlushPrint() {
-    if (!TryEnterCriticalSection(&Vars.cPrintSection))
-        return;
+// Queued prints shown per frame; the rest wait for later frames. Each line goes to the console, and where configured to
+// the log and the in-game chat, so a frame that takes a whole flood stops the window from answering, and D2Bot kills a
+// game that stops answering.
+static const size_t kPrintsPerFrame = 50;
+// Console lines, and characters, per log append: one print() can hold any number of lines of any length, and the log
+// text must stay bounded. A line longer than the character bound is appended on its own.
+static const size_t kLogLinesPerAppend = 1000;
+static const size_t kLogCharsPerAppend = 64 * 1024;
 
-    if (Vars.qPrintBuffer.empty()) {
-        LeaveCriticalSection(&Vars.cPrintSection);
-        return;
+// The console lines a frame has not written to the log yet.
+struct ConsoleLog {
+    std::vector<std::wstring> lines;
+    size_t chars;
+    ConsoleLog() : chars(0) {
     }
+};
 
-    std::queue<std::wstring> clean;
-    std::swap(Vars.qPrintBuffer, clean);
-    LeaveCriticalSection(&Vars.cPrintSection);
+// Writes the collected console lines to the log in one append and empties the list.
+static void LogConsoleLines(ConsoleLog& log) {
+    if (log.lines.empty())
+        return;
+    std::vector<const wchar_t*> logged;
+    for (std::vector<std::wstring>::iterator it = log.lines.begin(); it != log.lines.end(); ++it)
+        logged.push_back(it->c_str());
+    LogLines(&logged[0], logged.size());
+    log.lines.clear();
+    log.chars = 0;
+}
 
-    while (!clean.empty()) {
-        std::wstring str = clean.front();
+// Adds the line to the console and, with LogConsoleOutput on, to the lines the frame writes to the log.
+static void ShowConsoleLine(const std::wstring& line, ConsoleLog& log) {
+    Console::AddLine(line);
+    if (!Vars.bLogConsole)
+        return;
+    // The lines so far go first when this one would take them past the character bound.
+    if (line.size() > kLogCharsPerAppend - log.chars)
+        LogConsoleLines(log);
+    log.lines.push_back(line);
+    log.chars += line.size();
+    if (log.lines.size() >= kLogLinesPerAppend || log.chars >= kLogCharsPerAppend)
+        LogConsoleLines(log);
+}
 
+void FlushPrint() {
+    // Kept across frames, and empty between them: only the game thread runs FlushPrint (GameDraw, GameDrawOOG), and
+    // after the first batch a frame allocates no batch storage.
+    static std::vector<std::wstring> batch;
+    if (!TakePrintBatch(batch, kPrintsPerFrame) || batch.empty())
+        return;
+
+    ConsoleLog consoleLog;
+
+    for (std::vector<std::wstring>::iterator entry = batch.begin(); entry != batch.end(); ++entry) {
         // Break into lines through \n.
         list<wstring> lines;
         wstring temp;
-        wstringstream ss(str);
+        wstringstream ss(*entry);
 
         if (Vars.bUseGamePrint && ClientState() == ClientStateInGame) {
             while (getline(ss, temp)) {
                 SplitLines(temp.c_str(), Console::MaxWidth() - 100, L' ', lines);
-                Console::AddLine(temp);
+                ShowConsoleLine(temp, consoleLog);
             }
 
             // Convert and send every line.
@@ -559,11 +596,12 @@ void FlushPrint() {
                         D2MULTI_PrintChannelText((char*)it->c_str(), 0);*/
         } else {
             while (getline(ss, temp))
-                Console::AddLine(temp);
+                ShowConsoleLine(temp, consoleLog);
         }
-
-        clean.pop();
     }
+
+    LogConsoleLines(consoleLog);
+    batch.clear();
 }
 
 void GameDraw(void) {

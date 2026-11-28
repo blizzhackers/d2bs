@@ -1,0 +1,1 @@
+- **Whole log lines.** Lines written to the D2BS log from several threads at once each arrive whole.

@@ -64,8 +64,8 @@ enum {
     FUNCPTR(D2CLIENT, SubmitItem, void __fastcall, (DWORD dwItemId), 0xB2370) // Updated 1.14d //004B2370-BASE
     FUNCPTR(D2CLIENT, Transmute, void __fastcall, (void), 0x8A0D0)            // Updated 1.14d //0048A0D0-BASE
 
-    FUNCPTR(D2CLIENT, FindClientSideUnit, UnitAny* __fastcall, (DWORD dwId, DWORD dwType), 0x63990) // Updated 1.14d //00463990-BASE
-    FUNCPTR(D2CLIENT, FindServerSideUnit, UnitAny* __fastcall, (DWORD dwId, DWORD dwType), 0x639B0) // Updated 1.14d //004639B0-BASE
+    FUNCPTR(D2CLIENT, FindServerSideUnit, UnitAny* __fastcall, (DWORD dwId, DWORD dwType), 0x63990) // Updated 1.14d //00463990-BASE
+    FUNCPTR(D2CLIENT, FindClientSideUnit, UnitAny* __fastcall, (DWORD dwId, DWORD dwType), 0x639B0) // Updated 1.14d //004639B0-BASE
     FUNCPTR(D2CLIENT, GetCurrentInteractingNPC, UnitAny* __fastcall, (void), 0xB1620)               // Updated 1.14d //004B1620-BASE
     FUNCPTR(D2CLIENT, GetSelectedUnit, UnitAny* __stdcall, (), 0x67A10)                             // Updated 1.14d //00467A10-BASE
     FUNCPTR(D2CLIENT, GetCursorItem, UnitAny* __fastcall, (void), 0x680A0)                          // Updated 1.14d //004680A0-BASE

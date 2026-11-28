@@ -677,22 +677,24 @@ static UnitAny* FindUnitInTables(UnitHashTable* pTables, DWORD dwId, DWORD dwTyp
     return NULL;
 }
 
+// Missiles in the client-only tables, every other type in the server tables, as the game's own owner lookup (0x4639D0)
+// looks. The game lets a client-only unit (flag 0x200000, ids from a counter of its own) share a server unit's type and
+// id, so one search of both tables can answer with the other unit, also after this one has left the game.
+UnitHashTable* UnitTablesFor(DWORD dwType) {
+    return dwType == UNIT_MISSILE ? p_D2CLIENT_ClientSideUnitHashTables : p_D2CLIENT_ServerSideUnitHashTables;
+}
+
 UnitAny* D2CLIENT_FindUnit(DWORD dwId, DWORD dwType) {
     if (dwId == -1)
         return NULL;
-    // The tables FindServerSideUnit (0x4639B0) walks come first: 0x7A5270, which D2Ptrs.h names ClientSideUnitHashTables;
-    // then those of FindClientSideUnit (0x463990), ServerSideUnitHashTables (0x7A5E70).
-    UnitAny* pUnit = FindUnitInTables(p_D2CLIENT_ClientSideUnitHashTables, dwId, dwType);
-    return pUnit ? pUnit : FindUnitInTables(p_D2CLIENT_ServerSideUnitHashTables, dwId, dwType);
+    return FindUnitInTables(UnitTablesFor(dwType), dwId, dwType);
 }
 
-// A missile's owner, looked up where the game's own lookup (0x4639D0) looks: a missile owner in the tables at
-// 0x7A5270, any other type in those at 0x7A5E70. That lookup halts on a type mismatch.
+// A missile's owner, where the game's own lookup (0x4639D0) looks for it; that lookup halts on a type mismatch.
 UnitAny* FindMissileOwner(UnitAny* pMissile) {
     if (!(pMissile->dwFlags2 & 0x400)) // set by the game with the owner
         return NULL;
-    UnitHashTable* pTables = pMissile->dwOwnerType == UNIT_MISSILE ? p_D2CLIENT_ClientSideUnitHashTables : p_D2CLIENT_ServerSideUnitHashTables;
-    return FindUnitInTables(pTables, pMissile->dwOwnerId, pMissile->dwOwnerType);
+    return FindUnitInTables(UnitTablesFor(pMissile->dwOwnerType), pMissile->dwOwnerId, pMissile->dwOwnerType);
 }
 
 CellFile* LoadCellFile(const wchar_t* lpszPath, DWORD bMPQ) {

@@ -100,6 +100,8 @@ const char* GetUnitName(UnitAny* pUnit, char* szBuf, size_t bufSize);
 void GetItemCode(UnitAny* pUnit, char* szBuf);
 
 InventoryLayout* GetLayoutFromTable(DWORD dwTable);
+// The unit tables a unit of that type lives in for scripts: getUnit walks them and D2CLIENT_FindUnit looks up there.
+UnitHashTable* UnitTablesFor(DWORD dwType);
 UnitAny* D2CLIENT_FindUnit(DWORD dwId, DWORD dwType);
 UnitAny* FindMissileOwner(UnitAny* pMissile);
 

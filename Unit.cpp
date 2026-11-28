@@ -11,8 +11,8 @@ using namespace std;
 
 // TODO: If UnitId is the unique id of the unit, we can just look up that
 // location in the table
-static UnitAny* GetUnitFromTables(UnitHashTable* unitTables, DWORD dwTypeLow, DWORD dwTypeHigh, char* szName, DWORD dwClassId, DWORD dwType, DWORD dwMode,
-                                  DWORD dwUnitId) {
+// Each type is walked in its own tables (UnitTablesFor), so a unit found here is the one its methods look up again.
+static UnitAny* GetUnitFromTables(DWORD dwTypeLow, DWORD dwTypeHigh, char* szName, DWORD dwClassId, DWORD dwType, DWORD dwMode, DWORD dwUnitId) {
     unsigned int i, j;
     unsigned int hashLow, hashHigh;
     UnitAny* tmpUnit;
@@ -26,6 +26,7 @@ static UnitAny* GetUnitFromTables(UnitHashTable* unitTables, DWORD dwTypeLow, DW
 
     // Go through all the types
     for (i = dwTypeLow; i <= dwTypeHigh; ++i) {
+        UnitHashTable* unitTables = UnitTablesFor(i);
         // Go through all the hash values
         for (j = hashLow; j <= hashHigh; ++j) {
             // Go through all the units in a given hash value
@@ -45,13 +46,10 @@ UnitAny* GetUnit(char* szName, DWORD dwClassId, DWORD dwType, DWORD dwMode, DWOR
 
     // If we have a valid type, just check that value, other wise, check all
     // values. There are 6 valid types, 0-5
-    if (dwType == 3)
-        return GetUnitFromTables(p_D2CLIENT_ClientSideUnitHashTables, dwType, dwType, szName, dwClassId, dwType, dwMode, dwUnitId);
-
-    if (dwType >= 0 && dwType <= 5)
-        return GetUnitFromTables(p_D2CLIENT_ServerSideUnitHashTables, dwType, dwType, szName, dwClassId, dwType, dwMode, dwUnitId);
+    if (dwType <= 5)
+        return GetUnitFromTables(dwType, dwType, szName, dwClassId, dwType, dwMode, dwUnitId);
     else
-        return GetUnitFromTables(p_D2CLIENT_ServerSideUnitHashTables, 0, 5, szName, dwClassId, dwType, dwMode, dwUnitId);
+        return GetUnitFromTables(0, 5, szName, dwClassId, dwType, dwMode, dwUnitId);
 
     /*	EnterCriticalSection(&Vars.cUnitListSection);
 
@@ -96,8 +94,8 @@ static DWORD dwMax(DWORD a, DWORD b) {
     return a > b ? a : b;
 }
 
-static UnitAny* GetNextUnitFromTables(UnitAny* curUnit, UnitHashTable* unitTables, DWORD dwTypeLow, DWORD dwTypeHigh, char* szName, DWORD dwClassId, DWORD dwType,
-                                      DWORD dwMode) {
+// Continues in each type's own tables (UnitTablesFor), as GetUnitFromTables walks them.
+static UnitAny* GetNextUnitFromTables(UnitAny* curUnit, DWORD dwTypeLow, DWORD dwTypeHigh, char* szName, DWORD dwClassId, DWORD dwType, DWORD dwMode) {
     unsigned int i, j;
     UnitAny* tmpUnit;
 
@@ -113,6 +111,7 @@ static UnitAny* GetNextUnitFromTables(UnitAny* curUnit, UnitHashTable* unitTable
                 return tmpUnit;
 
         // Finish off the current hash table
+        UnitHashTable* unitTables = UnitTablesFor(i);
         for (j = (curUnit->dwUnitId & 0x7f) + 1; j <= 127; ++j)
             // Go through all the units in this linked list
             for (tmpUnit = unitTables[i].table[j]; tmpUnit != NULL; tmpUnit = tmpUnit->pListNext)
@@ -123,6 +122,7 @@ static UnitAny* GetNextUnitFromTables(UnitAny* curUnit, UnitHashTable* unitTable
 
     // Go through all the remaining types
     for (i = dwMax(dwTypeLow, curUnit->dwType + 1); i <= dwTypeHigh; ++i) {
+        UnitHashTable* unitTables = UnitTablesFor(i);
         // Go through all the hash values
         for (j = 0; j < 127; ++j) {
             // Go through all the units in a given hash value
@@ -142,13 +142,10 @@ UnitAny* GetNextUnit(UnitAny* pUnit, char* szName, DWORD dwClassId, DWORD dwType
 
     if (!pUnit)
         return NULL;
-    if (dwType == 3)
-        return GetNextUnitFromTables(pUnit, p_D2CLIENT_ClientSideUnitHashTables, dwType, dwType, szName, dwClassId, dwType, dwMode);
-
-    if (dwType >= 0 && dwType <= 5)
-        return GetNextUnitFromTables(pUnit, p_D2CLIENT_ServerSideUnitHashTables, dwType, dwType, szName, dwClassId, dwType, dwMode);
+    if (dwType <= 5)
+        return GetNextUnitFromTables(pUnit, dwType, dwType, szName, dwClassId, dwType, dwMode);
     else
-        return GetNextUnitFromTables(pUnit, p_D2CLIENT_ServerSideUnitHashTables, 0, 5, szName, dwClassId, dwType, dwMode);
+        return GetNextUnitFromTables(pUnit, 0, 5, szName, dwClassId, dwType, dwMode);
 
     /*	EnterCriticalSection(&Vars.cUnitListSection);
 

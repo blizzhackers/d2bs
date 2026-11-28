@@ -350,21 +350,21 @@ public:
 	 * negative. The values come from the unit's base stats, its stat totals
 	 * (the values the single-stat form reads) and the stat list that
 	 * getStat(-1) reads, in that order; where more than one holds the same
-	 * stat and subindex, the last one wins, so a value here is not always the
-	 * one the single-stat form returns.
+	 * stat and subindex, the last one wins, a skill entry included, so a
+	 * value here is not always the one the single-stat form returns.
 	 *
 	 * A stat that carries a skill (for example a charged skill or a
 	 * chance-to-cast skill such as one cast on striking) holds an object
-	 * {skill, level} instead, for skill ids 8 and up; lower skill ids come
-	 * back as ordinary entries. A charged skill also gets charges and
-	 * maxcharges, except on an item with a maximum of 1 charge, or of 2
-	 * charges with none left. When the same stat id occurs more than once,
-	 * the element is an array of such objects. On many items each
-	 * skill-carrying entry is returned twice (a single skill gives an array of
-	 * two identical objects); on other items and on a player each comes back
-	 * once. So check an element with Array.isArray and allow for duplicate
-	 * objects. Oskill mods (stat 97) are ordinary entries: element 97 is
-	 * indexed by skill id and holds the bonus level.
+	 * {skill, level} instead, for skill ids 8 and up (skill 8 from level 1);
+	 * lower skill ids come back as ordinary entries. A charged skill also
+	 * gets charges and maxcharges, except on an item with a maximum of 1
+	 * charge, or of 2 charges with none left. Each skill and level comes back
+	 * once per stat: a stat with one of them holds a bare object, and a stat
+	 * with several holds an array of such objects, so check an element with
+	 * Array.isArray. When the stat also holds an ordinary entry, the element
+	 * is a subindex array instead, with the skill objects in the indexes that
+	 * follow its highest ordinary subindex. Oskill mods (stat 97) are ordinary
+	 * entries: element 97 is indexed by skill id and holds the bonus level.
 	 *
 	 * \param nStat Set to -2.
 	 *

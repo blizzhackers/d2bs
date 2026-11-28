@@ -1,3 +1,5 @@
+#include <new>
+
 #include "JSUnit.h"
 #include "D2Helpers.h"
 #include "Constants.h"
@@ -1024,8 +1026,65 @@ JSAPI_FUNC(unit_interact) {
     return JS_TRUE;
 }
 
-bool InsertStatsToGenericObject(UnitAny* pUnit, StatList* pStatList, JSContext* pJSContext, JSObject* pGenericObject);
+// A subindex above 0x200 holds a skill id and level (skill << 6 | level), and such an entry becomes a {skill, level}
+// object. getStat(-2)'s build order and InsertStatsNow must use this same test.
+static bool IsSkillEntry(const Stat& stat) {
+    return stat.wSubIndex > 0x200;
+}
+
 bool InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray);
+
+// getStat(-2)'s sources can overlap: on the rig, an item's aggregate vector (+0x48) held most entries of its 0x40
+// sublist, every skill entry among them, so each skill entry came back twice. So the entries are merged by stat and
+// subindex before the result is built, and the last source keeps its value. False with out of memory reported; on
+// success the caller deletes aMerged, which is NULL when there are no entries.
+static bool MergeUnitStats(JSContext* cx, UnitAny* pUnit, Stat*& aMerged, DWORD& dwMerged) {
+    StatList* aLists[2] = {pUnit->pStats, D2COMMON_GetStatList(pUnit, NULL, 0x40)};
+    Stat* aEntries[4];
+    int aCounts[4];
+    int nVectors = 0;
+    DWORD dwTotal = 0;
+    // Per list: its own entries when it belongs to the unit, then its aggregate when it is extended.
+    for (int l = 0; l < 2; l++) {
+        StatList* pList = aLists[l];
+        if (!pList)
+            continue;
+        if ((pList->dwUnitId == pUnit->dwUnitId && pList->dwUnitType == pUnit->dwType) || pList->pUnit == pUnit) {
+            aEntries[nVectors] = pList->StatVec.pStats;
+            aCounts[nVectors++] = pList->StatVec.wCount;
+        }
+        if (pList->dwFlags >> 24 & 0x80) {
+            aEntries[nVectors] = pList->SetStatVec.pStats;
+            aCounts[nVectors++] = pList->SetStatVec.wCount;
+        }
+    }
+    // Each count is read once, so a list the game changes meanwhile cannot make the merge write past the buffer.
+    for (int v = 0; v < nVectors; v++)
+        dwTotal += aCounts[v];
+    aMerged = NULL;
+    dwMerged = 0;
+    if (!dwTotal)
+        return true;
+    aMerged = new (std::nothrow) Stat[dwTotal];
+    if (!aMerged) {
+        JS_ReportOutOfMemory(cx);
+        return false;
+    }
+    for (int v = 0; v < nVectors; v++) {
+        for (int i = 0; i < aCounts[v]; i++) {
+            // A local copy, so the key compared and the entry stored are taken from the same copy of the game's entry.
+            const Stat stat = aEntries[v][i];
+            DWORD k = 0;
+            while (k < dwMerged && (aMerged[k].wStatIndex != stat.wStatIndex || aMerged[k].wSubIndex != stat.wSubIndex))
+                k++;
+            if (k == dwMerged)
+                aMerged[dwMerged++] = stat;
+            else
+                aMerged[k].dwStatValue = stat.dwStatValue;
+        }
+    }
+    return true;
+}
 
 JSAPI_FUNC(unit_getStat) {
     if (!WaitForGameReady())
@@ -1122,11 +1181,22 @@ JSAPI_FUNC(unit_getStat) {
             return JS_FALSE;
         JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(pArray));
 
-        if (!InsertStatsToGenericObject(pUnit, pUnit->pStats, cx, pArray) ||
-            !InsertStatsToGenericObject(pUnit, D2COMMON_GetStatList(pUnit, NULL, 0x40), cx, pArray))
+        Stat* aMerged = NULL;
+        DWORD dwMerged = 0;
+        if (!MergeUnitStats(cx, pUnit, aMerged, dwMerged))
             return JS_FALSE;
-        // InsertStatsToGenericObject(pUnit, pUnit->pStats->pNext, cx, pArray);  // only check the current unit stats!
-        //	InsertStatsToGenericObject(pUnit, pUnit->pStats->pSetList, cx, pArray);
+        // Plain entries go in first, so on a stat that also holds plain entries the skill objects are appended after
+        // its highest plain subindex, where no later plain entry can overwrite them.
+        bool ok = true;
+        for (int pass = 0; ok && pass < 2; pass++) {
+            for (DWORD i = 0; ok && i < dwMerged; i++) {
+                if (IsSkillEntry(aMerged[i]) == (pass == 1))
+                    ok = InsertStatsNow(aMerged, (int)i, cx, pArray);
+            }
+        }
+        delete[] aMerged;
+        if (!ok)
+            return JS_FALSE;
     } else {
         long result = D2COMMON_GetUnitStat(pUnit, nStat, nSubIndex);
         if (result == 0) // if stat isnt found look up preset list
@@ -1148,32 +1218,9 @@ JSAPI_FUNC(unit_getStat) {
     return JS_TRUE;
 }
 
-bool InsertStatsToGenericObject(UnitAny* pUnit, StatList* pStatList, JSContext* cx, JSObject* pArray) {
-    Stat* pStat = NULL;
-    if (!pStatList)
-        return true;
-    if ((pStatList->dwUnitId == pUnit->dwUnitId && pStatList->dwUnitType == pUnit->dwType) || pStatList->pUnit == pUnit) {
-        pStat = pStatList->StatVec.pStats;
-
-        for (int nStat = 0; nStat < pStatList->StatVec.wCount; nStat++) {
-            if (!InsertStatsNow(pStat, nStat, cx, pArray))
-                return false;
-        }
-    }
-    if ((pStatList->dwFlags >> 24 & 0x80)) {
-        pStat = pStatList->SetStatVec.pStats;
-
-        for (int nStat = 0; nStat < pStatList->SetStatVec.wCount; nStat++) {
-            if (!InsertStatsNow(pStat, nStat, cx, pArray))
-                return false;
-        }
-    }
-    return true;
-}
-
-// False on any engine failure (out of memory, already reported), which unit_getStat turns into JS_FALSE.
+// A failed JSAPI call returns false here, and unit_getStat propagates it as JS_FALSE.
 bool InsertStatsNow(Stat* pStat, int nStat, JSContext* cx, JSObject* pArray) {
-    if (pStat[nStat].wSubIndex > 0x200) {
+    if (IsSkillEntry(pStat[nStat])) {
         // subindex is the skill id and level
         int skill = pStat[nStat].wSubIndex >> 6, level = pStat[nStat].wSubIndex & 0x3F, charges = 0, maxcharges = 0;
         if (pStat[nStat].dwStatValue > 0x200) {

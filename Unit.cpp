@@ -9,9 +9,10 @@
 
 using namespace std;
 
+// Each type is walked in its own tables (UnitTablesFor), so a unit found
+// here is the one its methods look up again.
 // TODO: If UnitId is the unique id of the unit, we can just look up that
 // location in the table
-// Each type is walked in its own tables (UnitTablesFor), so a unit found here is the one its methods look up again.
 static UnitAny* GetUnitFromTables(DWORD dwTypeLow, DWORD dwTypeHigh, char* szName, DWORD dwClassId, DWORD dwType, DWORD dwMode, DWORD dwUnitId) {
     unsigned int i, j;
     unsigned int hashLow, hashHigh;

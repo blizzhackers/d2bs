@@ -1,0 +1,1 @@
+- **Steady printing.** A script that prints in a fast loop leaves the game window responsive: the console takes printed lines a frame's share at a time, and when a script's messages pile up faster than the console can show them, the extra ones are skipped and one console line gives their count.

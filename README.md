@@ -897,6 +897,8 @@ The [Unit](#classUnit) currently being interacted with.
 
 Print the String representation of the arguments to the console.
 
+Each argument is one message. The console shows up to 50 messages each frame. Once 2000 are waiting, print() drops its messages until half of them have been shown, and one console line then gives the number dropped.
+
 #### `public void `[`delay`](#group__globalFunctions_1ga95cd2552eeef0300ab5bae0ee284f82d)`(uint32_t nDelay)` 
 
 Delay for nDelay milliseconds.

@@ -1144,6 +1144,10 @@ Unit getInteractedNPC();
 
 /** Print the String representation of the arguments to the console.
  *
+ * Each argument is one message. The console shows up to 50 messages each
+ * frame. Once 2000 are waiting, print() drops its messages until half of
+ * them have been shown, and one console line then gives the number dropped.
+ *
  * \ingroup globalFunctions
  */
 void print(...);

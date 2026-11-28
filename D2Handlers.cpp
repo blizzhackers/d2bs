@@ -520,31 +520,30 @@ LRESULT CALLBACK MouseMove(int code, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(NULL, code, wParam, lParam);
 }
 
+// Queued prints shown per frame; the rest wait for later frames. Each line goes to the console, and where configured to
+// the log and the in-game chat, so a frame that takes a whole flood stops the window from answering, and D2Bot kills a
+// game that stops answering.
+static const size_t kPrintsPerFrame = 50;
+
 void FlushPrint() {
-    if (!TryEnterCriticalSection(&Vars.cPrintSection))
+    std::vector<std::wstring> batch;
+    if (!TakePrintBatch(batch, kPrintsPerFrame) || batch.empty())
         return;
 
-    if (Vars.qPrintBuffer.empty()) {
-        LeaveCriticalSection(&Vars.cPrintSection);
-        return;
-    }
+    // The batch's console lines, written to the log with one open of the file.
+    std::vector<std::wstring> consoleLines;
 
-    std::queue<std::wstring> clean;
-    std::swap(Vars.qPrintBuffer, clean);
-    LeaveCriticalSection(&Vars.cPrintSection);
-
-    while (!clean.empty()) {
-        std::wstring str = clean.front();
-
+    for (std::vector<std::wstring>::iterator entry = batch.begin(); entry != batch.end(); ++entry) {
         // Break into lines through \n.
         list<wstring> lines;
         wstring temp;
-        wstringstream ss(str);
+        wstringstream ss(*entry);
 
         if (Vars.bUseGamePrint && ClientState() == ClientStateInGame) {
             while (getline(ss, temp)) {
                 SplitLines(temp.c_str(), Console::MaxWidth() - 100, L' ', lines);
                 Console::AddLine(temp);
+                consoleLines.push_back(temp);
             }
 
             // Convert and send every line.
@@ -558,11 +557,18 @@ void FlushPrint() {
                     for (list<string>::iterator it = lines.begin(); it != lines.end(); ++it)
                         D2MULTI_PrintChannelText((char*)it->c_str(), 0);*/
         } else {
-            while (getline(ss, temp))
+            while (getline(ss, temp)) {
                 Console::AddLine(temp);
+                consoleLines.push_back(temp);
+            }
         }
+    }
 
-        clean.pop();
+    if (Vars.bLogConsole && !consoleLines.empty()) {
+        std::vector<const wchar_t*> logged;
+        for (std::vector<std::wstring>::iterator it = consoleLines.begin(); it != consoleLines.end(); ++it)
+            logged.push_back(it->c_str());
+        LogLines(&logged[0], logged.size());
     }
 }
 

@@ -56,7 +56,8 @@ Script* ScriptEngine::CompileFile(const wchar_t* file, ScriptState state, uint a
     // Checked before construction: without unwind semantics a throwing constructor leaks the Script itself.
     if (_waccess(file, 0) != 0) {
         DEBUG_LOG(file);
-        Print(L"File not found");
+        // Droppable: load() reaches this once per call; a start by D2BS also prints its kept "Failed to start" line.
+        PrintScriptMessage(L"File not found");
         return NULL;
     }
 
@@ -565,7 +566,10 @@ void reportError(JSContext* cx, const char* message, JSErrorReport* report) {
         displayName = filename + wcslen(Vars.szPath);
 
     Log(L"[%hs%hs] Code(%d) File(%s:%d) %hs\nLine: %hs", strict, type, report->errorNumber, filename, report->lineno, message, report->linebuf);
-    Print(L"[\u00FFc%d%hs%hs\u00FFc0 (%d)] File(%s:%d) %hs", (warn ? 9 : 1), strict, type, report->errorNumber, displayName, report->lineno, message);
+    // A warning's console copy can be dropped like a script's print(): a script can raise one on every pass of a loop,
+    // and the Log() above always writes it. An error's copy is always shown.
+    void (*printCopy)(const wchar_t*, ...) = warn ? PrintScriptMessage : Print;
+    printCopy(L"[\u00FFc%d%hs%hs\u00FFc0 (%d)] File(%s:%d) %hs", (warn ? 9 : 1), strict, type, report->errorNumber, displayName, report->lineno, message);
 
     if (filename[0] == L'<')
         free(filename);

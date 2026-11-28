@@ -70,9 +70,9 @@ JSAPI_FUNC(my_print) {
 
             // bob20				jsrefcount depth = JS_SuspendRequest(cx);
             if (!Text)
-                Print(L"undefined");
+                PrintScriptMessage(L"undefined");
             else
-                Print(L"%s", Text);
+                PrintScriptMessage(L"%s", Text);
             // bob20				JS_ResumeRequest(cx, depth);
         }
     }
@@ -233,7 +233,7 @@ JSAPI_FUNC(my_load) {
     Script* newScript = ScriptEngine::CompileFile(buf, scriptState, nArgs, autoBuffer);
     if (!newScript) {
         FreeCloneBuffers(autoBuffer, nArgs);
-        Print(L"File \"%s\" not found.", file);
+        PrintScriptMessage(L"File \"%s\" not found.", file);
         return JS_TRUE;
     }
 
@@ -349,7 +349,7 @@ JSAPI_FUNC(my_version) {
         return JS_TRUE;
     }
 
-    Print(L"\u00FFc4D2BS\u00FFc1 \u00FFc3%s for Diablo II 1.14d.", D2BS_VERSION);
+    PrintScriptMessage(L"\u00FFc4D2BS\u00FFc1 \u00FFc3%s for Diablo II 1.14d.", D2BS_VERSION);
     return JS_TRUE;
 }
 

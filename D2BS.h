@@ -115,6 +115,8 @@ struct Variables {
     DWORD dwMenuSession;
 
     std::queue<std::wstring> qPrintBuffer;
+    // Prints dropped since the queue was last full, not yet reported; guarded by cPrintSection like qPrintBuffer.
+    DWORD dwPrintsDropped;
     // Keyed by the exact path LoadCellFile loaded; guarded by cCellFileSection. Cells live until the process ends.
     std::map<std::wstring, CellFile*> mCachedCellFiles;
     std::vector<std::pair<DWORD, DWORD>> vUnitList;

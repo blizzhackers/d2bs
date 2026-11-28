@@ -1,0 +1,1 @@
+- **Item skills listed once.** `unit.getStat(-2)` lists each charged or chance-to-cast skill of an item once, so an item with a single charged skill gives one skill object at that stat, not an array.

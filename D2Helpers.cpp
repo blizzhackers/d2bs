@@ -54,9 +54,15 @@ void LogLines(const wchar_t* const* lines, size_t count) {
         delete[] sString;
     }
 #else
+    // One append for all the lines: Windows puts each FILE_APPEND_DATA write at the end of the file whole, so no other
+    // writer's line (Log on a script thread, the hang report) lands inside them. A log that can't be opened loses them.
+    // Read and write sharing only, as the CRT's _SH_DENYNO open had: the file can't be renamed or deleted mid-append.
+    HANDLE log = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (log == INVALID_HANDLE_VALUE)
+        return;
     char prefix[160];
     sprintf_s(prefix, sizeof(prefix), "[%s] D2BS %d: ", szTime, id);
-    // WriteFile does no text-mode translation, so every LF goes out as CRLF: the log's lines end in CRLF.
+    // WriteFile writes the bytes as given, so each LF is written as CRLF here: the log's lines end in CRLF.
     std::string text;
     for (size_t i = 0; i < count; i++) {
         char* sString = UnicodeToAnsi(lines[i]);
@@ -69,11 +75,6 @@ void LogLines(const wchar_t* const* lines, size_t count) {
         text += "\r\n";
         delete[] sString;
     }
-    // One append for all the lines: Windows puts each FILE_APPEND_DATA write at the end of the file whole, so no other
-    // writer's line (Log on a script thread, the hang report) lands inside them. A log that can't be opened loses them.
-    HANDLE log = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (log == INVALID_HANDLE_VALUE)
-        return;
     DWORD written = 0;
     WriteFile(log, text.data(), (DWORD)text.size(), &written, NULL);
     CloseHandle(log);

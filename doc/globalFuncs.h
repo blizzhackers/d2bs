@@ -1144,9 +1144,16 @@ Unit getInteractedNPC();
 
 /** Print the String representation of the arguments to the console.
  *
- * Each argument is one message. The console shows up to 50 messages each
- * frame. Once 2000 are waiting, print() drops its messages until half of
- * them have been shown, and one console line then gives the number dropped.
+ * Each argument other than null is one message, queued on its own; a null
+ * argument is skipped, neither printed nor counted, and an argument that
+ * cannot become a string ends the call with an error. The console takes up
+ * to 50 messages each frame. A message that finds 2000 waiting is dropped,
+ * and messages keep being dropped until no more than 1000 are waiting; one
+ * notice then gives the number dropped. The console copies of warnings,
+ * load()'s "not found" lines, the banner version(arg) prints and the map's
+ * "Level Not Loaded" line are dropped and counted the same way. With
+ * LogConsoleOutput on, a dropped message is not logged either; debugLog()
+ * bypasses the print queue.
  *
  * \ingroup globalFunctions
  */

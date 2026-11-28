@@ -567,7 +567,8 @@ void reportError(JSContext* cx, const char* message, JSErrorReport* report) {
 
     Log(L"[%hs%hs] Code(%d) File(%s:%d) %hs\nLine: %hs", strict, type, report->errorNumber, filename, report->lineno, message, report->linebuf);
     // A warning's console copy can be dropped like a script's print(): a script can raise one on every pass of a loop,
-    // and the Log() above always writes it. An error's copy is always shown.
+    // and the Log() above still reports the warning, apart from the print queue. An error's copy always goes through
+    // Print, which never drops it.
     void (*printCopy)(const wchar_t*, ...) = warn ? PrintScriptMessage : Print;
     printCopy(L"[\u00FFc%d%hs%hs\u00FFc0 (%d)] File(%s:%d) %hs", (warn ? 9 : 1), strict, type, report->errorNumber, displayName, report->lineno, message);
 
@@ -833,9 +834,11 @@ bool ExecScriptEvent(Event* evt, bool clearList) {
             wchar_t* cmd = (wchar_t*)evt->arg1;
             std::wstring test;
 
+            // The caught error is the command's value, printed below by Print like any result: print() could drop it. A
+            // thrown undefined shows as the text "undefined"; a thrown null shows nothing.
             test.append(L"try{ ");
             test.append(cmd);
-            test.append(L" } catch (error){print(error)}");
+            test.append(L" } catch (error){error === undefined ? \"undefined\" : error}");
             JS_BeginRequest(cx);
             jsval rval;
 

@@ -49,17 +49,19 @@ bool SplitLines(const std::wstring& str, size_t maxWidth, const wchar_t delim, s
 }
 
 // Threads queue their prints and the game thread shows a frame's share of them (FlushPrint). A script can queue faster
-// than that, so once this many wait, the lines a script makes once per call (PrintScriptMessage) are dropped and counted
-// until the queue is down to half; then one notice gives the count and printing resumes. D2BS's other lines are never
-// dropped and leave the gap open: the "Script X ended" of a flooding script comes while its flood still fills the queue.
+// than that, so a message a script's call makes (PrintScriptMessage, one queue entry, which may hold several lines)
+// that finds this many waiting is dropped and counted, as is every such message after it until the game thread has the
+// queue down to half this many; then one notice gives the count. D2BS's other messages are never dropped: the "Script
+// X ended" of a flooding script can come while its flood still fills the queue.
 static const size_t kMaxQueuedPrints = 2000;
 
 // The caller holds cPrintSection.
 static void QueueDroppedNotice() {
     wchar_t notice[160];
-    swprintf_s(notice, _countof(notice), L"\u00FFc2D2BS\u00FFc0 :: Script prints dropped while the print queue was backed up: %u", Vars.dwPrintsDropped);
+    swprintf_s(notice, _countof(notice), L"\xFF" L"c2D2BS\xFF" L"c0 :: Script messages dropped while the print queue was backed up: %I64u",
+               Vars.qwPrintsDropped);
     Vars.qPrintBuffer.push(std::wstring(notice));
-    Vars.dwPrintsDropped = 0;
+    Vars.qwPrintsDropped = 0;
 }
 
 void Print(const wchar_t* szFormat, ...) {
@@ -88,10 +90,8 @@ void PrintScriptMessage(const wchar_t* szFormat, ...) {
     va_end(vaArgs);
 
     EnterCriticalSection(&Vars.cPrintSection);
-    if (Vars.dwPrintsDropped && Vars.qPrintBuffer.size() <= kMaxQueuedPrints / 2)
-        QueueDroppedNotice();
-    if (Vars.dwPrintsDropped || Vars.qPrintBuffer.size() >= kMaxQueuedPrints)
-        Vars.dwPrintsDropped++;
+    if (Vars.qwPrintsDropped || Vars.qPrintBuffer.size() >= kMaxQueuedPrints)
+        Vars.qwPrintsDropped++;
     else
         Vars.qPrintBuffer.push(std::wstring(str));
     LeaveCriticalSection(&Vars.cPrintSection);
@@ -100,6 +100,7 @@ void PrintScriptMessage(const wchar_t* szFormat, ...) {
 }
 
 bool TakePrintBatch(std::vector<std::wstring>& batch, size_t max) {
+    batch.reserve(max);
     if (!TryEnterCriticalSection(&Vars.cPrintSection))
         return false;
 
@@ -108,8 +109,8 @@ bool TakePrintBatch(std::vector<std::wstring>& batch, size_t max) {
         batch.back().swap(Vars.qPrintBuffer.front());
         Vars.qPrintBuffer.pop();
     }
-    // With no later print to carry it, the notice goes out on its own.
-    if (Vars.dwPrintsDropped && Vars.qPrintBuffer.empty())
+    // Only the game thread, here, shortens the queue, so the backup ends here whichever thread prints next.
+    if (Vars.qwPrintsDropped && Vars.qPrintBuffer.size() <= kMaxQueuedPrints / 2)
         QueueDroppedNotice();
 
     LeaveCriticalSection(&Vars.cPrintSection);

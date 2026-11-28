@@ -171,6 +171,8 @@ bool Script::Run(void) {
     }
 
     bool inRequest = false;
+    // The console D2BS makes when no DefaultConsoleScript is set; its banner is printed as its main() starts.
+    bool builtinConsole = false;
     try {
         runtime = JS_NewRuntime(Vars.dwMemUsage, JS_NO_HELPER_THREADS);
         if (!runtime)
@@ -206,7 +208,8 @@ bool Script::Run(void) {
             if (wcslen(Vars.szConsole) > 0) {
                 script = JS_CompileFile(context, globalObject, fileName);
             } else {
-                char* cmd = "function main() {print('ÿc2D2BSÿc0 :: Started Console'); while (true){delay(10000)};}  ";
+                builtinConsole = true;
+                char* cmd = "function main() {while (true){delay(10000)};}  ";
                 script = JS_CompileScript(context, globalObject, cmd, strlen(cmd), "Command Line", 1);
             }
         } else
@@ -321,6 +324,9 @@ bool Script::Run(void) {
     }
     if (executed != JS_FALSE && JS_GetProperty(GetContext(), globalObject, "main", &main) != JS_FALSE &&
         JSVAL_IS_FUNCTION(GetContext(), main)) {
+        // D2BS's own line: Print never drops it, where a script's print() can be dropped.
+        if (builtinConsole)
+            Print(L"\xFF" L"c2D2BS\xFF" L"c0 :: Started Console");
         JS_CallFunctionValue(GetContext(), globalObject, main, this->argc, argvalue.begin(), &dummy);
     }
     JS_RemoveValueRoot(GetContext(), &main);

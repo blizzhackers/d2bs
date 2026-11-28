@@ -1,2 +1,19 @@
 # build\Build-D2BS.ps1 output (objects, generated headers, the unpacked js_static.lib, D2BS.dll, D2BS.pdb, build.log)
 /build/out/
+
+# Visual Studio builds of D2BS.vcxproj: OutDir is $(SolutionDir)$(Configuration)\ and IntDir is within that folder
+/Debug/
+/Release/
+/Packaging/
+
+# Visual Studio IDE state kept next to the solution: .vs/ and, from older versions, the IntelliSense database
+# (.sdf, .VC.db, their lock files and ipch/) and .suo; the per-user .vcxproj.user; the resource editor's .aps
+/.vs/
+/ipch/
+/*.sdf
+/*.opensdf
+/*.suo
+/*.VC.db
+/*.VC.opendb
+/*.vcxproj.user
+/*.aps

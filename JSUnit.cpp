@@ -1795,8 +1795,8 @@ JSAPI_FUNC(unit_getParent) {
 
         // The game's pet list (0x7BB5BC) gives the owner's id without its type. Pets belong to players, and ids overlap
         // across unit types, so only players are searched.
-        UnitAny* pMonster = GetUnit(NULL, (DWORD)-1, UNIT_PLAYER, (DWORD)-1, dwOwnerId);
-        if (!pMonster)
+        UnitAny* pOwner = GetUnit(NULL, (DWORD)-1, UNIT_PLAYER, (DWORD)-1, dwOwnerId);
+        if (!pOwner)
             return JS_TRUE;
 
         myUnit* pmyUnit = new myUnit;
@@ -1804,10 +1804,10 @@ JSAPI_FUNC(unit_getParent) {
             return JS_TRUE;
 
         pmyUnit->_dwPrivateType = PRIVATE_UNIT;
-        pmyUnit->dwUnitId = pMonster->dwUnitId;
-        pmyUnit->dwClassId = pMonster->dwTxtFileNo;
-        pmyUnit->dwMode = pMonster->dwMode;
-        pmyUnit->dwType = pMonster->dwType;
+        pmyUnit->dwUnitId = pOwner->dwUnitId;
+        pmyUnit->dwClassId = pOwner->dwTxtFileNo;
+        pmyUnit->dwMode = pOwner->dwMode;
+        pmyUnit->dwType = pOwner->dwType;
         pmyUnit->szName[0] = NULL;
 
         JSObject* jsunit = BuildObject(cx, &unit_class, unit_methods, unit_props, pmyUnit);

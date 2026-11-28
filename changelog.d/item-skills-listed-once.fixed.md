@@ -1,1 +1,1 @@
-- **Item skills listed once.** `unit.getStat(-2)` lists each charged or chance-to-cast entry of an item once.
+- **Item skills listed once.** `unit.getStat(-2)` lists each charged or chance-to-cast entry of an item once, so a stat with one of them can now hold a bare `{skill, level}` object rather than an array; check such an element with `Array.isArray`, as the API docs describe.

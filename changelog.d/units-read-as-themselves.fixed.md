@@ -1,0 +1,1 @@
+- **Units read as themselves.** A unit found with `getUnit()` is the unit its properties and methods read and act on, including the waypoint, stash, town portals and town NPCs in a game that starts in the Rogue Encampment; `getUnit(-1)` searches missiles too, as it does every other unit type, and a monster's `getParent()` looks for its owner among players only.
